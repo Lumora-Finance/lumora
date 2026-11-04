@@ -1,20 +1,32 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  createUserWithEmailAndPassword,
+  GoogleAuthProvider,
+  sendEmailVerification,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+} from "firebase/auth";
 import { AlertCircle, Check, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createClient } from "@/lib/supabase/client";
+import { authErrorMessage, getFirebaseAuth, isPopupDismissed } from "@/lib/firebase/auth";
+
+import { useAuthUser } from "./use-auth-user";
 
 type Mode = "signup" | "login";
 type Values = { email: string; password: string };
+
+const AFTER_SIGN_IN = "/marketplace";
 
 const schemas = {
   signup: z.object({
@@ -28,13 +40,6 @@ const schemas = {
 };
 
 const NOT_CONNECTED = "Accounts aren't connected yet. Please try again soon.";
-
-function getClient() {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
-    return null;
-  }
-  return createClient();
-}
 
 function FieldError({ id, message }: { id: string; message?: string }) {
   if (!message) return null;
@@ -59,90 +64,101 @@ function GoogleIcon() {
 
 export function AuthForm({ mode }: { mode: Mode }) {
   const router = useRouter();
+  const { user, loading } = useAuthUser();
   // Next keeps visited pages mounted but hidden, so the login and signup forms can coexist.
   const emailId = useId();
   const passwordId = useId();
   const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [googlePending, setGooglePending] = useState(false);
   const {
     register,
     handleSubmit,
+    trigger,
+    getValues,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm<Values>({ resolver: zodResolver(schemas[mode]) });
 
-  const callbackUrl = () => `${window.location.origin}/auth/callback`;
+  // Covers every route in: this form, Google, and arriving while already signed in.
+  // The reset matters because this page stays mounted, and a password must not stay in it.
+  useEffect(() => {
+    if (loading || !user) return;
+    reset({ email: "", password: "" });
+    router.replace(AFTER_SIGN_IN);
+  }, [loading, user, reset, router]);
 
   async function onSubmit({ email, password }: Values) {
     setFormError(null);
-    const supabase = getClient();
-    if (!supabase) {
+    setNotice(null);
+    setShowPassword(false);
+    const auth = getFirebaseAuth();
+    if (!auth) {
       setFormError(NOT_CONNECTED);
       return;
     }
 
-    if (mode === "login") {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        setFormError(error.message);
+    try {
+      if (mode === "login") {
+        await signInWithEmailAndPassword(auth, email, password);
         return;
       }
-      router.push("/");
-      router.refresh();
-      return;
-    }
-
-    // Which button brought them here. It only tailors onboarding: users can edit
-    // this metadata, so it must never decide what they're allowed to do.
-    const role = new URLSearchParams(window.location.search).get("role");
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: callbackUrl(),
-        data: role === "buyer" || role === "producer" ? { intended_role: role } : undefined,
-      },
-    });
-    if (error) {
-      setFormError(error.message);
-    } else if (data.session) {
-      router.push("/");
-      router.refresh();
-    } else {
-      setSentTo(email);
+      const { user: created } = await createUserWithEmailAndPassword(auth, email, password);
+      // The account already exists by now, so a failed email mustn't look like a failed sign-up.
+      // The account page offers to send it again.
+      await sendEmailVerification(created).catch(() => undefined);
+    } catch (error) {
+      setFormError(authErrorMessage(error));
     }
   }
 
   async function continueWithGoogle() {
     setFormError(null);
-    const supabase = getClient();
-    if (!supabase) {
+    setNotice(null);
+    const auth = getFirebaseAuth();
+    if (!auth) {
       setFormError(NOT_CONNECTED);
       return;
     }
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: callbackUrl() },
-    });
-    if (error) setFormError(error.message);
+
+    setGooglePending(true);
+    try {
+      await signInWithPopup(auth, new GoogleAuthProvider());
+    } catch (error) {
+      if (!isPopupDismissed(error)) setFormError(authErrorMessage(error));
+    } finally {
+      setGooglePending(false);
+    }
   }
 
-  if (sentTo) {
-    return (
-      <div role="status" className="mt-8 rounded-xl border border-line bg-card p-5">
-        <p className="flex items-center gap-2 font-medium text-success">
-          <Check aria-hidden="true" strokeWidth={1.5} className="size-5" />
-          Check your email
-        </p>
-        <p className="mt-2 text-ink-muted">
-          We sent a confirmation link to <span className="font-medium text-ink">{sentTo}</span>.
-          Open it to finish creating your account.
-        </p>
-      </div>
-    );
+  async function forgotPassword() {
+    setFormError(null);
+    setNotice(null);
+    if (!(await trigger("email"))) return;
+
+    const auth = getFirebaseAuth();
+    if (!auth) {
+      setFormError(NOT_CONNECTED);
+      return;
+    }
+
+    const email = getValues("email");
+    try {
+      await sendPasswordResetEmail(auth, email);
+    } catch (error) {
+      const code = (error as { code?: string })?.code;
+      // Saying "no such account" would reveal who has signed up, so only real failures show.
+      if (code !== "auth/user-not-found") {
+        setFormError(authErrorMessage(error));
+        return;
+      }
+    }
+    setNotice(`If ${email} has an account, a reset link is on its way.`);
   }
 
   const isSignup = mode === "signup";
+  const busy = isSubmitting || googlePending || Boolean(user);
 
   return (
     <>
@@ -150,6 +166,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
         type="button"
         variant="secondary"
         onClick={continueWithGoogle}
+        disabled={busy}
         className="mt-8 h-12 w-full md:h-12"
       >
         <GoogleIcon />
@@ -180,9 +197,18 @@ export function AuthForm({ mode }: { mode: Mode }) {
         </div>
 
         <div>
-          <Label htmlFor={passwordId} className="mb-1.5">
-            Password
-          </Label>
+          <div className="mb-1.5 flex items-center justify-between gap-4">
+            <Label htmlFor={passwordId}>Password</Label>
+            {!isSignup && (
+              <button
+                type="button"
+                onClick={forgotPassword}
+                className="-my-2 rounded-sm py-2 text-body-sm text-ink-muted underline-offset-4 hover:text-ink hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+              >
+                Forgot password?
+              </button>
+            )}
+          </div>
           <div className="relative">
             <Input
               id={passwordId}
@@ -218,7 +244,14 @@ export function AuthForm({ mode }: { mode: Mode }) {
           </p>
         )}
 
-        <Button type="submit" disabled={isSubmitting} className="h-12 w-full md:h-12">
+        {notice && (
+          <p role="status" className="flex items-start gap-2 text-body-sm text-success">
+            <Check aria-hidden="true" strokeWidth={1.5} className="mt-0.5 size-4 shrink-0" />
+            {notice}
+          </p>
+        )}
+
+        <Button type="submit" disabled={busy} className="h-12 w-full md:h-12">
           {isSubmitting
             ? isSignup
               ? "Creating account"

@@ -1,6 +1,6 @@
 "use client";
 
-import { gsap, refreshTriggers, useGSAP } from "@/lib/gsap/effects";
+import { gsap, refreshTriggers, ScrollTrigger, useGSAP } from "@/lib/gsap/effects";
 
 const COLORS: Record<string, string> = {
   paper: "#F6F3EC",
@@ -59,7 +59,11 @@ export function PageMotion() {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const scheduleRefresh = () => {
       clearTimeout(timer);
-      timer = setTimeout(refreshTriggers, 150);
+      // A refresh cancels a smooth scroll in progress, such as a click on a nav link.
+      timer = setTimeout(() => {
+        if (ScrollTrigger.isScrolling()) scheduleRefresh();
+        else refreshTriggers();
+      }, 150);
     };
     const images = Array.from(document.images).filter((image) => !image.complete);
 

@@ -1,12 +1,12 @@
 import { Buyers } from "@/components/landing/buyers";
 import { ClosingCta } from "@/components/landing/closing-cta";
-import { Comparison } from "@/components/landing/comparison";
+import { ChaosToOrder } from "@/components/landing/chaos-to-order";
 import { Hero } from "@/components/landing/hero";
+import { HeroStory } from "@/components/landing/hero-story";
 import { HowItWorks } from "@/components/landing/how-it-works";
 import { Prices } from "@/components/landing/prices";
 import { Producers } from "@/components/landing/producers";
 import { SiteFooter } from "@/components/landing/site-footer";
-import { Story } from "@/components/landing/story";
 import { Ticker } from "@/components/landing/ticker";
 import { PageMotion } from "@/components/motion/page-motion";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
@@ -45,9 +45,9 @@ export default function Home() {
       />
       <main id="top" className="flex-1">
         <Hero />
+        <HeroStory />
         <Ticker />
-        <Story />
-        <Comparison />
+        <ChaosToOrder />
         <HowItWorks />
         <Producers />
         <Buyers />

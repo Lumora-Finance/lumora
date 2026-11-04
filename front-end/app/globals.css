@@ -88,6 +88,7 @@
   --color-green: #1F5C45;
   --color-green-hover: #184A37;
   --color-field: #0E2E23;
+  --color-dust: #EDE8DC;
   --color-field-soft: #1A4636;
   --color-field-line: #24503F;
   --color-sage: #8FB8A4;
@@ -241,6 +242,118 @@
     animation-duration: 0s !important;
     animation-delay: 0s !important;
   }
+}
+
+/* Hero story. Without data-live (reduced motion, no JS) it's just the text, with the photo inline. */
+[data-hero-story]:not([data-live]) [data-photo] {
+  display: none;
+}
+
+[data-hero-story][data-live] [data-stage] {
+  position: relative;
+  display: grid;
+  height: 100svh;
+  place-items: center;
+  overflow: hidden;
+  background-color: var(--color-field);
+}
+
+[data-hero-story][data-live] [data-photo] {
+  position: absolute;
+  z-index: 2;
+  padding: 0;
+  background-color: var(--color-paper);
+  will-change: transform;
+}
+
+/* A clip-path would cut off any focus ring, so keyboard users get the full box instead. */
+[data-hero-story][data-live] [data-photo]:focus-visible {
+  clip-path: none !important;
+  outline: 3px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+[data-hero-story][data-live] [data-copy] {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  padding-block: 0;
+}
+
+/* The flying photo takes over from the inline one, which only holds its place in the text. */
+[data-hero-story][data-live] [data-target-inline] {
+  visibility: hidden;
+}
+
+@media (max-width: 767px) {
+  [data-hero-story][data-live] [data-target-inline] {
+    display: none;
+  }
+
+  [data-hero-story][data-live] [data-target-kernel] {
+    display: block;
+  }
+}
+
+/* Chaos to order. Without data-live (reduced motion, no JS) the notes are a flat strip above the card. */
+[data-chaos]:not([data-live]) [data-headline-before],
+[data-chaos]:not([data-live]) [data-face="field"] {
+  display: none;
+}
+
+[data-chaos]:not([data-live]) [data-note] {
+  height: 100%;
+}
+
+[data-chaos][data-live] [data-chaos-stage] {
+  height: 100svh;
+  justify-content: center;
+  padding-block: 0;
+  background-color: var(--color-dust);
+}
+
+[data-chaos][data-live] [data-notes-label] {
+  display: none;
+}
+
+[data-chaos][data-live] [data-notes],
+[data-chaos][data-live] [data-notes-list] {
+  display: contents;
+}
+
+/* Each wrapper covers the stage, so a note's percent position and its measured flight share a box. */
+[data-chaos][data-live] [data-note-float] {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+[data-chaos][data-live] [data-note] {
+  position: absolute;
+  width: 15rem;
+  will-change: transform;
+}
+
+[data-chaos][data-live] [data-face="field"] {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+/* Hidden with opacity, so screen readers still get the real fields under the flying copies. */
+[data-chaos][data-live] [data-field] {
+  opacity: 0;
+}
+
+@media (max-width: 767px) {
+  [data-chaos][data-live] [data-note] {
+    width: 10rem;
+  }
+}
+
+.story-word {
+  will-change: opacity;
 }
 
 .type-caret {

@@ -1,13 +1,14 @@
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
+import { Flip } from "gsap/Flip";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { SplitText } from "gsap/SplitText";
 
 import { formatNaira } from "@/lib/format";
 
-gsap.registerPlugin(useGSAP, ScrollTrigger, SplitText);
+gsap.registerPlugin(useGSAP, ScrollTrigger, SplitText, Flip);
 
-export { gsap, ScrollTrigger, SplitText, useGSAP };
+export { Flip, gsap, ScrollTrigger, SplitText, useGSAP };
 
 export type EffectName =
   | "riseIn"
@@ -18,7 +19,9 @@ export type EffectName =
   | "kernelRise"
   | "floatDrift"
   | "marquee"
-  | "typeIn";
+  | "typeIn"
+  | "chipPop"
+  | "chaosToOrder";
 
 export type EffectConfig = {
   stagger?: number;
@@ -31,6 +34,9 @@ export type EffectConfig = {
   button?: HTMLButtonElement | null;
   speed?: number;
   text?: string;
+  duration?: number;
+  landings?: Element[];
+  stage?: Element;
 };
 
 type EffectTargets = gsap.TweenTarget;
@@ -207,6 +213,66 @@ const EFFECTS: Record<
       });
       return tween;
     },
+  },
+
+  chaosToOrder: {
+    defaults: { stagger: 0.07, duration: 0.35 },
+    run: (targets, config) => {
+      const timeline = gsap.timeline();
+      const duration = config.duration ?? 0.35;
+      const stageBox = config.stage?.getBoundingClientRect();
+
+      gsap.utils.toArray<HTMLElement>(targets).forEach((note, index) => {
+        const landing = config.landings?.[index]?.getBoundingClientRect();
+        if (!landing || !stageBox) return;
+
+        const at = index * (config.stagger ?? 0.07);
+        const flight = { duration, ease: "power3.inOut" };
+        const chaos = note.querySelector("[data-face='chaos']");
+        const field = note.querySelector<HTMLElement>("[data-face='field']");
+
+        // The answer keeps its final width, so its text never reflows while the note resizes.
+        if (field) gsap.set(field, { width: landing.width - 2 });
+
+        timeline.to(
+          note,
+          {
+            x: landing.left - stageBox.left - note.offsetLeft,
+            y: landing.top - stageBox.top - note.offsetTop,
+            rotation: 0,
+            width: landing.width,
+            height: landing.height,
+            ...flight,
+          },
+          at,
+        );
+        // Halfway through the flight, the problem becomes the answer.
+        timeline.fromTo(
+          chaos,
+          { opacity: 1 },
+          { opacity: 0, duration: duration * 0.2, ease: "none" },
+          at + duration * 0.4,
+        );
+        timeline.fromTo(
+          field,
+          { opacity: 0 },
+          { opacity: 1, duration: duration * 0.2, ease: "none" },
+          at + duration * 0.5,
+        );
+      });
+
+      return timeline;
+    },
+  },
+
+  chipPop: {
+    defaults: { duration: 0.4 },
+    run: (targets, config) =>
+      gsap.fromTo(
+        targets,
+        { scale: 0.6, opacity: 0 },
+        { scale: 1, opacity: 1, duration: config.duration, ease: "back.out(2.2)" },
+      ),
   },
 
   typeIn: {
