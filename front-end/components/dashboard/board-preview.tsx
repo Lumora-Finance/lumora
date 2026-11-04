@@ -74,14 +74,23 @@ export function BoardPreview() {
       </div>
 
       {/* Items */}
-      <div className="divide-y divide-line">
-        {ITEMS.map((item) => (
+      <div className="flex flex-col gap-3 p-4">
+        {ITEMS.map((item, index) => {
+          // Shape 6: skewed parallelogram-ish via clip-path
+          const isHighlight = item.highlight;
+          const clipPath = isHighlight
+            ? "polygon(16px 0, 100% 0, calc(100% - 16px) 100%, 0 100%)"
+            : "polygon(0 0, 100% 0, 100% 100%, 0 100%)";
+
+          return (
           <div
             key={item.id}
             className={cn(
-              "group relative flex items-start gap-4 px-5 py-4 transition-colors hover:bg-sage-soft/20",
-              item.highlight && "bg-amber-soft/30",
+              "group relative flex items-start gap-4 px-5 py-4 transition-all hover:shadow-md hover:-translate-y-px",
+              item.highlight && "bg-amber-soft/40",
+              !item.highlight && "bg-paper",
             )}
+            style={{ clipPath }}
           >
             {/* Highest bid indicator */}
             {item.highlight && (
@@ -133,7 +142,8 @@ export function BoardPreview() {
               Book
             </button>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Footer */}
