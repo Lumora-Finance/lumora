@@ -172,6 +172,77 @@
   background-color: transparent;
 }
 
+/* Landing to sign-up. The photo travels into its panel while the rest makes way for it. */
+.vt-logo {
+  view-transition-name: lumora-logo;
+}
+
+.vt-hero-nav {
+  view-transition-name: hero-nav;
+}
+
+.vt-hero-copy {
+  view-transition-name: hero-copy;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 350ms;
+}
+
+::view-transition-group(.farm-morph),
+::view-transition-group(lumora-logo) {
+  animation-duration: 700ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+::view-transition-group(.farm-morph) {
+  overflow: clip;
+  border-radius: 16px;
+}
+
+::view-transition-old(.farm-morph),
+::view-transition-new(.farm-morph) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  animation-duration: 700ms;
+}
+
+::view-transition-old(hero-copy),
+::view-transition-old(hero-nav),
+::view-transition-old(.auth-form-out) {
+  animation: vt-fade-out 180ms ease-out both;
+}
+
+::view-transition-new(hero-copy),
+::view-transition-new(hero-nav),
+::view-transition-new(.auth-form-in) {
+  animation: vt-rise-in 500ms cubic-bezier(0.22, 1, 0.36, 1) 220ms both;
+}
+
+@keyframes vt-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes vt-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
+}
+
 .type-caret {
   display: inline-block;
   width: 2px;

@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useRef } from "react";
 
 import { buttonVariants } from "@/components/ui/button";
@@ -108,14 +109,14 @@ export function ClosingCta() {
               Farmers near you will see it today.
             </p>
             <div data-follow className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <a
-                href="#buyers"
+              <Link
+                href="/auth/signup?role=buyer"
                 className={cn(buttonVariants({ variant: "highlight" }), ON_DARK_FOCUS, "w-full sm:w-auto")}
               >
                 Post your demand
-              </a>
-              <a
-                href="#producers"
+              </Link>
+              <Link
+                href="/auth/signup?role=producer"
                 className={cn(
                   buttonVariants({ variant: "ghost" }),
                   ON_DARK_FOCUS,
@@ -123,7 +124,7 @@ export function ClosingCta() {
                 )}
               >
                 Selling? See buyers near you
-              </a>
+              </Link>
             </div>
           </div>
         </div>

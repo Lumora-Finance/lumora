@@ -1,10 +1,11 @@
 import { ArrowRight } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
+import { ViewTransition } from "react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-// These scroll to the matching section until the board and listing routes exist.
 const PRODUCER_HREF = "#producers";
 const BUYER_HREF = "#buyers";
 
@@ -18,7 +19,8 @@ export function Hero() {
   return (
     <section className="relative isolate mx-auto mt-2 flex min-h-[calc(100svh-1rem)] w-[calc(100%-1rem)] max-w-[1600px] flex-col overflow-hidden rounded-2xl rounded-tl-none bg-field text-paper md:mt-3 md:min-h-[calc(100svh-1.5rem)] md:w-[calc(100%-1.5rem)]">
       {/* Pexels photo 34705725, free licence. Must not imply this person endorses Lumora. */}
-      <div className="absolute inset-0 -z-10">
+      <ViewTransition name="farm-photo" share="farm-morph" default="none">
+      <div className="absolute inset-0 -z-10 overflow-hidden rounded-2xl rounded-tl-none">
         <Image
           src="/images/hero-farm.jpg"
           alt="A farmer laughing beside baskets of fresh tomatoes in a Nigerian field"
@@ -32,13 +34,14 @@ export function Hero() {
         <div aria-hidden="true" className="absolute inset-x-0 bottom-0 h-2/3 bg-linear-to-t from-field via-field/85 via-45% to-transparent lg:h-1/2 lg:from-field/90 lg:via-field/40 lg:via-50%" />
         <div aria-hidden="true" className="absolute inset-0 hidden bg-linear-to-r from-field/90 via-field/50 via-35% to-transparent to-60% lg:block" />
       </div>
+      </ViewTransition>
 
       <header className="flex items-start justify-between gap-2 pr-2 md:pr-5">
         {/* The logo's green lines need a light surface, so it sits on a paper notch. */}
         <div className="relative rounded-br-2xl bg-paper pt-2 pr-4 pb-3 pl-3 text-ink md:pr-5 md:pl-5">
           <a
             href="#top"
-            className="inline-flex min-h-10 items-center gap-2 rounded-md focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+            className="vt-logo inline-flex min-h-10 items-center gap-2 rounded-md focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
           >
             <Image
               src="/brand/lumora-mark.png"
@@ -60,20 +63,23 @@ export function Hero() {
           />
         </div>
 
-        <nav aria-label="Main" className="flex items-center gap-1 pt-3 md:gap-2 md:pt-4">
+        <nav aria-label="Main" className="vt-hero-nav flex items-center md:gap-2 pt-3 md:pt-4">
           <a href="#how-it-works" className={cn(NAV_LINK, "hidden md:inline-flex")}>
             How it works
           </a>
-          <a href={PRODUCER_HREF} className={NAV_LINK}>
+          <a href={PRODUCER_HREF} className={cn(NAV_LINK, "hidden sm:inline-flex")}>
             Producers
           </a>
-          <a href={BUYER_HREF} className={NAV_LINK}>
+          <a href={BUYER_HREF} className={cn(NAV_LINK, "hidden sm:inline-flex")}>
             Buyers
           </a>
+          <Link href="/auth/login" className={NAV_LINK}>
+            Sign in
+          </Link>
         </nav>
       </header>
 
-      <div className="mt-auto px-4 pt-56 pb-4 md:px-6 md:pt-80 md:pb-6 lg:px-8 lg:pt-24 lg:pb-8">
+      <div className="vt-hero-copy mt-auto px-4 pt-56 pb-4 md:px-6 md:pt-80 md:pb-6 lg:px-8 lg:pt-24 lg:pb-8">
         <h1
           className={cn(
             ENTER,
@@ -95,7 +101,7 @@ export function Hero() {
             "mt-6 flex flex-col gap-3 motion-safe:delay-200 sm:flex-row sm:items-center",
           )}
         >
-          <a href={PRODUCER_HREF} className="group flex gap-1 rounded-md">
+          <Link href="/auth/signup?role=producer" className="group flex gap-1 rounded-md">
             <span
               className={cn(
                 buttonVariants({ variant: "highlight" }),
@@ -116,9 +122,9 @@ export function Hero() {
                 className="size-5 transition-transform duration-200 ease-out group-hover:translate-x-0.5 motion-reduce:transition-none"
               />
             </span>
-          </a>
-          <a
-            href={BUYER_HREF}
+          </Link>
+          <Link
+            href="/auth/signup?role=buyer"
             className={cn(
               buttonVariants({ variant: "ghost" }),
               ON_DARK_FOCUS,
@@ -126,7 +132,7 @@ export function Hero() {
             )}
           >
             Post your demand
-          </a>
+          </Link>
         </div>
       </div>
     </section>

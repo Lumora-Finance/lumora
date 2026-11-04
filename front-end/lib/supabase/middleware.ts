@@ -2,7 +2,15 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 // Public pages and crawler files. They need no session, and must work for logged-out visitors.
-const PUBLIC_PATHS = new Set(['/', '/robots.txt', '/sitemap.xml', '/manifest.webmanifest'])
+const PUBLIC_PATHS = new Set([
+  '/',
+  '/robots.txt',
+  '/sitemap.xml',
+  '/manifest.webmanifest',
+  '/auth/signup',
+  '/auth/login',
+  '/auth/callback',
+])
 
 export async function updateSession(request: NextRequest) {
   if (PUBLIC_PATHS.has(request.nextUrl.pathname)) {
