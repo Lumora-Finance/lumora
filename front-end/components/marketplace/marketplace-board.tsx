@@ -109,24 +109,6 @@ export function MarketplaceBoard() {
 
   return (
     <>
-      <header className="border-b border-line">
-        <div className="mx-auto flex h-16 w-full max-w-[1200px] items-center justify-between gap-4 px-4 md:px-6 lg:px-8">
-          <Link
-            href="/"
-            className="vt-logo inline-flex min-h-10 items-center gap-2 rounded-md focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-          >
-            <Image src="/brand/lumora-mark.png" alt="" width={1024} height={945} preload className="h-6 w-auto md:h-7" />
-            <span className="font-display text-xl font-medium">lumora</span>
-          </Link>
-          <Link
-            href="/account"
-            className="inline-flex min-h-10 items-center rounded-md px-3 text-sm font-medium transition-colors duration-200 ease-out hover:bg-sage-soft focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-          >
-            Account
-          </Link>
-        </div>
-      </header>
-
       <main className="mx-auto w-full max-w-[1200px] flex-1 px-4 py-8 md:px-6 md:py-10 lg:px-8">
         <h1 className="text-title font-semibold">Buyers near you</h1>
         <p className="mt-1 text-ink-muted">

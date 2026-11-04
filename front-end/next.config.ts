@@ -7,6 +7,20 @@ const nextConfig: NextConfig = {
   },
   cacheComponents: true,
   partialPrefetching: true,
+  images: {
+    remotePatterns: [
+      {
+        // Google profile photos (sign in with Google)
+        protocol: "https",
+        hostname: "lh3.googleusercontent.com",
+      },
+      {
+        // GitHub avatars
+        protocol: "https",
+        hostname: "avatars.githubusercontent.com",
+      },
+    ],
+  },
   turbopack: {
     rules: {
       "*.css": {

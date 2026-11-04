@@ -26,7 +26,7 @@ import { useAuthUser } from "./use-auth-user";
 type Mode = "signup" | "login";
 type Values = { email: string; password: string };
 
-const AFTER_SIGN_IN = "/marketplace";
+const AFTER_SIGN_IN = "/dashboard";
 
 const schemas = {
   signup: z.object({

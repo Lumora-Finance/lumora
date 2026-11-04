@@ -75,7 +75,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en-NG"
       className={`${sans.variable} ${display.variable} ${mono.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col bg-paper font-sans text-body text-ink">
+      <body suppressHydrationWarning className="flex min-h-full flex-col bg-paper font-sans text-body text-ink">
         {children}
       </body>
     </html>
