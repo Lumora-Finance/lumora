@@ -65,7 +65,7 @@ export function BoardPreview() {
           <p className="mt-0.5 text-body-sm text-ink-muted">Top matches from the marketplace</p>
         </div>
         <Link
-          href="/marketplace"
+          href="/dashboard/marketplace"
           className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-body-sm font-medium text-ink-muted transition-colors hover:border-green hover:text-green"
         >
           All listings
@@ -139,7 +139,7 @@ export function BoardPreview() {
       {/* Footer */}
       <div className="border-t border-line px-5 py-3">
         <Link
-          href="/marketplace"
+          href="/dashboard/marketplace"
           className="text-body-sm font-medium text-green hover:underline"
         >
           See full marketplace →

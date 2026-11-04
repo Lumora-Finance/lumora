@@ -21,7 +21,7 @@ import { useAuthUser } from "@/components/auth/use-auth-user";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, exact: true },
-  { href: "/marketplace", label: "Marketplace", icon: Store },
+  { href: "/dashboard/marketplace", label: "Marketplace", icon: Store },
   { href: "/dashboard/bookings", label: "My Bookings", icon: BookOpen },
   { href: "/dashboard/messages", label: "Messages", icon: MessageSquare },
   { href: "/dashboard/transactions", label: "Transactions", icon: BarChart3 },
