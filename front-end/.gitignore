@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+front-end/node_modules/
+
+# Next.js build output
+front-end/.next/
+front-end/next-env.d.ts
+
+# Supabase
+supabase/.branches/
+supabase/.temp/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
