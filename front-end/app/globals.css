@@ -1,26 +1,193 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --radius: 0.5rem;
+
+  --background: #F6F3EC;
+  --foreground: #14201B;
+  --card: #FFFFFF;
+  --card-foreground: #14201B;
+  --popover: #FFFFFF;
+  --popover-foreground: #14201B;
+
+  --primary: #1F5C45;
+  --primary-foreground: #F6F3EC;
+  --secondary: #E8EFEB;
+  --secondary-foreground: #14201B;
+  --muted: #EEF2EF;
+  --muted-foreground: #6B7B73;
+  --accent: #E8EFEB;
+  --accent-foreground: #14201B;
+  --destructive: #B4442F;
+  --border: #DCE3DF;
+  --input: #DCE3DF;
+  --ring: #1F5C45;
+
+  --chart-1: #1F5C45;
+  --chart-2: #8FB8A4;
+  --chart-3: #C08A2E;
+  --chart-4: #0E2E23;
+  --chart-5: #6B7B73;
+}
+
+.dark {
+  --background: #0E2E23;
+  --foreground: #F6F3EC;
+  --card: #133A2D;
+  --card-foreground: #F6F3EC;
+  --popover: #133A2D;
+  --popover-foreground: #F6F3EC;
+  --primary: #8FB8A4;
+  --primary-foreground: #0E2E23;
+  --secondary: #1A4636;
+  --secondary-foreground: #F6F3EC;
+  --muted: #1A4636;
+  --muted-foreground: #A9BDB3;
+  --accent: #1A4636;
+  --accent-foreground: #F6F3EC;
+  --destructive: #D8644E;
+  --border: #24503F;
+  --input: #24503F;
+  --ring: #8FB8A4;
 }
 
 @theme inline {
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-mono);
+  --font-heading: var(--font-sans);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-green: #1F5C45;
+  --color-green-hover: #184A37;
+  --color-field: #0E2E23;
+  --color-field-soft: #1A4636;
+  --color-field-line: #24503F;
+  --color-sage: #8FB8A4;
+  --color-sage-soft: #E8EFEB;
+  --color-amber: #C08A2E;
+  --color-amber-soft: #F5EBD7;
+  --color-paper: #F6F3EC;
+  --color-ink: #14201B;
+  --color-ink-muted: #6B7B73;
+  --color-line: #DCE3DF;
+  --color-success: #2E7D6B;
+  --color-danger: #B4442F;
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 4px);
+
+  /* Type scale from BRAND.md section 4 */
+  --text-display-xl: 3.5rem;
+  --text-display-xl--line-height: 3.75rem;
+  --text-display-xl--letter-spacing: -0.02em;
+  --text-display-xl-sm: 2.25rem;
+  --text-display-xl-sm--line-height: 2.625rem;
+  --text-display-xl-sm--letter-spacing: -0.02em;
+  --text-display-lg: 2.5rem;
+  --text-display-lg--line-height: 2.875rem;
+  --text-display-lg--letter-spacing: -0.015em;
+  --text-display-lg-sm: 1.75rem;
+  --text-display-lg-sm--line-height: 2.125rem;
+  --text-display-lg-sm--letter-spacing: -0.015em;
+  --text-title: 1.5rem;
+  --text-title--line-height: 2rem;
+  --text-title--letter-spacing: -0.01em;
+  --text-heading: 1.125rem;
+  --text-heading--line-height: 1.625rem;
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.5rem;
+  --text-body-sm: 0.8125rem;
+  --text-body-sm--line-height: 1.25rem;
+  --text-label: 0.75rem;
+  --text-label--line-height: 1rem;
+  --text-label--letter-spacing: 0.02em;
+  --text-number-lg: 2rem;
+  --text-number-lg--line-height: 2.25rem;
+  --text-number: 0.9375rem;
+  --text-number--line-height: 1.5rem;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+.font-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Static section colours. PageMotion fades the page colour instead when motion is allowed. */
+[data-rhythm="white"] {
+  background-color: #ffffff;
+}
+
+[data-rhythm="field"] {
+  background-color: var(--color-field);
+}
+
+.rhythm-live [data-rhythm] {
+  background-color: transparent;
+}
+
+.type-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 1px;
+  vertical-align: -0.125em;
+  background-color: currentColor;
+  animation: caret-blink 0.8s steps(1) infinite;
+}
+
+.type-caret[hidden] {
+  display: none;
+}
+
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
 }
