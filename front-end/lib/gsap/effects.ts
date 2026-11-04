@@ -21,7 +21,12 @@ export type EffectName =
   | "marquee"
   | "typeIn"
   | "chipPop"
-  | "chaosToOrder";
+  | "chaosToOrder"
+  | "signalTravel"
+  | "phoneBuzz"
+  | "countDown"
+  | "lineMorph"
+  | "numberRoll";
 
 export type EffectConfig = {
   stagger?: number;
@@ -35,6 +40,14 @@ export type EffectConfig = {
   speed?: number;
   text?: string;
   duration?: number;
+  fromValues?: number[];
+  toValues?: number[];
+  onFrame?: (values: number[]) => void;
+  formatValue?: (value: number) => string;
+  perCharacter?: number;
+  path?: SVGPathElement;
+  activePath?: SVGPathElement;
+  direction?: 1 | -1;
   landings?: Element[];
   stage?: Element;
 };
@@ -276,6 +289,7 @@ const EFFECTS: Record<
   },
 
   typeIn: {
+    defaults: { perCharacter: 0.12 },
     run: (targets, config) => {
       const element = firstElement(targets);
       const text = config.text ?? element.textContent ?? "";
@@ -290,16 +304,110 @@ const EFFECTS: Record<
 
       return gsap.to(progress, {
         characters: text.length,
-        duration: text.length * 0.028,
+        duration: text.length * (config.perCharacter ?? 0.12),
         ease: "none",
         onStart: () => {
+          typed.data = "";
           caret.hidden = false;
         },
         onUpdate: () => {
           typed.data = text.slice(0, Math.round(progress.characters));
         },
         onComplete: () => {
-          element.textContent = text;
+          typed.data = text;
+          caret.hidden = true;
+        },
+      });
+    },
+  },
+
+  signalTravel: {
+    defaults: { direction: 1, duration: 1.3 },
+    run: (targets, config) => {
+      const { path, activePath, direction = 1 } = config;
+      const travelled = { progress: 0 };
+      // Reads the path on every frame, so a resize mid-flight can't leave the dot off the arc.
+      const draw = () => {
+        if (!path) return;
+        const length = path.getTotalLength();
+        const drawn = length * travelled.progress;
+        const point = path.getPointAtLength(direction === 1 ? drawn : length - drawn);
+        gsap.set(firstElement<SVGCircleElement>(targets), { attr: { cx: point.x, cy: point.y } });
+        activePath?.setAttribute(
+          "stroke-dasharray",
+          direction === 1 ? `${drawn} ${length}` : `0 ${length - drawn} ${drawn} ${length}`,
+        );
+      };
+
+      return gsap
+        .timeline()
+        .set([targets, activePath], { opacity: 1 })
+        .fromTo(
+          travelled,
+          { progress: 0 },
+          { progress: 1, duration: config.duration, ease: "power2.inOut", onUpdate: draw },
+        )
+        .to([targets, activePath], { opacity: 0, duration: 0.2, ease: "none" });
+    },
+  },
+
+  phoneBuzz: {
+    run: (targets) => {
+      const step = { duration: 0.07, ease: "none" };
+      return gsap
+        .timeline()
+        .to(targets, { x: -2, rotation: -0.8, ...step })
+        .to(targets, { x: 2, rotation: 0.8, ...step })
+        .to(targets, { x: -2, rotation: -0.8, ...step })
+        .to(targets, { x: 2, rotation: 0.8, ...step })
+        .to(targets, { x: 0, rotation: 0, ...step });
+    },
+  },
+
+  lineMorph: {
+    run: (_targets, config) => {
+      const from = config.fromValues ?? [];
+      const to = config.toValues ?? [];
+      const morph = { progress: 0 };
+      return gsap.to(morph, {
+        progress: 1,
+        duration: 0.7,
+        ease: "power3.inOut",
+        onUpdate: () => {
+          config.onFrame?.(from.map((value, index) => value + (to[index] - value) * morph.progress));
+        },
+      });
+    },
+  },
+
+  numberRoll: {
+    defaults: { from: 0, to: 0 },
+    run: (targets, config) => {
+      const element = firstElement(targets);
+      const format = config.formatValue ?? ((value: number) => String(value));
+      const counter = { value: config.from ?? 0 };
+      return gsap.to(counter, {
+        value: config.to ?? 0,
+        duration: 0.6,
+        ease: "power3.out",
+        onUpdate: () => {
+          element.textContent = format(Math.round(counter.value));
+        },
+      });
+    },
+  },
+
+  countDown: {
+    defaults: { from: 0, to: 0 },
+    run: (targets, config) => {
+      const element = firstElement(targets);
+      const counter = { value: config.from ?? 0 };
+      return gsap.to(counter, {
+        value: config.to ?? 0,
+        duration: 0.7,
+        ease: "power3.out",
+        onUpdate: () => {
+          element.textContent = String(Math.round(counter.value));
         },
       });
     },
