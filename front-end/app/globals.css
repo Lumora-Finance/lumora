@@ -161,16 +161,81 @@
 }
 
 /* Static section colours. PageMotion fades the page colour instead when motion is allowed. */
-[data-rhythm="white"] {
+[data-bg="white"] {
   background-color: #ffffff;
 }
 
-[data-rhythm="field"] {
+[data-bg="field"] {
   background-color: var(--color-field);
 }
 
-.rhythm-live [data-rhythm] {
+.bg-live [data-bg] {
   background-color: transparent;
+}
+
+/* Lenis does the smoothing, and the browser's own would fight it. */
+html.lenis {
+  scroll-behavior: auto !important;
+}
+
+/* The journey. Without data-live (phones, reduced motion, no JS) it's a plain vertical stack. */
+.journey-number {
+  font-size: 96px;
+}
+
+.journey-title {
+  font-size: 40px;
+}
+
+.journey-payout {
+  font-size: 44px;
+}
+
+@media (min-width: 768px) {
+  .journey-payout {
+    font-size: 64px;
+  }
+}
+
+[data-journey][data-live] {
+  --journey-panel-height: min(70vh, calc(100svh - 11rem));
+  display: flex;
+  height: 100svh;
+  flex-direction: column;
+  justify-content: center;
+  padding-block: 0;
+  overflow: hidden;
+}
+
+[data-journey][data-live] [data-journey-track] {
+  display: flex;
+  width: max-content;
+  max-width: none;
+  gap: 24px;
+  margin: 2rem 0 0;
+  padding-inline: 15vw;
+}
+
+[data-journey][data-live] [data-journey-step] {
+  width: 70vw;
+  height: var(--journey-panel-height);
+}
+
+/* Type gives way on short and narrow windows, so nothing is cut off inside a fixed-height panel. */
+[data-journey][data-live] .journey-number {
+  font-size: clamp(56px, 12vh, 96px);
+}
+
+[data-journey][data-live] .journey-title {
+  font-size: clamp(28px, min(5.2vh, 3.6vw), 40px);
+}
+
+[data-journey][data-live] .journey-payout {
+  font-size: clamp(40px, min(8.4vh, 6.2vw), 64px);
+}
+
+[data-journey][data-live] .journey-kernel {
+  width: min(100%, calc((var(--journey-panel-height) - 7rem) * 1.12));
 }
 
 /* Landing to sign-up. The photo travels into its panel while the rest makes way for it. */

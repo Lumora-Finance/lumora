@@ -1,6 +1,8 @@
 "use client";
 
-import { gsap, refreshTriggers, ScrollTrigger, useGSAP } from "@/lib/gsap/effects";
+import Lenis from "lenis";
+
+import { gsap, panelEntrance, refreshTriggers, ScrollTrigger, useGSAP } from "@/lib/gsap/effects";
 
 const COLORS: Record<string, string> = {
   paper: "#F6F3EC",
@@ -8,51 +10,76 @@ const COLORS: Record<string, string> = {
   field: "#0E2E23",
 };
 
-const TEXT_COLORS: Record<string, { from: string; to: string }> = {
-  heading: { from: "#14201B", to: "#F6F3EC" },
-  muted: { from: "#6B7B73", to: "#8FB8A4" },
-};
+/** Smooth wheel scrolling, driven by GSAP's clock so pins and scrubs stay in step with it. */
+function startSmoothScroll() {
+  const lenis = new Lenis({ anchors: true });
+  const raf = (time: number) => lenis.raf(time * 1000);
+  // Lenis measures the page on a delay, but a pin can make the page taller on the first scroll.
+  const measure = () => lenis.resize();
 
-/** Page-wide scroll behaviour: background rhythm and trigger refreshes. Renders nothing. */
+  lenis.on("scroll", ScrollTrigger.update);
+  gsap.ticker.add(raf);
+  gsap.ticker.lagSmoothing(0);
+  ScrollTrigger.addEventListener("refresh", measure);
+
+  return () => {
+    ScrollTrigger.removeEventListener("refresh", measure);
+    gsap.ticker.remove(raf);
+    gsap.ticker.lagSmoothing(500, 33);
+    lenis.destroy();
+  };
+}
+
+/** One trigger per section. The page takes the colour of the last section to reach 60%. */
+function startBackgrounds() {
+  const root = document.documentElement;
+  root.classList.add("bg-live");
+
+  const apply = () => {
+    const current = triggers.filter((trigger) => trigger.isActive).at(-1);
+    const name = (current?.trigger as HTMLElement | undefined)?.dataset.bg ?? "paper";
+    gsap.to(document.body, {
+      backgroundColor: COLORS[name],
+      duration: 0.5,
+      ease: "power2.inOut",
+      overwrite: true,
+    });
+  };
+
+  const triggers = gsap.utils.toArray<HTMLElement>("[data-bg]").map((section) =>
+    ScrollTrigger.create({
+      trigger: section,
+      start: "top 60%",
+      end: "max",
+      onToggle: apply,
+    }),
+  );
+
+  return () => {
+    root.classList.remove("bg-live");
+    gsap.killTweensOf(document.body);
+    gsap.set(document.body, { clearProps: "backgroundColor" });
+  };
+}
+
+/** Page-wide scroll behaviour: smooth scroll, backgrounds, entrances, refreshes. Renders nothing. */
 export function PageMotion() {
   useGSAP(() => {
     const media = gsap.matchMedia();
 
     media.add("(prefers-reduced-motion: no-preference)", () => {
-      const root = document.documentElement;
-      root.classList.add("rhythm-live");
+      const stopSmoothScroll = startSmoothScroll();
+      const stopBackgrounds = startBackgrounds();
 
-      let previous = COLORS.paper;
-      gsap.utils.toArray<HTMLElement>("[data-rhythm]").forEach((section) => {
-        const color = COLORS[section.dataset.rhythm ?? "paper"];
-        if (color !== previous) {
-          const scrollTrigger = {
-            trigger: section,
-            start: "top 70%",
-            end: "top 30%",
-            scrub: true,
-          };
-
-          gsap.fromTo(
-            document.body,
-            { backgroundColor: previous },
-            { backgroundColor: color, ease: "none", immediateRender: false, scrollTrigger },
-          );
-          section.querySelectorAll<HTMLElement>("[data-rhythm-text]").forEach((text) => {
-            const colors = TEXT_COLORS[text.dataset.rhythmText ?? "heading"];
-            gsap.fromTo(
-              text,
-              { color: colors.from },
-              { color: colors.to, ease: "none", scrollTrigger },
-            );
-          });
-        }
-        previous = color;
+      gsap.utils.toArray<HTMLElement>("[data-entrance]").forEach((panel) => {
+        panelEntrance(panel, panel.parentElement, {
+          rounded: panel.dataset.entrance !== "scale",
+        });
       });
 
       return () => {
-        root.classList.remove("rhythm-live");
-        gsap.set(document.body, { clearProps: "backgroundColor" });
+        stopBackgrounds();
+        stopSmoothScroll();
       };
     });
 

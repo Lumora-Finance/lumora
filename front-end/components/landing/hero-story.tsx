@@ -35,13 +35,13 @@ const FACE = { desktop: { x: 31, y: 27, zoom: 2.2 }, mobile: { x: 52, y: 30, zoo
 // How big the kernel starts, before it flies into its place in the text.
 const START_HEIGHT = { desktop: 0.2, mobile: 0.22 };
 
-const CHIP_TEXT = "text-[0.46em] leading-none";
+const CHIP_TEXT = "text-[0.6em] leading-none md:text-[0.46em]";
 
 function Chip({ className, children }: { className: string; children: ReactNode }) {
   return (
     <span
       data-chip
-      className={`mx-[0.1em] inline-flex h-[0.9em] items-center gap-[0.2em] rounded-[10px] px-[0.3em] align-middle whitespace-nowrap ${className}`}
+      className={`mx-[0.1em] inline-flex h-[1.1em] items-center gap-[0.2em] rounded-[8px] px-[0.3em] align-middle whitespace-nowrap md:h-[0.9em] md:rounded-[10px] ${className}`}
     >
       {children}
     </span>
@@ -154,7 +154,13 @@ function buildTimeline(root: HTMLElement, isDesktop: boolean) {
 
   const reveal = (item: HTMLElement) => {
     if (item.matches("[data-chip]")) {
-      timeline.add(fx("chipPop", item, { duration: 0.03 }), at);
+      // Faint like the unread words, not invisible, so the sentence never has holes in it.
+      timeline.fromTo(
+        item,
+        { opacity: 0.15, scale: 0.85 },
+        { opacity: 1, scale: 1, duration: 0.03, ease: "back.out(2.2)" },
+        at,
+      );
       if (item.contains(payout)) payoutStart = at + 0.01;
     } else {
       timeline.fromTo(item, { opacity: 0.15 }, { opacity: 1, duration: wordDuration }, at);
@@ -388,11 +394,11 @@ export function HeroStory() {
           <span
             data-target-kernel
             aria-hidden="true"
-            className="mx-auto mb-5 hidden h-24 w-[3.25rem]"
+            className="mx-auto mb-3 hidden h-[11svh] w-[6.2svh]"
           />
           <div
             data-paragraph
-            className="mx-auto max-w-[860px] text-[min(24px,3vh)] leading-[1.25] font-medium text-ink md:text-[min(38px,4.9vh)]"
+            className="mx-auto max-w-[860px] text-[min(22px,3svh)] leading-[1.3] font-medium text-ink md:text-[min(38px,4.9vh)] md:leading-[1.25]"
           >
             <p data-story-text>
               A farmer in Jos{" "}
@@ -420,7 +426,7 @@ export function HeroStory() {
               them <Strong>cheap</Strong>, just to go home.
             </p>
 
-            <p data-turn className="my-10 font-display text-[1.2em] leading-[1.2] text-green">
+            <p data-turn className="my-[2.2svh] font-display text-[1.2em] leading-[1.2] text-green md:my-10">
               Lumora fixes this.
             </p>
 

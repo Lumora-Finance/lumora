@@ -1,4 +1,3 @@
-import { ArrowRight } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { ViewTransition } from "react";
@@ -73,7 +72,10 @@ export function Hero() {
           <a href={BUYER_HREF} className={cn(NAV_LINK, "hidden sm:inline-flex")}>
             Buyers
           </a>
-          <Link href="/auth/login" className={NAV_LINK}>
+          <Link
+            href="/auth/login"
+            className="ml-1 inline-flex min-h-10 items-center rounded-md bg-paper px-4 text-sm font-semibold text-ink transition-colors duration-200 ease-out hover:bg-sage-soft focus-visible:ring-3 focus-visible:ring-paper/60 focus-visible:outline-none md:ml-2"
+          >
             Sign in
           </Link>
         </nav>
@@ -95,45 +97,17 @@ export function Hero() {
           they load the truck.
         </p>
 
-        <div
+        <Link
+          href="/auth/login"
           className={cn(
+            buttonVariants({ variant: "highlight" }),
+            ON_DARK_FOCUS,
             ENTER,
-            "mt-6 flex flex-col gap-3 motion-safe:delay-200 sm:flex-row sm:items-center",
+            "mt-6 w-full motion-safe:delay-200 sm:w-auto",
           )}
         >
-          <Link href="/auth/signup?role=producer" className="group flex gap-1 rounded-md">
-            <span
-              className={cn(
-                buttonVariants({ variant: "highlight" }),
-                "flex-1 group-hover:bg-amber/90 group-focus-visible:ring-3 group-focus-visible:ring-paper/60",
-              )}
-            >
-              See buyers near you
-            </span>
-            <span
-              aria-hidden="true"
-              className={cn(
-                buttonVariants({ variant: "highlight", size: "icon" }),
-                "size-11 group-hover:bg-amber/90 md:size-10",
-              )}
-            >
-              <ArrowRight
-                strokeWidth={1.5}
-                className="size-5 transition-transform duration-200 ease-out group-hover:translate-x-0.5 motion-reduce:transition-none"
-              />
-            </span>
-          </Link>
-          <Link
-            href="/auth/signup?role=buyer"
-            className={cn(
-              buttonVariants({ variant: "ghost" }),
-              ON_DARK_FOCUS,
-              "text-paper hover:bg-field-soft hover:text-paper",
-            )}
-          >
-            Post your demand
-          </Link>
-        </div>
+          Sign in
+        </Link>
       </div>
     </section>
   );
