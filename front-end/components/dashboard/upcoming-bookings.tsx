@@ -81,11 +81,19 @@ export function UpcomingBookings() {
       </div>
 
       {/* Booking cards */}
-      <div className="divide-y divide-line">
-        {BOOKINGS.map((booking) => (
+      <div className="flex flex-col gap-3 p-4">
+        {BOOKINGS.map((booking, index) => {
+          // Shape 5: arrow-cut cards, alternating left/right notch
+          const isLeft = index % 2 === 0;
+          const clipPath = isLeft
+            ? "polygon(0 0, 100% 0, 100% 100%, 12px 100%, 0 calc(100% - 12px))"
+            : "polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%)";
+
+          return (
           <div
             key={booking.id}
-            className="group flex gap-4 px-5 py-4 transition-colors hover:bg-sage-soft/20"
+            className="group relative flex gap-4 bg-paper px-5 py-4 transition-all hover:shadow-md hover:-translate-y-px"
+            style={{ clipPath }}
           >
             {/* Left: date pill */}
             <div className="flex shrink-0 flex-col items-center justify-start pt-0.5">
@@ -149,7 +157,8 @@ export function UpcomingBookings() {
               </div>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Footer */}

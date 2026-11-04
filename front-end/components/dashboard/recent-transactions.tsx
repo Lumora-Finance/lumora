@@ -83,13 +83,20 @@ export function RecentTransactions() {
       </div>
 
       {/* List */}
-      <div className="divide-y divide-line">
-        {TXS.map((tx) => {
+      <div className="flex flex-col gap-2 p-3">
+        {TXS.map((tx, index) => {
           const isIn = tx.type === "received";
+          // Shape 7: alternating trapezoid rows
+          const isOdd = index % 2 === 1;
           return (
             <div
               key={tx.id}
-              className="flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-sage-soft/20"
+              className="flex items-center gap-4 bg-paper px-5 py-3.5 transition-all hover:shadow-sm hover:-translate-y-px"
+              style={{
+                clipPath: isOdd
+                  ? "polygon(0 0, 100% 0, 100% 100%, 8px 100%, 0 calc(100% - 8px))"
+                  : "polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%)",
+              }}
             >
               {/* Direction icon */}
               <div

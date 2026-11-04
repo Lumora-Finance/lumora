@@ -93,14 +93,23 @@ export function MyPosts({ onPost }: { onPost?: () => void }) {
       </div>
 
       {/* Posts */}
-      <div className="divide-y divide-line">
-        {POSTS.map((post) => {
+      <div className="flex flex-col gap-3 p-4">
+        {POSTS.map((post, index) => {
           const pct = post.total === "0" ? 0 : Math.round((parseInt(post.remaining) / parseInt(post.total)) * 100);
+          // Alternate 4 card shapes
+          const shapes = [
+            { clip: "polygon(0 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%)", border: "border-l-[3px] border-l-green" },
+            { clip: "polygon(14px 0, 100% 0, 100% 100%, 0 100%, 0 14px)", border: "border-r-[3px] border-r-amber" },
+            { clip: "polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%)", border: "border-b-[3px] border-b-green" },
+            { clip: "polygon(0 0, 100% 0, 100% 100%, 14px 100%, 0 calc(100% - 14px))", border: "border-t-[3px] border-t-sage" },
+          ];
+          const { clip, border } = shapes[index % 4];
 
           return (
             <div
               key={post.id}
-              className="group flex items-start gap-4 px-5 py-4 transition-colors hover:bg-sage-soft/20"
+              className={cn("group flex items-start gap-4 bg-paper px-5 py-4 transition-all hover:shadow-md hover:-translate-y-px", border)}
+              style={{ clipPath: clip }}
             >
               {/* Type tag */}
               <span
@@ -188,8 +197,6 @@ export function MyPosts({ onPost }: { onPost?: () => void }) {
           );
         })}
       </div>
-
-      {/* Footer */}
       <div className="border-t border-line px-5 py-3">
         <button className="text-body-sm font-medium text-green hover:underline">
           View all posts →
