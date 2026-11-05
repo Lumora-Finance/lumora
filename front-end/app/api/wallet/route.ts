@@ -35,7 +35,8 @@ export async function GET(request: Request) {
       (balances ?? []).map((b: { bucket: string; balance_kobo: number }) => [b.bucket, b.balance_kobo]),
     );
 
-    available = balanceMap["buyer_available"] ?? balanceMap["farmer_pending"] ?? 0;
+    // Sum all available/pending buckets - user may be buyer, farmer, or both
+    available = (balanceMap["buyer_available"] ?? 0) + (balanceMap["farmer_available"] ?? 0) + (balanceMap["farmer_pending"] ?? 0);
     reserved = balanceMap["buyer_reserved"] ?? 0;
   } catch {
     // Balances not available — return zeros

@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowDownLeft, ArrowUpRight,
   CheckCircle2, History, X,
 } from "lucide-react";
-
+import { useSearchParams, useRouter } from "next/navigation";
 
 import { getToken } from "@/lib/firebase/auth";
 import { Reveal } from "@/components/motion/reveal";
@@ -59,11 +59,13 @@ function relDate(iso: string) {
 export default function WalletPage() {
   const { user } = useAuthUser();
 
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [wallet, setWallet] = useState<WalletData | null>(null);
   const [walletLoading, setWalletLoading] = useState(true);
-
   const [modal, setModal] = useState<"fund" | "withdraw" | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const reloadRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const displayName = user?.displayName ?? user?.email?.split("@")[0] ?? "there";
   const firstName = displayName.split(" ")[0];
@@ -93,6 +95,23 @@ export default function WalletPage() {
     load();
     return () => { cancelled = true; };
   }, []);
+
+  // Paystack redirects back with ?reference=LUMORA-FUND-xxx
+  // Reload wallet after 3s to allow webhook to process
+  useEffect(() => {
+    const ref = searchParams.get("reference") ?? searchParams.get("trxref") ?? "";
+    if (!ref.startsWith("LUMORA-FUND-")) return;
+    router.replace("/dashboard/wallet", { scroll: false });
+    setSuccess("Payment received — updating your balance…");
+    reloadRef.current = setTimeout(async () => {
+      try {
+        const token = await getToken();
+        const res = await fetch("/api/wallet", { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+        if (res.ok) { setWallet(await res.json()); setSuccess("Wallet updated!"); }
+      } catch { /* */ }
+    }, 3500);
+    return () => { if (reloadRef.current) clearTimeout(reloadRef.current); };
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const available = wallet?.available_kobo ?? 0;
   const totalIn = wallet?.total_in_kobo ?? 0;
