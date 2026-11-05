@@ -3,11 +3,11 @@
 import { Check } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { type FormEvent, type MouseEvent, useLayoutEffect, useRef, useState } from "react";
+import { type FormEvent, useLayoutEffect, useRef, useState } from "react";
 
+import { BusyBar } from "@/components/loader/busy-bar";
 import { LocationPicker, type PickedLocation } from "@/components/location/location-picker";
 import { gsap, isReducedMotion } from "@/lib/gsap/effects";
-import { wipeFrom } from "@/lib/gsap/page-wipe";
 import { validPhone } from "@/lib/logistics/location-input";
 import { cn } from "@/lib/utils";
 
@@ -22,7 +22,7 @@ const ROLES = [
 ] as const;
 
 const NEXT =
-  "inline-flex h-[52px] min-w-28 items-center justify-center rounded-2xl bg-green px-7 font-medium text-paper transition-[background-color,transform] duration-150 [-webkit-tap-highlight-color:transparent] hover:bg-green-hover focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:outline-none active:scale-[0.97] disabled:opacity-60 motion-reduce:active:scale-100";
+  "relative inline-flex h-[52px] min-w-28 items-center overflow-hidden justify-center rounded-2xl bg-green px-7 font-medium text-paper transition-[background-color,transform] duration-150 [-webkit-tap-highlight-color:transparent] hover:bg-green-hover focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:outline-none active:scale-[0.97] disabled:opacity-60 motion-reduce:active:scale-100";
 const QUIET =
   "inline-flex h-[52px] items-center justify-center rounded-2xl px-4 font-medium text-ink transition-colors duration-150 [-webkit-tap-highlight-color:transparent] hover:bg-sage-soft focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none";
 const FIELD =
@@ -47,7 +47,8 @@ export function OnboardingView({
   /** Returns an error message to show, or null when saved. */
   onSaveDetails: (details: { role: OnboardingRole; name: string; phone: string }) => Promise<string | null>;
   onSaveLocation: (location: PickedLocation) => Promise<void>;
-  onFinish: () => void;
+  /** With details when they finished properly. Without when they skipped. */
+  onFinish: (details?: { role: OnboardingRole; area: string | null }) => void;
 }) {
   const [step, setStep] = useState(initialStep);
   const [role, setRole] = useState(initialRole);
@@ -62,7 +63,6 @@ export function OnboardingView({
   const heading = useRef<HTMLHeadingElement>(null);
   const direction = useRef<1 | -1>(1);
   const changing = useRef(false);
-  const leaving = useRef(false);
   const firstRender = useRef(true);
   const deckHeight = useRef<number | null>(null);
   const entrance = useRef<gsap.core.Timeline | null>(null);
@@ -178,13 +178,6 @@ export function OnboardingView({
     setSaving(false);
     setArea(location.area);
     goTo("done");
-  }
-
-  // The button opens out to fill the screen, and the dashboard lifts the cover when it's ready.
-  function finish(event: MouseEvent<HTMLButtonElement>) {
-    if (leaving.current) return;
-    leaving.current = true;
-    wipeFrom(event.currentTarget.getBoundingClientRect(), firstName ? `Welcome, ${firstName}` : "Welcome", onFinish);
   }
 
   const headings: Record<OnboardingStep, string> = {
@@ -364,18 +357,19 @@ export function OnboardingView({
                   </button>
                 )}
                 {step === "location" && (
-                  <button type="button" onClick={finish} className={cn(QUIET, "text-ink-muted")}>
+                  <button type="button" onClick={() => onFinish()} className={cn(QUIET, "text-ink-muted")}>
                     Skip for now
                   </button>
                 )}
                 {step === "done" && (
-                  <button type="button" onClick={finish} className={NEXT}>
+                  <button type="button" onClick={() => onFinish({ role, area })} className={NEXT}>
                     Take me in
                   </button>
                 )}
                 {(step === "role" || step === "name" || step === "phone") && (
                   <button type="submit" disabled={saving} className={NEXT}>
-                    {saving ? "Saving…" : "Next"}
+                    Next
+                    <BusyBar active={saving} />
                   </button>
                 )}
               </div>

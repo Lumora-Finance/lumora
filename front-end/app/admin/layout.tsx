@@ -25,6 +25,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { getFirebaseAuth } from "@/lib/firebase/auth";
 import { useProfile } from "@/components/auth/use-profile";
+import { LoaderScreen } from "@/components/loader/LumoraLoader";
 
 const NAV = [
   { href: "/admin",              label: "Overview",     icon: LayoutDashboard, exact: true },
@@ -195,12 +196,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   // Show nothing while checking auth / redirecting
   if (loading || !user || !isAdmin) {
     return (
-      <div className="flex h-svh items-center justify-center bg-paper">
-        <div className="flex flex-col items-center gap-3 text-ink-muted">
-          <div className="size-8 animate-spin rounded-full border-2 border-line border-t-green" />
-          <p className="text-body-sm">Checking access…</p>
-        </div>
-      </div>
+      <LoaderScreen label="Checking access" />
     );
   }
 

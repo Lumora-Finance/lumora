@@ -4,6 +4,7 @@ import { onAuthStateChanged, type User } from "firebase/auth";
 import { useSyncExternalStore } from "react";
 
 import { getFirebaseAuth } from "@/lib/firebase/auth";
+import { forgetLoaderSeen } from "@/lib/loading/moment";
 
 type AuthState = { user: User | null; loading: boolean };
 
@@ -27,6 +28,8 @@ function subscribe(listener: () => void) {
       listening = true;
       onAuthStateChanged(auth, (user) => {
         state = { user, loading: false };
+        // Signing back in earns the full first-load sequence again.
+        if (!user) forgetLoaderSeen();
         listeners.forEach((notify) => notify());
       });
     }

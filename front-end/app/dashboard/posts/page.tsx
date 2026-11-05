@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Plus, Pause, Pencil, MoreHorizontal, Sparkles, Loader2 } from "lucide-react";
+import { Plus, Pause, Pencil, MoreHorizontal, Sparkles } from "lucide-react";
 import { getAuth } from "firebase/auth";
 
 import app from "@/lib/firebase/config";
@@ -10,6 +10,8 @@ import { PostModal } from "@/components/dashboard/post-button";
 import { Reveal } from "@/components/motion/reveal";
 import { fx, playOnEnter, useGSAP } from "@/lib/gsap/effects";
 import { cn } from "@/lib/utils";
+import { RowsSkeleton } from "@/components/loader/skeletons";
+import { trackTask } from "@/lib/loading/progress";
 
 type Post = {
   id: string;
@@ -108,6 +110,7 @@ export default function PostsPage() {
     let cancelled = false;
     async function load() {
       setLoading(true);
+      const finished = trackTask("posts-page");
       setError(null);
       try {
         const token = await getAuth(app).currentUser?.getIdToken();
@@ -120,6 +123,7 @@ export default function PostsPage() {
       } catch {
         if (!cancelled) setError("Couldn't load posts. Please refresh.");
       } finally {
+        finished();
         if (!cancelled) setLoading(false);
       }
     }
@@ -185,9 +189,7 @@ export default function PostsPage() {
 
         {/* Content */}
         {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="size-6 animate-spin text-ink-muted" />
-          </div>
+          <RowsSkeleton label="Loading your posts" />
         ) : error ? (
           <div className="rounded-xl border border-danger/30 bg-danger/5 p-6 text-center text-danger">{error}</div>
         ) : posts.length === 0 ? (

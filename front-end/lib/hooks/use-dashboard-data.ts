@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { getAuth } from "firebase/auth";
 
 import app from "@/lib/firebase/config";
+import { trackTask } from "@/lib/loading/progress";
 
 /**
  * Maps the short dashboard keys used by board components to their API paths.
@@ -51,6 +52,8 @@ export function useDashboardData<T>(key: string): DashboardState<T> {
     }
 
     let cancelled = false;
+    // Counts towards what the loaders show, so their progress comes from real requests.
+    const finished = trackTask(key);
 
     async function fetchData() {
       try {
@@ -85,6 +88,8 @@ export function useDashboardData<T>(key: string): DashboardState<T> {
             error: err instanceof Error ? err.message : "Failed to load data",
           });
         }
+      } finally {
+        finished();
       }
     }
 

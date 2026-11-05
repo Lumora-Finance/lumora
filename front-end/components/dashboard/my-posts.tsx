@@ -3,6 +3,7 @@
 import { Plus } from "lucide-react";
 import Link from "next/link";
 
+import { RowsSkeleton } from "@/components/loader/skeletons";
 import type { DashboardPost } from "@/lib/dashboard-data";
 import { useDashboardData } from "@/lib/hooks/use-dashboard-data";
 import { formatKobo } from "@/lib/money/rules";
@@ -35,7 +36,7 @@ export function MyPosts({ onPost }: { onPost?: () => void }) {
         }
       />
       {loading ? (
-        <p className="flex-1 px-5 py-8 text-center text-ink-muted sm:px-6">Loading your posts…</p>
+        <RowsSkeleton rows={3} label="Loading your posts" className="mt-2 flex-1 px-5 sm:px-6" />
       ) : posts.length === 0 ? (
         <div className="flex-1 px-5 py-8 text-center sm:px-6">
           <p className="text-body-sm text-ink-muted">No posts yet.</p>

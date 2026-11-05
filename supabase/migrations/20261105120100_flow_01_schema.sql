@@ -90,6 +90,27 @@ create table if not exists notifications (
   created_at timestamptz not null default now()
 );
 
+-- The live database already has this table in an older shape, with title, body and read, and
+-- notify_user still writes to it. Keep those columns, add ours, and stop requiring the words: ours
+-- live in lib/email/templates.
+alter table notifications
+  add column if not exists booking_id uuid references bookings (id),
+  add column if not exists read_at timestamptz;
+
+do $$
+declare
+  old_column text;
+begin
+  foreach old_column in array array['title', 'body'] loop
+    if exists (
+      select 1 from information_schema.columns
+      where table_schema = current_schema() and table_name = 'notifications' and column_name = old_column
+    ) then
+      execute format('alter table notifications alter column %I drop not null', old_column);
+    end if;
+  end loop;
+end $$;
+
 -- Queued, and sent by the job with retries, so a failed email can never block a money step.
 create table if not exists email_outbox (
   id uuid primary key default gen_random_uuid(),

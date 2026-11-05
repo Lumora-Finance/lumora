@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
 import { getAuth } from "firebase/auth";
 import app from "@/lib/firebase/config";
 import { cn } from "@/lib/utils";
+import { RowsSkeleton } from "@/components/loader/skeletons";
 
 type User = {
   id: string;
@@ -42,11 +42,11 @@ export default function AdminUsersPage() {
   return (
     <div className="mx-auto w-full max-w-[1000px] px-4 py-6 md:px-6 lg:px-8">
       <h1 className="font-display text-2xl font-medium text-ink">Users</h1>
-      <p className="mt-1 text-body-sm text-ink-muted">{loading ? "Loading…" : `${users.length} registered`}</p>
+      <p className="mt-1 text-body-sm text-ink-muted">{loading ? "Loading" : `${users.length} registered`}</p>
 
       <div className="mt-6 overflow-hidden rounded-xl border border-line bg-white shadow-sm">
         {loading ? (
-          <div className="flex items-center justify-center py-16"><Loader2 className="size-6 animate-spin text-ink-muted" /></div>
+          <RowsSkeleton rows={6} label="Loading users" className="px-5" />
         ) : users.length === 0 ? (
           <p className="py-12 text-center text-body-sm text-ink-muted">No users yet.</p>
         ) : (

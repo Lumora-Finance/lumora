@@ -8,6 +8,7 @@ import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useProfile } from "@/components/auth/use-profile";
+import { RouteProgress } from "@/components/loader/route-progress";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { useDrawer } from "@/lib/gsap/use-drawer";
 import { useToday } from "@/lib/use-today";
@@ -109,6 +110,8 @@ export function DashboardHeader() {
           </Link>
         </div>
       </div>
+
+      <RouteProgress area={profile?.area} />
 
       {/* On the body, so nothing on the page can sit over it or scroll behind it. */}
       {drawer.shown &&

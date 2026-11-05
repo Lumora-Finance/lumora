@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Calendar, Loader2 } from "lucide-react";
+import { Calendar } from "lucide-react";
 import Link from "next/link";
 import { getAuth } from "firebase/auth";
 
@@ -10,6 +10,8 @@ import { type LiveBooking, LiveBookings } from "@/components/board/live-bookings
 import { LogoVideo } from "@/components/dashboard/logo-video";
 import { Reveal } from "@/components/motion/reveal";
 import { cn } from "@/lib/utils";
+import { CardsSkeleton } from "@/components/loader/skeletons";
+import { trackTask } from "@/lib/loading/progress";
 
 type Tab = "upcoming" | "past" | "cancelled";
 
@@ -36,6 +38,7 @@ export default function BookingsPage() {
     let cancelled = false;
     async function load() {
       setLoading(true);
+      const finished = trackTask("bookings");
       setError(null);
       try {
         const auth = getAuth(app);
@@ -51,6 +54,7 @@ export default function BookingsPage() {
       } catch {
         if (!cancelled) setError("Couldn't load bookings. Please refresh.");
       } finally {
+        finished();
         if (!cancelled) setLoading(false);
       }
     }
@@ -120,9 +124,7 @@ export default function BookingsPage() {
 
       {/* Content */}
       {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="size-6 animate-spin text-ink-muted" />
-        </div>
+        <CardsSkeleton label="Loading your bookings" />
       ) : error ? (
         <div className="rounded-xl border border-danger/30 bg-danger/5 p-6 text-center text-danger">{error}</div>
       ) : items.length === 0 ? (

@@ -14,6 +14,7 @@ import {
 import { reliabilityWords } from "@/lib/money/booking-view";
 import { freeDeliveriesLeft } from "@/lib/pricing";
 
+import { CardsSkeleton } from "@/components/loader/skeletons";
 import { BuyerRadar } from "./buyer-radar";
 import { cardTakeHome, CrateCard } from "./crate-card";
 import { Segmented } from "./segmented";
@@ -338,7 +339,7 @@ export function MarketBoard() {
           )}
 
           {cards === null ? (
-            <p className="py-10 text-center text-ink-muted">Finding buyers…</p>
+            <CardsSkeleton cards={4} label="Finding buyers" className="xl:grid-cols-2" />
           ) : open.length === 0 ? (
             <section className="rounded-[20px] border border-line bg-white px-5 py-8 text-center sm:py-10">
               <BuyerRadar area={area} />

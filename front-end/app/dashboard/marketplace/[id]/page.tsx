@@ -4,8 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useRef, useState, useEffect } from "react";
 import {
   ArrowLeft, MapPin, Clock, MessageSquare, TrendingUp, Shield, CheckCircle2,
-  Calendar, Package, BarChart3, Loader2,
-} from "lucide-react";
+  Calendar, Package, BarChart3, } from "lucide-react";
 import Link from "next/link";
 import { getAuth } from "firebase/auth";
 
@@ -16,6 +15,8 @@ import { OfferModal } from "@/components/marketplace/offer-modal";
 import { fx, playOnEnter, useGSAP } from "@/lib/gsap/effects";
 import { cn } from "@/lib/utils";
 import type { MarketItem, Offer } from "@/lib/demo/market";
+import { DetailSkeleton } from "@/components/loader/skeletons";
+import { trackTask } from "@/lib/loading/progress";
 
 const TABS = [
   { key: "overview", label: "Overview", icon: Package },
@@ -60,6 +61,7 @@ export default function ProductDetailsPage() {
     let cancelled = false;
     async function load() {
       setLoading(true);
+      const finished = trackTask("marketplace-post");
       setError(null);
       try {
         const token = await getAuth(app).currentUser?.getIdToken();
@@ -78,6 +80,7 @@ export default function ProductDetailsPage() {
       } catch {
         if (!cancelled) setError("Couldn't load this listing. Please refresh.");
       } finally {
+        finished();
         if (!cancelled) setLoading(false);
       }
     }
@@ -96,9 +99,7 @@ export default function ProductDetailsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="size-6 animate-spin text-ink-muted" />
-      </div>
+      <DetailSkeleton label="Opening this post" />
     );
   }
 

@@ -11,6 +11,8 @@ import { normalisePhone, readLocationChoice, validPhone } from "../../lib/logist
 import { areaMenu } from "../../lib/logistics/sms-onboarding";
 import { handleInboundSms } from "../../lib/money/sms-commands";
 import { largestHoldKobo, type ListingDraft, listingBody, stepProblem } from "../../lib/logistics/listing-draft";
+import { loadingMessage } from "../../lib/loading-messages";
+import { taskCounts, trackTask, whenTasksSettle } from "../../lib/loading/progress";
 import { FARMER_FEE_PCT, takeHomeKobo } from "../../lib/pricing";
 import {
   arrive, balance, book, call, confirmedBooking, db, FakeSms, fund, hours, makeSlot, makeUser, pool, PRICE, q, resetDb, T0, WINDOW_START,
@@ -691,5 +693,48 @@ describe("the post demand steps", () => {
 
   it("sends no address when the buyer collects", () => {
     expect(listingBody({ ...draft, mode: "buyer_collects" })).toMatchObject({ address: null, unitPriceKobo: 350_000, capacity: 30 });
+  });
+});
+
+describe("loader messages", () => {
+  it("says something plain for every route, with the area when it's known", () => {
+    expect(loadingMessage("/dashboard")).toBe("Getting your day ready");
+    expect(loadingMessage("/dashboard/board", "Bukuru")).toBe("Finding buyers near Bukuru");
+    expect(loadingMessage("/dashboard/board")).toBe("Finding buyers near you");
+    expect(loadingMessage("/dashboard/bookings")).toBe("Loading your bookings");
+    expect(loadingMessage("/dashboard/bookings/abc")).toBe("Opening your booking");
+    expect(loadingMessage("/dashboard/wallet")).toBe("Checking your balance");
+    expect(loadingMessage("/onboarding/finish")).toBe("Setting up your board");
+    for (const path of ["/dashboard", "/dashboard/marketplace", "/dashboard/posts", "/nowhere"]) {
+      expect(loadingMessage(path)).not.toMatch(/…|\.\.\.|undefined/);
+    }
+  });
+});
+
+describe("loader progress", () => {
+  it("counts one piece of work once, and settles only when nothing is left", async () => {
+    const before = taskCounts();
+    const first = trackTask("loader-test");
+    const second = trackTask("loader-test");
+    expect(taskCounts().pending).toBe(before.pending + 1);
+    first();
+    first();
+    expect(taskCounts().pending).toBe(before.pending + 1);
+    let settled = false;
+    const waiting = whenTasksSettle({ graceMs: 0, capMs: 2000 }).then(() => { settled = true; });
+    await new Promise((done) => setTimeout(done, 100));
+    expect(settled).toBe(false);
+    second();
+    await waiting;
+    expect(settled).toBe(true);
+    expect(taskCounts().pending).toBe(before.pending);
+  });
+
+  it("never traps anyone behind a stuck request", async () => {
+    const stuck = trackTask("loader-stuck");
+    const startedAt = Date.now();
+    await whenTasksSettle({ graceMs: 0, capMs: 100 });
+    expect(Date.now() - startedAt).toBeLessThan(1000);
+    stuck();
   });
 });

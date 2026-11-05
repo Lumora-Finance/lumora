@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Sparkles, SlidersHorizontal, Loader2, Search } from "lucide-react";
+import { Sparkles, SlidersHorizontal, Search } from "lucide-react";
 import { getAuth } from "firebase/auth";
 
 import app from "@/lib/firebase/config";
@@ -10,6 +10,8 @@ import { FilterPanel, type FilterState } from "@/components/marketplace/filter-p
 import { Reveal } from "@/components/motion/reveal";
 import { fx, playOnEnter, useGSAP } from "@/lib/gsap/effects";
 import { cn } from "@/lib/utils";
+import { CardsSkeleton } from "@/components/loader/skeletons";
+import { trackTask } from "@/lib/loading/progress";
 
 // Board slot shape from /api/board
 type Slot = {
@@ -91,6 +93,7 @@ export default function MarketplacePage() {
     let cancelled = false;
     async function load() {
       setLoading(true);
+      const finished = trackTask("marketplace");
       setError(null);
       try {
         const token = await getAuth(app).currentUser?.getIdToken();
@@ -105,6 +108,7 @@ export default function MarketplacePage() {
       } catch {
         if (!cancelled) setError("Couldn't load the board. Please refresh.");
       } finally {
+        finished();
         if (!cancelled) setLoading(false);
       }
     }
@@ -186,9 +190,7 @@ export default function MarketplacePage() {
 
         {/* Loading */}
         {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="size-6 animate-spin text-ink-muted" />
-          </div>
+          <CardsSkeleton cards={6} columns label="Finding demand" />
         ) : error ? (
           <div className="rounded-xl border border-danger/30 bg-danger/5 p-6 text-center text-danger">{error}</div>
         ) : items.length === 0 ? (

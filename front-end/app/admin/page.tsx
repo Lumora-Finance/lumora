@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Users, Store, BookOpen, Banknote, Bell, MessageSquare, Scale, BarChart3, Loader2 } from "lucide-react";
+import { Users, Store, BookOpen, Banknote, Bell, MessageSquare, Scale, BarChart3 } from "lucide-react";
 import { getAuth } from "firebase/auth";
 
 import app from "@/lib/firebase/config";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type Stats = {
   users: number;
@@ -69,7 +70,7 @@ export default function AdminOverviewPage() {
               <div>
                 <p className="text-body-sm font-medium text-ink-muted">{label}</p>
                 <p className="font-num text-2xl font-medium text-ink">
-                  {loading ? <Loader2 className="size-4 animate-spin text-ink-muted" /> : (stats?.[key as keyof Stats] ?? 0)}
+                  {loading ? <Skeleton className="h-6 w-12" /> : (stats?.[key as keyof Stats] ?? 0)}
                 </p>
               </div>
             </div>

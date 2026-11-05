@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowDownLeft, ArrowUpRight, CheckCircle2, ChevronDown, ChevronUp, Loader2, Wallet } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, CheckCircle2, ChevronDown, ChevronUp, Wallet } from "lucide-react";
 import { getAuth } from "firebase/auth";
 
 import app from "@/lib/firebase/config";
@@ -9,6 +9,8 @@ import { LogoVideo } from "@/components/dashboard/logo-video";
 import { Reveal } from "@/components/motion/reveal";
 import { fx, playOnEnter, useGSAP } from "@/lib/gsap/effects";
 import { cn } from "@/lib/utils";
+import { RowsSkeleton } from "@/components/loader/skeletons";
+import { trackTask } from "@/lib/loading/progress";
 
 type Filter = "all" | "trade" | "wallet" | "received" | "paid";
 
@@ -77,6 +79,7 @@ export default function TransactionsPage() {
     let cancelled = false;
     async function load() {
       setLoading(true);
+      const finished = trackTask("transactions-page");
       setError(null);
       try {
         const token = await getAuth(app).currentUser?.getIdToken();
@@ -89,6 +92,7 @@ export default function TransactionsPage() {
       } catch {
         if (!cancelled) setError("Couldn't load transactions. Please refresh.");
       } finally {
+        finished();
         if (!cancelled) setLoading(false);
       }
     }
@@ -186,9 +190,7 @@ export default function TransactionsPage() {
 
       {/* Table */}
       {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="size-6 animate-spin text-ink-muted" />
-        </div>
+        <RowsSkeleton rows={6} label="Loading your money" />
       ) : error ? (
         <div className="rounded-xl border border-danger/30 bg-danger/5 p-6 text-center text-danger">{error}</div>
       ) : filtered.length === 0 ? (

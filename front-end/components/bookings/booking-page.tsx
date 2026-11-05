@@ -6,6 +6,8 @@ import { useCallback, useEffect, useState } from "react";
 
 import { useAuthUser } from "@/components/auth/use-auth-user";
 import { uploadPhoto } from "@/components/board/delivery-form";
+import { BusyBar } from "@/components/loader/busy-bar";
+import { DetailSkeleton } from "@/components/loader/skeletons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { clock, dayAndClock, kilos, money, pricePer, windowText } from "@/lib/email/format";
@@ -81,6 +83,7 @@ export function BookingPage({ bookingId }: { bookingId: string }) {
   const [view, setView] = useState<BookingView | null>(null);
   const [missing, setMissing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const [digits, setDigits] = useState("");
@@ -117,10 +120,12 @@ export function BookingPage({ bookingId }: { bookingId: string }) {
   async function act(action: string, body: Record<string, unknown> = {}, done?: string) {
     if (!user) return;
     setBusy(true);
+    setPending(action);
     setMessage(null);
     const response = await apiFetch(user, `/api/money/bookings/${bookingId}`, { action, ...body }).catch(() => null);
     const result = (await response?.json().catch(() => null)) as { ok?: boolean; code?: string; attempts_left?: number } | null;
     setBusy(false);
+    setPending(null);
     if (result?.ok) {
       setMessage(done ?? null);
       setLateOpen(false);
@@ -140,7 +145,7 @@ export function BookingPage({ bookingId }: { bookingId: string }) {
     await load();
   }
 
-  if (loading || (user && !view && !missing)) return <p className="mx-auto max-w-[720px] px-4 py-8 text-ink-muted md:px-6">Loading your booking…</p>;
+  if (loading || (user && !view && !missing)) return <DetailSkeleton label="Loading your booking" />;
   if (!user) {
     return (
       <p className="mx-auto max-w-[720px] px-4 py-8 md:px-6">
@@ -191,8 +196,9 @@ export function BookingPage({ bookingId }: { bookingId: string }) {
         <section className={CARD}>
           <h2 className="font-semibold text-ink">Will you be there?</h2>
           <p className="mt-1 text-ink-muted">Tell us by {dayAndClock(view.confirm_deadline)}, or we give your place to another farmer.</p>
-          <Button className="mt-3 h-12 w-full text-base sm:w-auto" disabled={busy} onClick={() => act("confirm", {}, "You're confirmed. See you on delivery day.")}>
+          <Button className="relative mt-3 h-12 w-full overflow-hidden text-base sm:w-auto" disabled={busy} onClick={() => act("confirm", {}, "You're confirmed. See you on delivery day.")}>
             Confirm
+            <BusyBar active={pending === "confirm"} />
           </Button>
         </section>
       )}
@@ -302,7 +308,10 @@ export function BookingPage({ bookingId }: { bookingId: string }) {
               onChange={(event) => setDigits(event.target.value.replace(/\D/g, ""))}
               className="font-num h-12 w-32 text-center text-xl tracking-[0.2em]"
             />
-            <Button type="submit" className="h-12 text-base" disabled={busy || digits.length !== 4}>Enter code</Button>
+            <Button type="submit" className="relative h-12 overflow-hidden text-base" disabled={busy || digits.length !== 4}>
+              Enter code
+              <BusyBar active={pending === "submit_code"} />
+            </Button>
           </form>
         </section>
       )}
@@ -320,7 +329,10 @@ export function BookingPage({ bookingId }: { bookingId: string }) {
             <a href={view.delivery.scale_photo} target="_blank" rel="noreferrer" className="mt-2 inline-flex min-h-12 items-center underline underline-offset-4 md:min-h-0">See the scale photo</a>
           )}
           <div className="mt-3 flex flex-wrap gap-2">
-            <Button className="h-12 text-base" disabled={busy} onClick={() => act("reply", { reply: "yes" }, "Thank you. Your payout is on its way.")}>Confirm</Button>
+            <Button className="relative h-12 overflow-hidden text-base" disabled={busy} onClick={() => act("reply", { reply: "yes" }, "Thank you. Your payout is on its way.")}>
+              Confirm
+              <BusyBar active={pending === "reply"} />
+            </Button>
             <Button className="h-12 text-base" variant="outline" disabled={busy} onClick={() => setDisputeOpen((open) => !open)}>Something&apos;s wrong</Button>
           </div>
           {disputeOpen && (

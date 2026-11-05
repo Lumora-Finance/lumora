@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { useAuthUser } from "@/components/auth/use-auth-user";
+import { BusyBar } from "@/components/loader/busy-bar";
 import { dayAndClock, money, windowText } from "@/lib/email/format";
 import { gsap, isReducedMotion, useGSAP } from "@/lib/gsap/effects";
 import { wipeAway } from "@/lib/gsap/page-wipe";
@@ -461,9 +462,11 @@ export function ListingForm() {
             <button
               type="submit"
               disabled={saving}
-              className="h-[52px] flex-1 rounded-2xl bg-green px-8 font-medium text-paper transition-[background-color,transform] duration-150 [-webkit-tap-highlight-color:transparent] hover:bg-green-hover focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none active:scale-[0.98] disabled:opacity-60 motion-reduce:active:scale-100 sm:h-14 sm:flex-none"
+              aria-busy={saving}
+              className="relative h-[52px] flex-1 overflow-hidden rounded-2xl bg-green px-8 font-medium text-paper transition-[background-color,transform] duration-150 [-webkit-tap-highlight-color:transparent] hover:bg-green-hover focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none active:scale-[0.98] disabled:opacity-60 motion-reduce:active:scale-100 sm:h-14 sm:flex-none"
             >
-              {step === LISTING_STEPS ? (saving ? "Posting…" : "Post demand") : "Next"}
+              {step === LISTING_STEPS ? "Post demand" : "Next"}
+              <BusyBar active={saving} />
             </button>
           </div>
         </div>

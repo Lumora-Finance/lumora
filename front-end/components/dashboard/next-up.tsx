@@ -3,6 +3,7 @@
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import { dayAndClock, relativeDay } from "@/lib/email/format";
 import { type DashboardBooking, otherParty, upcoming } from "@/lib/dashboard-data";
 import { useDashboardData } from "@/lib/hooks/use-dashboard-data";
@@ -43,8 +44,18 @@ export function NextUp() {
         <LogoVideo />
       </div>
       <p className="font-num text-[11px] leading-4 tracking-[0.08em] text-sage uppercase">{label}</p>
-      <h2 className="mt-2 max-w-[30rem] font-display text-[24px] leading-[1.2] font-medium text-balance sm:text-[30px]">{title}</h2>
-      <p className="mt-1.5 text-body-sm text-paper/70">{detail}</p>
+      {loading ? (
+        <div role="status" aria-label="Getting your day ready" className="mt-2 space-y-3 pb-1">
+          <Skeleton className="h-9 w-72 max-w-full" />
+          <Skeleton className="h-4 w-48" />
+          <Skeleton className="mt-5 h-11 w-40 rounded-2xl" />
+        </div>
+      ) : (
+        <>
+          <h2 className="mt-2 max-w-[30rem] font-display text-[24px] leading-[1.2] font-medium text-balance sm:text-[30px]">{title}</h2>
+          <p className="mt-1.5 text-body-sm text-paper/70">{detail}</p>
+        </>
+      )}
       {!loading && (
         <Link href={href} className={BUTTON}>
           {action}

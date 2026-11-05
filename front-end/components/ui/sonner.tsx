@@ -2,7 +2,7 @@
 
 import { useTheme } from "next-themes"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
-import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
+import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon } from "lucide-react"
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme()
@@ -25,7 +25,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
           <OctagonXIcon className="size-4" />
         ),
         loading: (
-          <Loader2Icon className="size-4 animate-spin" />
+          <span className="relative block h-0.5 w-4 overflow-hidden rounded-full bg-current/25"><span className="lumora-busy block h-full origin-left bg-current" /></span>
         ),
       }}
       style={
