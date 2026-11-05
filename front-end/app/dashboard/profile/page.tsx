@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, ShieldAlert, LogOut, Trash2 } from "lucide-react";
+import { BadgeCheck, CheckCircle2, ShieldAlert, LogOut, Trash2 } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
 
+import { BusyBar } from "@/components/loader/busy-bar";
 import { DetailSkeleton } from "@/components/loader/skeletons";
 import { ProfileLocation } from "@/components/location/profile-location";
 import { ProfileReliability } from "@/components/location/profile-reliability";
@@ -13,14 +14,15 @@ import { CopyProfileLink, ProfileCard } from "@/components/profile/profile-card"
 import { TransactionPinModal } from "@/components/dashboard/transaction-pin-modal";
 import { isReducedMotion } from "@/lib/gsap/effects";
 import { trackTask } from "@/lib/loading/progress";
-import { apiFetch } from "@/lib/logistics/client";
 import { useAuthUser } from "@/components/auth/use-auth-user";
 import { getFirebaseAuth } from "@/lib/firebase/auth";
+import { apiFetch } from "@/lib/logistics/client";
 import { cn } from "@/lib/utils";
 
 type Summary = {
   id?: string;
   name?: string;
+  phone?: string;
   display_name?: string | null;
   role?: string | null;
   area?: string | null;
@@ -40,16 +42,19 @@ export default function ProfilePage() {
   const router = useRouter();
   const { user } = useAuthUser();
 
-  const displayName = user?.displayName ?? user?.email?.split("@")[0] ?? "User";
+  const fbName = user?.displayName ?? user?.email?.split("@")[0] ?? "User";
   const email = user?.email ?? "";
   const isGoogleUser = user?.providerData?.some((p) => p.providerId === "google.com") ?? false;
 
-  const [name, setName] = useState(displayName);
+  const [name, setName] = useState(fbName);
   const [phone, setPhone] = useState("");
   const [bio, setBio] = useState("");
+  const [role, setRole] = useState("");
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [pinOpen, setPinOpen] = useState(false);
   const [summary, setSummary] = useState<Summary | null>(null);
+  const verified = Boolean(summary?.verified);
 
   useEffect(() => {
     if (!user) return;
@@ -67,7 +72,11 @@ export default function ProfilePage() {
         }
         const publicRes = await apiFetch(signedIn, `/api/users/${me.id}`);
         const counts = publicRes.ok ? ((await publicRes.json()) as Summary) : null;
-        if (!cancelled) setSummary({ ...counts, ...me });
+        if (cancelled) return;
+        setSummary({ ...counts, ...me });
+        if (me.name) setName(me.name);
+        if (me.phone) setPhone(me.phone);
+        if (me.role) setRole(me.role);
       } catch {
         if (!cancelled) setSummary({ booking_count: 0, listing_count: 0 });
       } finally {
@@ -92,10 +101,27 @@ export default function ProfilePage() {
     router.replace("/auth/login");
   }
 
-  function saveProfile(e: React.FormEvent) {
+  async function saveProfile(e: React.FormEvent) {
     e.preventDefault();
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    if (!user) return;
+    setSaving(true);
+    try {
+      // Update name and phone via the existing /api/me POST endpoint
+      const res = await apiFetch(user, "/api/me", { name, phone, role }).catch(() => null);
+      if (res?.ok) {
+        // Also sync display name and photo to DB
+        await apiFetch(user, "/api/profile/sync", {
+          email: user.email ?? "",
+          display_name: name,
+          photo_url: user.photoURL ?? "",
+        }).catch(() => {});
+        setSummary((current) => ({ ...current, name, display_name: name }));
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2500);
+      }
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -104,13 +130,13 @@ export default function ProfilePage() {
       <div className="mb-8">
         {user ? (
           <ProfileCard
-            name={summary?.display_name || summary?.name || displayName}
+            name={summary?.display_name || summary?.name || fbName}
             lead={email}
             role={summary?.role}
             area={summary?.area}
             joined={summary?.created_at ? joinedDate(summary.created_at) : null}
             photoUrl={summary?.photo_url || user.photoURL}
-            verified={summary?.verified}
+            verified={verified}
             deliveries={summary ? summary.booking_count ?? 0 : null}
             posts={summary ? summary.listing_count ?? 0 : null}
             produce={summary?.listings?.map((listing) => listing.commodity.name)}
@@ -123,33 +149,24 @@ export default function ProfilePage() {
         )}
       </div>
 
-      {/* Verification status */}
+      {/* Role badge */}
       <Reveal effect="riseIn">
-        <div className="mb-6 overflow-hidden rounded-xl border border-amber/30 bg-amber-soft/40">
-          <div className="flex items-start gap-4 p-5">
-            <ShieldAlert strokeWidth={1.5} className="mt-0.5 size-5 shrink-0 text-amber" />
+        <div className="mb-6 overflow-hidden rounded-xl border border-line bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className={cn("flex size-10 items-center justify-center rounded-full", verified ? "bg-sage-soft text-green" : "bg-amber-soft text-amber")}>
+              {verified ? <BadgeCheck strokeWidth={1.5} className="size-5" /> : <ShieldAlert strokeWidth={1.5} className="size-5" />}
+            </div>
             <div className="flex-1">
-              <p className="font-medium text-ink">Verification required to list produce</p>
-              <p className="mt-1 text-body-sm text-ink-muted">
-                Submit a government ID and a short selfie. Takes less than 2 minutes. Reviewed within 24 hours.
+              <p className="font-medium text-ink">{verified ? "Verified account" : "Not verified yet"}</p>
+              <p className="mt-0.5 text-body-sm text-ink-muted">
+                {verified ? "Your account is verified and trusted by buyers and sellers." : "You can still list produce and make demands. Verification adds a trust badge."}
               </p>
             </div>
-            <button className="shrink-0 rounded-lg bg-amber px-4 py-2 text-body-sm font-medium text-ink hover:bg-amber/90">
-              Start verification
-            </button>
-          </div>
-          <div className="flex items-center gap-3 border-t border-amber/20 bg-amber-soft/30 px-5 py-3">
-            {["Upload ID", "Take selfie", "Under review", "Verified"].map((step, i) => (
-              <div key={step} className="flex items-center gap-2">
-                {i > 0 && <span className="h-px w-4 bg-amber/30" />}
-                <div className={cn("flex items-center gap-1.5 text-label", i === 0 ? "font-medium text-amber" : "text-ink-muted")}>
-                  <span className={cn("flex size-4 items-center justify-center rounded-full text-[10px] font-medium", i === 0 ? "bg-amber text-ink" : "bg-line text-ink-muted")}>
-                    {i + 1}
-                  </span>
-                  <span className="hidden sm:inline">{step}</span>
-                </div>
-              </div>
-            ))}
+            {!verified && (
+              <button className="shrink-0 rounded-lg bg-amber px-4 py-2 text-body-sm font-medium text-ink hover:bg-amber/90">
+                Get verified
+              </button>
+            )}
           </div>
         </div>
       </Reveal>
@@ -196,8 +213,9 @@ export default function ProfilePage() {
             </div>
 
             <div className="mt-5 flex items-center gap-3">
-              <button type="submit" className="rounded-lg bg-green px-5 py-2.5 text-body font-medium text-paper hover:bg-green-hover">
+              <button type="submit" disabled={saving || !summary} aria-busy={saving} className="relative overflow-hidden flex items-center gap-2 rounded-lg bg-green px-5 py-2.5 text-body font-medium text-paper hover:bg-green-hover disabled:opacity-60">
                 Save changes
+                <BusyBar active={saving} />
               </button>
               {saved && (
                 <span className="flex items-center gap-1.5 text-body-sm text-success">

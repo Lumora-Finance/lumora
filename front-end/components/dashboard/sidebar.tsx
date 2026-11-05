@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   ShoppingBag,
   Store,
+  Tag,
   User,
   Wallet,
 } from "lucide-react";
@@ -25,6 +26,7 @@ import { useProfile } from "@/components/auth/use-profile";
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/dashboard/marketplace", label: "Marketplace", icon: Store },
+  { href: "/dashboard/sell", label: "Sell Produce", icon: Tag },
   { href: "/dashboard/board", label: "Buyers near you", icon: MapPin },
   { href: "/dashboard/bookings", label: "My Bookings", icon: BookOpen },
   { href: "/dashboard/messages", label: "Messages", icon: MessageSquare },

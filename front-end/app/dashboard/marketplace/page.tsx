@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sparkles, SlidersHorizontal, Search, MapPin, Users } from "lucide-react";
+import { Sparkles, SlidersHorizontal, Search, MapPin, Users, Package } from "lucide-react";
 import { getAuth } from "firebase/auth";
 import Link from "next/link";
 
@@ -42,7 +42,21 @@ type Seller = {
   verified: boolean;
 };
 
-type Tab = "demand" | "sellers";
+type SupplyRow = {
+  id: string;
+  title: string;
+  unit_price_kobo: number;
+  qty: number;
+  unit: string;
+  images: string[];
+  status: string;
+  created_at: string;
+  area: string | null;
+  commodity: string | null;
+  farmer: { id: string; name: string; verified: boolean; photo_url: string | null };
+};
+
+type Tab = "demand" | "supply" | "sellers";
 
 function formatKobo(kobo: number, unit: string) {
   return `₦${(kobo / 100).toLocaleString("en-NG")}/${unit}`;
@@ -99,6 +113,65 @@ function DemandCard({ row }: { row: BoardRow }) {
   );
 }
 
+function SupplyCard({ row }: { row: SupplyRow }) {
+  const initials = row.farmer.name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+  return (
+    <Link
+      href={`/dashboard/marketplace/supply/${row.id}`}
+      className="group flex flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
+    >
+      {row.images && row.images.length > 0 ? (
+        <div className="aspect-[4/3] overflow-hidden bg-paper">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={row.images[0]} alt={row.title} className="size-full object-cover transition-transform duration-300 group-hover:scale-105" />
+        </div>
+      ) : (
+        <div className="flex aspect-[4/3] items-center justify-center bg-sage-soft">
+          <Package strokeWidth={1} className="size-10 text-green/40" />
+        </div>
+      )}
+      <div className="flex-1 p-5">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <span className="rounded-md bg-amber/10 px-2 py-0.5 font-num text-label font-medium text-[#9A6A1A]">SUPPLY</span>
+            <p className="mt-2 font-medium text-ink">{row.title}</p>
+          </div>
+          <p className="shrink-0 font-num text-number font-medium text-amber">
+            {formatKobo(row.unit_price_kobo, row.unit)}
+          </p>
+        </div>
+        <div className="mt-3 space-y-1 text-body-sm text-ink-muted">
+          <Link
+            href={`/dashboard/profile/${row.farmer.id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="flex items-center gap-1.5 font-medium text-ink hover:text-green hover:underline"
+          >
+            <span className="flex size-5 items-center justify-center overflow-hidden rounded-full bg-sage-soft font-num text-[10px] font-medium text-green">
+              {row.farmer.photo_url
+                ? <img src={row.farmer.photo_url} alt="" className="size-full object-cover" referrerPolicy="no-referrer" />
+                : initials}
+            </span>
+            {row.farmer.name}
+            {row.farmer.verified && <span className="text-green">✓</span>}
+          </Link>
+          {row.area && (
+            <p className="flex items-center gap-1">
+              <MapPin strokeWidth={1.5} className="size-3.5 shrink-0" />
+              {row.area}
+            </p>
+          )}
+          <p className="font-num">{row.qty} {row.unit}s available</p>
+        </div>
+      </div>
+      <div className="border-t border-line px-5 py-3">
+        <span className="block w-full rounded-xl bg-amber py-2.5 text-center text-body-sm font-medium text-ink transition-colors group-hover:bg-amber/90">
+          View &amp; Offer
+        </span>
+      </div>
+    </Link>
+  );
+}
+
 function SellerCard({ seller }: { seller: Seller }) {
   const initials = seller.name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
   return (
@@ -137,6 +210,7 @@ export default function MarketplacePage() {
   const [areaFilter, setAreaFilter] = useState("All areas");
 
   const [rows, setRows] = useState<BoardRow[]>([]);
+  const [supplyRows, setSupplyRows] = useState<SupplyRow[]>([]);
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -162,9 +236,10 @@ export default function MarketplacePage() {
         const token = await getToken();
         const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
 
-        const [boardRes, sellersRes] = await Promise.all([
+        const [boardRes, sellersRes, supplyRes] = await Promise.all([
           fetch("/api/board", { headers }),
           fetch("/api/sellers", { headers }),
+          fetch("/api/supply-listings", { headers }),
         ]);
 
         if (!boardRes.ok) throw new Error(`board:${boardRes.status}`);
@@ -175,7 +250,10 @@ export default function MarketplacePage() {
         let sellerList: Seller[] = [];
         if (sellersRes.ok) sellerList = (await sellersRes.json()) as Seller[];
 
-        if (!cancelled) { setRows(cards); setSellers(sellerList); }
+        let supplyList: SupplyRow[] = [];
+        if (supplyRes.ok) supplyList = (await supplyRes.json()) as SupplyRow[];
+
+        if (!cancelled) { setRows(cards); setSellers(sellerList); setSupplyRows(supplyList); }
       } catch {
         if (!cancelled) setError("Couldn't load the marketplace. Please refresh.");
       } finally {
@@ -282,6 +360,12 @@ export default function MarketplacePage() {
             <Sparkles strokeWidth={1.5} className="size-4" /> Demand
             {rows.length > 0 && <span className="rounded-full bg-green/20 px-2 py-0.5 font-num text-label text-green">{demandItems.length}</span>}
           </button>
+          <button onClick={() => setTab("supply")}
+            className={cn("flex items-center gap-2 rounded-lg px-5 py-2 text-body-sm font-medium transition-all",
+              tab === "supply" ? "bg-sage-soft text-green shadow-sm" : "text-ink-muted hover:text-ink")}>
+            <Package strokeWidth={1.5} className="size-4" /> Supply
+            {supplyRows.length > 0 && <span className="rounded-full bg-green/20 px-2 py-0.5 font-num text-label text-green">{supplyRows.length}</span>}
+          </button>
           <button onClick={() => setTab("sellers")}
             className={cn("flex items-center gap-2 rounded-lg px-5 py-2 text-body-sm font-medium transition-all",
               tab === "sellers" ? "bg-sage-soft text-green shadow-sm" : "text-ink-muted hover:text-ink")}>
@@ -289,6 +373,19 @@ export default function MarketplacePage() {
             {sellers.length > 0 && <span className="rounded-full bg-green/20 px-2 py-0.5 font-num text-label text-green">{sellers.length}</span>}
           </button>
         </div>
+
+        {/* Supply area filter */}
+        {tab === "supply" && (
+          <div className="mb-5 flex flex-wrap gap-2">
+            {AREAS.map((a) => (
+              <button key={a} onClick={() => setAreaFilter(a)}
+                className={cn("rounded-full border px-4 py-1.5 text-body-sm font-medium transition-colors",
+                  areaFilter === a ? "border-green bg-sage-soft text-green" : "border-line text-ink-muted hover:border-green hover:text-green")}>
+                {a}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Sellers area filter */}
         {tab === "sellers" && (
@@ -323,6 +420,27 @@ export default function MarketplacePage() {
               {filteredDemand.map((row) => (
                 <Reveal key={row.listing_id} effect="riseIn" config={{ stagger: 0 }}>
                   <DemandCard row={row} />
+                </Reveal>
+              ))}
+            </div>
+          )
+        ) : tab === "supply" ? (
+          supplyRows.length === 0 ? (
+            <div className="flex flex-col items-center gap-4 rounded-2xl bg-field px-8 py-16 text-center text-paper">
+              <Package strokeWidth={1} className="size-10 text-sage/40" />
+              <p className="font-display text-title font-medium">No supply listings yet</p>
+              <p className="text-body text-paper/60">Farmers will appear here when they list produce for sale.</p>
+              <Link href="/dashboard/sell" className="mt-2 rounded-full bg-paper px-5 py-2.5 text-body-sm font-medium text-field hover:bg-sage-soft">
+                List your produce →
+              </Link>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {supplyRows
+                .filter((r) => areaFilter === "All areas" || r.area === areaFilter)
+                .map((row) => (
+                <Reveal key={row.id} effect="riseIn" config={{ stagger: 0 }}>
+                  <SupplyCard row={row} />
                 </Reveal>
               ))}
             </div>

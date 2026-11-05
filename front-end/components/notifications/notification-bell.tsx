@@ -1,119 +1,164 @@
 "use client";
 
-import { Bell } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Bell, X, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { getAuth } from "firebase/auth";
 
-import { useAuthUser } from "@/components/auth/use-auth-user";
-import { apiFetch } from "@/lib/logistics/client";
+import app from "@/lib/firebase/config";
 import { cn } from "@/lib/utils";
 
-type Item = { id: string; title: string; body: string; href: string; read: boolean; createdAt: string };
-
-const POLL_MS = 60_000;
-
-const ago = (iso: string) => {
-  const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60_000);
-  if (minutes < 1) return "Just now";
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.round(minutes / 60);
-  return hours < 24 ? `${hours} h ago` : `${Math.round(hours / 24)} d ago`;
+export type Notification = {
+  id: string;
+  kind: string;
+  title: string;
+  body: string;
+  data: Record<string, string>;
+  read: boolean;
+  created_at: string;
 };
 
-/** The top bar's bell: unread count, and a list where each item opens its booking. */
+function relDate(iso: string) {
+  const d = new Date(iso);
+  const diff = Date.now() - d.getTime();
+  if (diff < 60_000) return "Just now";
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  return d.toLocaleDateString("en-NG", { day: "numeric", month: "short" });
+}
+
+function notifLink(notif: Notification): string | null {
+  const d = notif.data;
+  // Supply listing links go to the supply detail page
+  if (d.listing_id && d.buyer_id) return `/dashboard/marketplace/supply/${d.listing_id}`;
+  if (d.listing_id) return `/dashboard/marketplace/${d.listing_id}`;
+  if (d.booking_id) return `/dashboard/bookings/${d.booking_id}`;
+  return null;
+}
+
+const KIND_ICON: Record<string, string> = {
+  offer_received: "💼", offer_accepted: "✅", delivery_otp: "🔑",
+  booking_accepted: "✅", payment_received: "💰", booking_revoked: "❌",
+  delivery_confirmed: "✅", buyer_offer_received: "🛒", buyer_offer_accepted: "✅",
+};
+
 export function NotificationBell({ className }: { className?: string }) {
-  const { user } = useAuthUser();
-  const root = useRef<HTMLDivElement>(null);
-  const [items, setItems] = useState<Item[]>([]);
-  const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
 
-  const load = useCallback(async () => {
-    if (!user) return;
-    const response = await apiFetch(user, "/api/notifications").catch(() => null);
-    if (!response?.ok) return;
-    const data = (await response.json()) as { unread: number; items: Item[] };
-    setItems(data.items);
-    setUnread(data.unread);
-  }, [user]);
+  const unread = notifications.filter((n) => !n.read).length;
 
-  useEffect(() => {
-    // Loading from the API is the external system this effect stays in step with.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void load();
-    const timer = setInterval(() => void load(), POLL_MS);
-    return () => clearInterval(timer);
-  }, [load]);
-
-  useEffect(() => {
-    if (!open) return;
-    const close = (event: PointerEvent | KeyboardEvent) => {
-      if (event instanceof KeyboardEvent ? event.key === "Escape" : !root.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener("pointerdown", close);
-    document.addEventListener("keydown", close);
-    return () => {
-      document.removeEventListener("pointerdown", close);
-      document.removeEventListener("keydown", close);
-    };
-  }, [open]);
-
-  async function markRead(id?: string) {
-    if (!user) return;
-    setItems((current) => current.map((item) => (!id || item.id === id ? { ...item, read: true } : item)));
-    setUnread((count) => (id ? Math.max(count - 1, 0) : 0));
-    await apiFetch(user, "/api/notifications", { id }).catch(() => null);
+  async function load() {
+    setLoading(true);
+    try {
+      const token = await getAuth(app).currentUser?.getIdToken();
+      const res = await fetch("/api/notifications", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        const data = (await res.json()) as Notification[];
+        setNotifications(Array.isArray(data) ? data : []);
+      }
+    } catch { /* */ } finally { setLoading(false); }
   }
 
+  async function markRead(ids: string[]) {
+    const token = await getAuth(app).currentUser?.getIdToken();
+    await fetch("/api/notifications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ ids }),
+    }).catch(() => {});
+    setNotifications((prev) => prev.map((n) => ids.includes(n.id) ? { ...n, read: true } : n));
+  }
+
+  useEffect(() => {
+    load();
+    const interval = setInterval(load, 30_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      const unreadIds = notifications.filter((n) => !n.read).map((n) => n.id);
+      if (unreadIds.length > 0) setTimeout(() => markRead(unreadIds), 1500);
+    }
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
   return (
-    <div ref={root} className="relative">
+    <div className="relative" ref={panelRef}>
       <button
-        type="button"
-        aria-label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"}
-        aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
-        className={cn("relative flex size-9 items-center justify-center rounded-full text-ink-muted hover:bg-sage-soft hover:text-ink", className)}
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          "relative flex size-9 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-sage-soft hover:text-ink",
+          className,
+        )}
+        aria-label={`Notifications${unread > 0 ? ` (${unread} unread)` : ""}`}
       >
         <Bell strokeWidth={1.5} className="size-5" />
         {unread > 0 && (
-          <span className="font-num absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber px-1 text-[10px] leading-none font-medium text-ink">
-            {unread > 99 ? "99+" : unread}
+          <span className="absolute -right-0.5 -top-0.5 flex size-5 items-center justify-center rounded-full bg-danger font-num text-label font-bold text-paper">
+            {unread > 9 ? "9+" : unread}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="fixed inset-x-3 top-14 z-40 flex max-h-[70svh] flex-col overflow-hidden rounded-xl border border-line bg-white sm:absolute sm:inset-x-auto sm:top-11 sm:right-0 sm:w-[360px]">
-          <div className="flex items-center justify-between border-b border-line px-4 py-2">
-            <h2 className="font-semibold text-ink">Notifications</h2>
-            {unread > 0 && (
-              <button type="button" onClick={() => markRead()} className="min-h-9 text-body-sm text-ink-muted underline underline-offset-4 hover:text-ink">
-                Mark all read
+        <div className="absolute right-0 top-11 z-50 w-[340px] overflow-hidden rounded-2xl border border-line bg-paper shadow-2xl md:w-[380px]">
+          <div className="flex items-center justify-between border-b border-line px-4 py-3.5">
+            <h3 className="text-body font-medium text-ink">Notifications</h3>
+            <div className="flex items-center gap-2">
+              {loading && <Loader2 className="size-4 animate-spin text-ink-muted" />}
+              <button onClick={() => setOpen(false)}
+                className="flex size-7 items-center justify-center rounded-full text-ink-muted hover:bg-sage-soft hover:text-ink">
+                <X strokeWidth={1.5} className="size-4" />
               </button>
+            </div>
+          </div>
+
+          <div className="max-h-[420px] overflow-y-auto">
+            {notifications.length === 0 ? (
+              <div className="px-4 py-10 text-center">
+                <p className="text-body-sm text-ink-muted">No notifications yet.</p>
+              </div>
+            ) : (
+              notifications.map((notif) => {
+                const link = notifLink(notif);
+                const inner = (
+                  <div className={cn(
+                    "flex items-start gap-3 px-4 py-3.5 transition-colors",
+                    notif.read ? "opacity-60" : "bg-sage-soft/20",
+                    link && "hover:bg-sage-soft/40 cursor-pointer",
+                  )}>
+                    <span className="mt-0.5 text-xl shrink-0">{KIND_ICON[notif.kind] ?? "🔔"}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-body-sm font-medium text-ink">{notif.title}</p>
+                      <p className="mt-0.5 text-body-sm text-ink-muted leading-relaxed">{notif.body}</p>
+                      <p className="mt-1 font-num text-label text-ink-muted">{relDate(notif.created_at)}</p>
+                    </div>
+                    {!notif.read && <span className="mt-2 size-2 shrink-0 rounded-full bg-green" />}
+                  </div>
+                );
+                return (
+                  <div key={notif.id} className="border-b border-line last:border-0">
+                    {link ? (
+                      <Link href={link} onClick={() => { setOpen(false); markRead([notif.id]); }}>{inner}</Link>
+                    ) : inner}
+                  </div>
+                );
+              })
             )}
           </div>
-          {items.length === 0 ? (
-            <p className="px-4 py-6 text-center text-ink-muted">Nothing yet. Updates on your bookings show up here.</p>
-          ) : (
-            <ul className="overflow-y-auto">
-              {items.map((item) => (
-                <li key={item.id} className="border-b border-line last:border-b-0">
-                  <Link
-                    href={item.href}
-                    onClick={() => {
-                      setOpen(false);
-                      if (!item.read) void markRead(item.id);
-                    }}
-                    className={cn("block px-4 py-3 hover:bg-sage-soft", !item.read && "bg-amber-soft/40")}
-                  >
-                    <span className={cn("block text-body-sm text-ink", !item.read && "font-medium")}>{item.title}</span>
-                    {item.body && <span className="mt-0.5 block text-body-sm text-ink-muted">{item.body}</span>}
-                    <span className="mt-1 block text-xs text-ink-muted">{ago(item.createdAt)}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
       )}
     </div>
