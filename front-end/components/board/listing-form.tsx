@@ -1,8 +1,9 @@
 "use client";
 
-import { Check } from "lucide-react";
+import { Check, ImagePlus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { useAuthUser } from "@/components/auth/use-auth-user";
 import { dayAndClock, money, windowText } from "@/lib/email/format";
@@ -49,7 +50,7 @@ const FAILURES: Record<string, string> = {
 
 const START: ListingDraft = {
   commodity: "Live broilers", mode: "farmer_delivers", address: "", date: "", windowStart: "07:00", windowEnd: "11:00",
-  price: "", capacity: "", minQty: "1", minWeight: "", maxWeight: "", spec: "",
+  price: "", capacity: "", minQty: "1", minWeight: "", maxWeight: "", spec: "", images: [],
 };
 
 /** The check sits against its label and slides open, so the two stay centred together as one. */
@@ -128,6 +129,39 @@ export function ListingForm() {
     value: draft[name],
     onChange: (event: React.ChangeEvent<HTMLInputElement>) => change({ [name]: event.target.value }),
   });
+
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleImageUpload(files: FileList | null) {
+    if (!files || !user) return;
+    const remaining = 4 - draft.images.length;
+    const toUpload = Array.from(files).slice(0, remaining);
+    if (toUpload.length === 0) return;
+    setUploading(true);
+    const newImages: string[] = [];
+    for (const file of toUpload) {
+      const formData = new FormData();
+      formData.append("photo", file);
+      const token = await user.getIdToken();
+      const res = await fetch("/api/uploads/listing-image?bucket=demand-listing-images", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const result = await res.json();
+      if (result.ok && result.url) newImages.push(result.url);
+    }
+    if (newImages.length > 0) {
+      change({ images: [...draft.images, ...newImages] });
+    }
+    setUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function removeImage(idx: number) {
+    change({ images: draft.images.filter((_, i) => i !== idx) });
+  }
 
   // A setting on the buyer, not this listing. Saved as soon as it's changed.
   const [approveFirst, setApproveFirst] = useState(false);
@@ -330,6 +364,49 @@ export function ListingForm() {
                     <span className={HINT}>Farmers only see this after they book.</span>
                   </label>
                 )}
+                {/* Image upload — 1 to 4 photos */}
+                <fieldset>
+                  <legend className={LABEL}>Photos <span className="font-normal text-ink-muted">(1–4 required)</span></legend>
+                  <div className="mt-2 grid grid-cols-4 gap-2.5">
+                    {draft.images.map((url, idx) => (
+                      <div key={idx} className="group relative aspect-square overflow-hidden rounded-2xl border border-line bg-paper">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={url} alt={`Upload ${idx + 1}`} className="size-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => removeImage(idx)}
+                          className="absolute top-1 right-1 flex size-6 items-center justify-center rounded-full bg-field/80 text-paper opacity-0 transition-opacity group-hover:opacity-100"
+                          aria-label={`Remove photo ${idx + 1}`}
+                        >
+                          <X strokeWidth={2} className="size-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    {draft.images.length < 4 && (
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploading}
+                        className="flex aspect-square items-center justify-center rounded-2xl border-2 border-dashed border-line bg-paper text-ink-muted transition-colors hover:border-green hover:text-green disabled:opacity-50"
+                      >
+                        {uploading ? (
+                          <span className="text-xs">Uploading…</span>
+                        ) : (
+                          <ImagePlus strokeWidth={1.5} className="size-6" />
+                        )}
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => handleImageUpload(e.target.files)}
+                  />
+                  <span className={HINT}>Add 1 to 4 photos so farmers can see what you need.</span>
+                </fieldset>
               </>
             )}
 

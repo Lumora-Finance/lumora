@@ -24,6 +24,7 @@ export type ListingDraft = {
   minWeight: string;
   maxWeight: string;
   spec: string;
+  images: string[];
 };
 
 export const commodityRules = (name: ListingDraft["commodity"]) =>
@@ -53,6 +54,7 @@ export function cutoffAt(draft: ListingDraft): Date | null {
 export function stepProblem(step: number, draft: ListingDraft, now: Date): string | null {
   if (step === 1) {
     if (draft.mode === "farmer_delivers" && !draft.address.trim()) return "Add the address farmers should deliver to.";
+    if (draft.images.length < 1) return "Add at least 1 photo so farmers can see what you need.";
     return null;
   }
   if (step === 2) {
@@ -109,5 +111,6 @@ export function listingBody(draft: ListingDraft) {
     windowEnd: draft.windowEnd,
     address: draft.mode === "farmer_delivers" ? draft.address.trim() : null,
     spec: draft.spec.trim(),
+    images: draft.images,
   };
 }

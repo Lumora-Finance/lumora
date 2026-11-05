@@ -31,8 +31,9 @@ async function callPinApi(method: "POST" | "GET" | "PATCH", body?: { pin: string
   });
 }
 
-export function TransactionPinModal({ mode, onSuccess, onClose }: Props) {
+export function TransactionPinModal({ mode: initialMode, onSuccess, onClose }: Props) {
   // "entry" | "confirm" | "done"
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [stage, setStage] = useState<"entry" | "confirm" | "done">("entry");
   const [digits, setDigits] = useState<string[]>(["", "", "", ""]);
   const [confirmDigits, setConfirmDigits] = useState<string[]>(["", "", "", ""]);
@@ -124,7 +125,13 @@ export function TransactionPinModal({ mode, onSuccess, onClose }: Props) {
           setStage("done");
           setTimeout(onSuccess, 600);
         } else if (json.code === "no_pin") {
-          setError("You haven't set a PIN yet. Go to Settings → Security.");
+          // No PIN set — switch to creation flow right here instead of sending the user away.
+          setMode("set");
+          setStage("entry");
+          setDigits(["", "", "", ""]);
+          setConfirmDigits(["", "", "", ""]);
+          setError(null);
+          setTimeout(() => entryRefs[0].current?.focus(), 50);
         } else {
           setError("Incorrect PIN. Please try again.");
           setDigits(["", "", "", ""]);
