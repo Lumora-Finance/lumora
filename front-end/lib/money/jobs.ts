@@ -1,3 +1,5 @@
+import { type Mailer, sendEmails } from "@/lib/email/send";
+
 import type { MoneyDb } from "./db";
 import { type PaystackClient, PaystackRejected } from "./paystack";
 
@@ -126,19 +128,24 @@ export async function sendOutbox(deps: { db: MoneyDb; sms: SmsSender }) {
   return { sent };
 }
 
-/** The 5-minute cron job. */
+/**
+ * The 5-minute job. The sweep is safe to run alongside pg_cron's copy. It only reaches the email
+ * queue through the database, so a failed email can't hold up a deadline, a payout or a refund.
+ * SMS isn't sent: `sendOutbox` stays for when that channel returns.
+ */
 export async function runMoneyJob(deps: {
   db: MoneyDb;
   paystack: PaystackClient;
-  sms: SmsSender;
+  mailer: Mailer | null;
+  emailSecret: string | undefined;
   now?: Date;
 }) {
   const at = (deps.now ?? new Date()).toISOString();
   const sweep = await deps.db.rpc("money_sweep", { p_now: at });
   const payouts = await sendPayouts(deps);
   const refunds = await sendRefunds(deps);
-  const outbox = await sendOutbox(deps);
-  return { sweep, payouts, refunds, outbox };
+  const emails = await sendEmails({ db: deps.db, mailer: deps.mailer, secret: deps.emailSecret, now: deps.now });
+  return { sweep, payouts, refunds, emails };
 }
 
 /** The nightly reconciliation job. */

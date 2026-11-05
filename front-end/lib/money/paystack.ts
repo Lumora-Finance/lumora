@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 const BASE_URL = "https://api.paystack.co";
 
@@ -254,14 +254,14 @@ export function createPaystackClient(secretKey?: string): PaystackClient {
   };
 }
 
-/** Verify Paystack webhook HMAC-SHA512 signature. */
+/** Verify Paystack's HMAC-SHA512 webhook signature. Fails closed: with no key set, nothing is trusted. */
 export function verifyWebhookSignature(
   signature: string | null | undefined,
   rawBody: string,
   secretKey: string | undefined,
 ): boolean {
-  if (!secretKey) return true; // demo mode — no key set
-  if (!signature) return false;
-  const expected = createHmac("sha512", secretKey).update(rawBody).digest("hex");
-  return signature === expected;
+  if (!secretKey || !signature) return false;
+  const expected = Buffer.from(createHmac("sha512", secretKey).update(rawBody).digest("hex"));
+  const given = Buffer.from(signature);
+  return expected.length === given.length && timingSafeEqual(expected, given);
 }

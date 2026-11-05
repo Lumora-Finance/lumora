@@ -1,7 +1,10 @@
 "use client";
 
-import { SlidersHorizontal, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Check, X } from "lucide-react";
+import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
+
+import { useDrawer } from "@/lib/gsap/use-drawer";
 import { cn } from "@/lib/utils";
 
 export type FilterState = {
@@ -12,6 +15,36 @@ export type FilterState = {
 };
 
 const COMMODITIES = ["All", "Live Broilers", "Tomatoes", "Eggs", "Live Turkey"];
+const RESET: FilterState = { commodity: "All", area: "All areas", type: "all", sort: "newest" };
+
+/** The same selected look as the Post demand form. */
+function Chip({ selected, onClick, children }: { selected: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      onClick={onClick}
+      className={cn(
+        "inline-flex min-h-11 items-center justify-center rounded-full border px-4 text-body-sm font-medium transition-[background-color,border-color,color,transform] duration-200 ease-out [-webkit-tap-highlight-color:transparent] focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:outline-none active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100",
+        selected ? "border-field bg-field text-paper" : "border-line bg-white text-ink hover:border-sage",
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          "flex shrink-0 justify-center overflow-hidden text-[#9BD27A] transition-[width,margin,opacity] duration-200 ease-out motion-reduce:transition-none",
+          selected ? "mr-1.5 w-3.5 opacity-100" : "mr-0 w-0 opacity-0",
+        )}
+      >
+        <Check strokeWidth={3} className="size-3.5 shrink-0" />
+      </span>
+      {children}
+    </button>
+  );
+}
+
+const LABEL = "mb-2.5 font-num text-[11px] leading-4 tracking-[0.08em] text-ink-muted uppercase";
+
 const AREAS = ["All areas", "Jos North", "Rayfield", "Bukuru", "Barkin Ladi", "Farin Gada", "Angwan Rukuba", "GRA, Jos"];
 
 export function FilterPanel({
@@ -26,168 +59,128 @@ export function FilterPanel({
   onApply: (f: FilterState) => void;
 }) {
   const [local, setLocal] = useState(filters);
-
-  useEffect(() => {
+  // Each opening starts from what's applied, not from choices abandoned last time.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) setLocal(filters);
-  }, [open, filters]);
+  }
+  const backdrop = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  const drawer = useDrawer({ open, onClose, items: "[data-filter-group]", backdrop, panel });
 
-  useEffect(() => {
-    document.body.style.overflow = open ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
-  }, [open]);
+  if (!drawer.shown) return null;
 
-  if (!open) return null;
-
-  return (
-    <div className="fixed inset-0 z-50">
-      {/* Backdrop */}
+  return createPortal(
+    <div className="fixed inset-0 z-50 overflow-hidden">
       <div
-        className="absolute inset-0 bg-field/60 backdrop-blur-sm"
-        style={{ animation: "fade-in 200ms ease-out both" }}
+        ref={backdrop}
+        aria-hidden="true"
+        className="absolute inset-0 bg-field/60 backdrop-blur-[2px]"
         onClick={onClose}
       />
 
-      {/* Panel — slides from left */}
       <div
-        className="absolute left-0 top-0 h-full w-full max-w-sm overflow-y-auto bg-paper shadow-2xl"
-        style={{ animation: "slide-in-left 300ms cubic-bezier(0.22,1,0.36,1) both" }}
+        ref={panel}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="filters-title"
+        tabIndex={-1}
+        {...drawer.swipe}
+        className="absolute top-0 left-0 flex h-full w-[min(24rem,88vw)] touch-pan-y flex-col rounded-r-[24px] bg-paper outline-none will-change-transform"
       >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-line px-5 py-4">
-          <div className="flex items-center gap-2">
-            <SlidersHorizontal strokeWidth={1.5} className="size-5 text-green" />
-            <h2 className="text-heading font-medium text-ink">Filters</h2>
-          </div>
+        <div className="flex shrink-0 items-center justify-between px-5 pt-5 pb-3">
+          <h2 id="filters-title" className="font-display text-[24px] leading-[1.2] font-medium text-ink">
+            Filters
+          </h2>
           <button
+            type="button"
             onClick={onClose}
             aria-label="Close filters"
-            className="flex size-8 items-center justify-center rounded-full text-ink-muted hover:bg-sage-soft hover:text-ink"
+            className="flex size-11 items-center justify-center rounded-full text-ink transition-colors duration-150 hover:bg-sage-soft focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
           >
-            <X strokeWidth={1.5} className="size-5" />
+            <X aria-hidden="true" strokeWidth={1.75} className="size-5" />
           </button>
         </div>
 
-        <div className="flex flex-col gap-6 p-5">
-          {/* Type */}
-          <div>
-            <p className="mb-3 text-body-sm font-medium text-ink">Show me</p>
-            <div className="flex gap-2">
+        <div className="flex-1 space-y-6 overflow-y-auto overscroll-contain px-5 pt-2 pb-6">
+          <fieldset data-filter-group>
+            <legend className={LABEL}>Show me</legend>
+            <div className="flex flex-wrap gap-2">
               {([
                 { key: "all", label: "Everything" },
-                { key: "demand", label: "📣 Demand" },
-                { key: "listing", label: "🌾 Listings" },
-              ] as const).map((opt) => (
-                <button
-                  key={opt.key}
-                  onClick={() => setLocal({ ...local, type: opt.key })}
-                  className={cn(
-                    "rounded-full px-3.5 py-2 text-body-sm font-medium transition-all",
-                    local.type === opt.key
-                      ? "bg-green text-paper"
-                      : "border border-line text-ink-muted hover:border-green hover:text-green",
-                  )}
-                >
-                  {opt.label}
-                </button>
+                { key: "demand", label: "Demand" },
+                { key: "listing", label: "Listings" },
+              ] as const).map((option) => (
+                <Chip key={option.key} selected={local.type === option.key} onClick={() => setLocal({ ...local, type: option.key })}>
+                  {option.label}
+                </Chip>
               ))}
             </div>
-          </div>
+          </fieldset>
 
-          {/* Commodity */}
-          <div>
-            <p className="mb-3 text-body-sm font-medium text-ink">Commodity</p>
+          <fieldset data-filter-group>
+            <legend className={LABEL}>Produce</legend>
             <div className="flex flex-wrap gap-2">
-              {COMMODITIES.map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setLocal({ ...local, commodity: c })}
-                  className={cn(
-                    "rounded-full border px-3.5 py-1.5 text-body-sm font-medium transition-all",
-                    local.commodity === c
-                      ? "border-green bg-sage-soft text-green"
-                      : "border-line text-ink-muted hover:border-green hover:text-green",
-                  )}
-                >
-                  {c}
-                </button>
+              {COMMODITIES.map((commodity) => (
+                <Chip key={commodity} selected={local.commodity === commodity} onClick={() => setLocal({ ...local, commodity })}>
+                  {commodity}
+                </Chip>
               ))}
             </div>
-          </div>
+          </fieldset>
 
-          {/* Area */}
-          <div>
-            <p className="mb-3 text-body-sm font-medium text-ink">Location</p>
+          <fieldset data-filter-group>
+            <legend className={LABEL}>Location</legend>
             <div className="flex flex-wrap gap-2">
-              {AREAS.map((a) => (
-                <button
-                  key={a}
-                  onClick={() => setLocal({ ...local, area: a })}
-                  className={cn(
-                    "rounded-full border px-3.5 py-1.5 text-body-sm font-medium transition-all",
-                    local.area === a
-                      ? "border-green bg-sage-soft text-green"
-                      : "border-line text-ink-muted hover:border-green hover:text-green",
-                  )}
-                >
-                  {a}
-                </button>
+              {AREAS.map((area) => (
+                <Chip key={area} selected={local.area === area} onClick={() => setLocal({ ...local, area })}>
+                  {area}
+                </Chip>
               ))}
             </div>
-          </div>
+          </fieldset>
 
-          {/* Sort */}
-          <div>
-            <p className="mb-3 text-body-sm font-medium text-ink">Sort by</p>
-            <div className="flex flex-col gap-2">
-              {[
-                { key: "newest", label: "Newest first" },
+          <fieldset data-filter-group>
+            <legend className={LABEL}>Sort by</legend>
+            <div className="flex flex-wrap gap-2">
+              {([
+                { key: "newest", label: "Newest" },
                 { key: "price-high", label: "Highest price" },
                 { key: "price-low", label: "Lowest price" },
-              ].map((s) => (
-                <button
-                  key={s.key}
-                  onClick={() => setLocal({ ...local, sort: s.key as FilterState["sort"] })}
-                  className={cn(
-                    "flex items-center gap-2.5 rounded-lg px-3.5 py-2.5 text-body-sm font-medium transition-all",
-                    local.sort === s.key
-                      ? "bg-sage-soft text-green"
-                      : "text-ink-muted hover:bg-sage-soft/50",
-                  )}
-                >
-                  <span className={cn(
-                    "flex size-4 items-center justify-center rounded-full border-2",
-                    local.sort === s.key ? "border-green" : "border-line",
-                  )}>
-                    {local.sort === s.key && <span className="size-2 rounded-full bg-green" />}
-                  </span>
-                  {s.label}
-                </button>
+              ] as const).map((option) => (
+                <Chip key={option.key} selected={local.sort === option.key} onClick={() => setLocal({ ...local, sort: option.key })}>
+                  {option.label}
+                </Chip>
               ))}
             </div>
-          </div>
+          </fieldset>
         </div>
 
-        {/* Footer */}
-        <div className="sticky bottom-0 flex gap-3 border-t border-line bg-paper px-5 py-4">
+        <div className="flex shrink-0 gap-3 border-t border-line px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <button
-            onClick={() => onApply({ commodity: "All", area: "All areas", type: "all", sort: "newest" })}
-            className="rounded-lg border border-line px-4 py-2.5 text-body-sm font-medium text-ink-muted hover:text-ink"
+            type="button"
+            onClick={() => {
+              setLocal(RESET);
+              onApply(RESET);
+            }}
+            className="h-[52px] rounded-2xl px-5 font-medium text-ink transition-colors duration-150 hover:bg-sage-soft focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
           >
             Reset
           </button>
           <button
-            onClick={() => { onApply(local); onClose(); }}
-            className="flex-1 rounded-lg bg-green py-2.5 text-body-sm font-medium text-paper hover:bg-green-hover"
+            type="button"
+            onClick={() => {
+              onApply(local);
+              onClose();
+            }}
+            className="h-[52px] flex-1 rounded-2xl bg-green font-medium text-paper transition-[background-color,transform] duration-150 hover:bg-green-hover focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:outline-none active:scale-[0.98] motion-reduce:active:scale-100"
           >
             Apply filters
           </button>
         </div>
       </div>
-
-      <style>{`
-        @keyframes fade-in { from { opacity: 0; } }
-        @keyframes slide-in-left { from { transform: translateX(-100%); } to { transform: translateX(0); } }
-      `}</style>
-    </div>
+    </div>,
+    document.body,
   );
 }

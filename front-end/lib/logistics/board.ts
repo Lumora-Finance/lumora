@@ -6,13 +6,18 @@ export type RawBoard = {
   farmer_area: (LatLng & { name: string }) | null;
   stock?: Record<string, number>;
   follows?: string[];
+  pinned?: string[];
+  reliability?: Reliability;
+  completed_deliveries?: number;
   rows: {
     listing_id: string; slot_id: string; buyer: string; area: string; area_lat: number; area_lng: number;
     price_kobo: number; price_unit: string; remaining: number; min_qty: number; window_start: string; window_end: string;
     delivery_mode: "farmer_delivers" | "buyer_collects"; plain_name: string; plain_plural: string; spec: string | null;
-    commodity?: string; min_weight_kg?: number; max_weight_kg?: number;
+    commodity?: string; min_weight_kg?: number; max_weight_kg?: number; urgent?: boolean;
   }[];
 };
+
+export type Reliability = { on_time: number; total: number };
 
 export type BoardCard = {
   listingId: string;
@@ -33,6 +38,8 @@ export type BoardCard = {
   commodity: string;
   minWeightKg: number;
   maxWeightKg: number;
+  urgent: boolean;
+  pinned: boolean;
 };
 
 /** Distances run from area to area, so a card never reveals anyone's exact location. */
@@ -56,9 +63,13 @@ export function buildBoard(raw: RawBoard, sort: BoardSort): BoardCard[] {
     commodity: row.commodity ?? "",
     minWeightKg: Number(row.min_weight_kg ?? 0),
     maxWeightKg: Number(row.max_weight_kg ?? 0),
+    urgent: row.urgent ?? false,
+    pinned: raw.pinned?.includes(row.slot_id) ?? false,
   }));
+  // Urgent requests sent to this farmer stay at the top, whatever the sort.
+  const pinnedFirst = (a: BoardCard, b: BoardCard) => Number(b.pinned) - Number(a.pinned);
   if (sort === "nearest") {
-    return [...cards].sort((a, b) => (a.km ?? Infinity) - (b.km ?? Infinity) || b.priceKobo - a.priceKobo);
+    return [...cards].sort((a, b) => pinnedFirst(a, b) || (a.km ?? Infinity) - (b.km ?? Infinity) || b.priceKobo - a.priceKobo);
   }
-  return [...cards].sort((a, b) => b.priceKobo - a.priceKobo);
+  return [...cards].sort((a, b) => pinnedFirst(a, b) || b.priceKobo - a.priceKobo);
 }

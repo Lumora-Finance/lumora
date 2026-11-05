@@ -6,12 +6,12 @@ import { namesMatch } from "./rules";
 export type BookingResult = MoneyResult & { booking_id?: string; capacity_remaining?: number };
 
 /**
- * Books a slot for a farmer. `book_slot` returns the plain delivery code once, for the buyer. It's
- * sent to them here and never returned, because the farmer is the one calling this.
+ * Books a slot for a farmer. `book_slot` returns the plain delivery code for the server. It's removed
+ * here because the farmer is the one calling this. The buyer reads it on their booking page.
  */
 export async function bookSlot(
   input: { slotId: string; farmerId: string; qty: number; now?: Date },
-  deps: { db: MoneyDb; sms: SmsSender },
+  deps: { db: MoneyDb },
 ): Promise<BookingResult> {
   const result = await deps.db.rpc<MoneyResult>("book_slot", {
     p_slot: input.slotId,
@@ -19,10 +19,13 @@ export async function bookSlot(
     p_qty: input.qty,
     p_now: (input.now ?? new Date()).toISOString(),
   });
-  return deliverCodeToBuyer(result, deps);
+  const safe = { ...result };
+  delete safe.delivery_code;
+  delete safe.buyer_phone;
+  return safe;
 }
 
-/** Sends the buyer their code and removes it, and their number, from what the caller gets back. */
+/** For the SMS channel: sends the buyer their code and removes it, and their number, from what the caller gets back. */
 export async function deliverCodeToBuyer(
   result: MoneyResult,
   deps: { db: MoneyDb; sms: SmsSender },
@@ -43,19 +46,6 @@ export async function deliverCodeToBuyer(
     }
   }
   return safe;
-}
-
-export async function regenerateCode(
-  input: { bookingId: string; buyerId: string; phone: string },
-  deps: { db: MoneyDb; sms: SmsSender },
-): Promise<MoneyResult> {
-  const result = await deps.db.rpc<MoneyResult>("money_regenerate_code", {
-    p_booking: input.bookingId,
-    p_buyer: input.buyerId,
-  });
-  if (!result.ok) return result;
-  await deps.sms.send(input.phone, `Your new delivery code is ${String(result.delivery_code)}`);
-  return { ok: true };
 }
 
 /** Payouts only go to accounts in the farmer's registered name. */

@@ -1,131 +1,45 @@
 "use client";
 
-import { ArrowUpRight, BookOpen, ShoppingBag, TrendingUp } from "lucide-react";
-import { cn } from "@/lib/utils";
+import type { DashboardStats } from "@/lib/dashboard-data";
 import { useDashboardData } from "@/lib/hooks/use-dashboard-data";
+import { formatKobo } from "@/lib/money/rules";
+import { useToday } from "@/lib/use-today";
 
-type Stats = {
-  activePosts: number;
-  upcomingBookings: number;
-  monthlyKobo: number;
-  monthlyCount: number;
-};
+import { Panel, PanelHeading } from "./panel";
 
-function formatNaira(kobo: number): string {
-  const naira = kobo / 100;
-  if (naira >= 1_000_000) return `₦${(naira / 1_000_000).toFixed(1)}M`;
-  if (naira >= 1_000) return `₦${Math.round(naira / 1000)}k`;
-  return `₦${naira.toLocaleString("en-NG")}`;
-}
-
+/** The month in four numbers. They share one panel, split by hairlines, and never repeat elsewhere. */
 export function StatsRow() {
-  const { data, loading } = useDashboardData<Stats>("stats");
+  const today = useToday();
+  const month = today ? new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" }).format(today) : " ";
+  const { data: stats, loading } = useDashboardData<DashboardStats>("stats");
+  const { data: me } = useDashboardData<{ role?: string; reliability?: { on_time: number; total: number } } | null>("me");
 
-  const stats = [
+  const deliveries = stats?.monthlyCount ?? 0;
+  const items = [
+    { label: "Active posts", value: String(stats?.activePosts ?? 0), note: "Demand you've posted" },
+    { label: "Bookings ahead", value: String(stats?.upcomingBookings ?? 0), note: "Booked and confirmed" },
+    { label: "Earned", value: formatKobo(stats?.monthlyKobo ?? 0), note: `From ${deliveries} ${deliveries === 1 ? "delivery" : "deliveries"}` },
     {
-      label: "Active Posts",
-      value: loading ? "…" : String(data?.activePosts ?? 0),
-      sub: "Demand and listings",
-      icon: ShoppingBag,
-      color: "text-green",
-      iconBg: "bg-green/10",
-      delta: "Live",
-      cardClass: "bg-white border-l-[3px] border-l-green",
-      dark: false,
-    },
-    {
-      label: "Upcoming Bookings",
-      value: loading ? "…" : String(data?.upcomingBookings ?? 0),
-      sub: "Confirmed and booked",
-      icon: BookOpen,
-      color: "text-amber",
-      iconBg: "bg-amber/10",
-      delta: "Active",
-      cardClass: "bg-field",
-      dark: true,
-    },
-    {
-      label: "This Month",
-      value: loading ? "…" : formatNaira(data?.monthlyKobo ?? 0),
-      sub: `Across ${data?.monthlyCount ?? 0} trades`,
-      icon: TrendingUp,
-      color: "text-amber",
-      iconBg: "bg-amber/20",
-      delta: "Settled",
-      cardClass: "bg-amber-soft border-t-[3px] border-t-amber",
-      dark: false,
+      label: "On time",
+      value: me?.reliability && me.reliability.total > 0 ? `${me.reliability.on_time} of ${me.reliability.total}` : "None yet",
+      note: "Your delivery record",
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-      {stats.map((stat) => {
-        const Icon = stat.icon;
-        return (
-          <div
-            key={stat.label}
-            className={cn(
-              "group relative overflow-hidden rounded-xl border border-line p-5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg",
-              stat.cardClass,
-            )}
-          >
-            <div
-              aria-hidden
-              className="pointer-events-none absolute inset-0 opacity-40"
-              style={{
-                backgroundImage: `repeating-linear-gradient(
-                  ${stat.dark ? "135deg" : "45deg"},
-                  transparent, transparent 20px,
-                  ${stat.dark ? "rgba(143,184,164,0.04)" : "rgba(31,92,69,0.03)"} 20px,
-                  ${stat.dark ? "rgba(143,184,164,0.04)" : "rgba(31,92,69,0.03)"} 21px
-                )`,
-              }}
-            />
-            <div
-              aria-hidden
-              className={cn(
-                "pointer-events-none absolute -right-6 -top-6 size-28 rounded-full blur-2xl opacity-30 transition-opacity duration-300 group-hover:opacity-60",
-                stat.dark ? "bg-sage/10" : "bg-green/8",
-              )}
-            />
-
-            <div className="relative flex items-start justify-between gap-2">
-              <div className={cn("flex size-9 items-center justify-center rounded-xl", stat.iconBg)}>
-                <Icon
-                  strokeWidth={1.5}
-                  className={cn("size-5", stat.dark ? "text-sage" : stat.color)}
-                />
-              </div>
-              <span
-                className={cn(
-                  "flex items-center gap-1 rounded-full px-2 py-0.5 font-num text-label",
-                  stat.dark ? "bg-sage/20 text-sage" : "bg-sage-soft text-green",
-                )}
-              >
-                <ArrowUpRight strokeWidth={2} className="size-3" />
-                {stat.delta}
-              </span>
-            </div>
-
-            <div className="relative mt-4">
-              <p
-                className={cn(
-                  "font-num text-number-lg font-medium",
-                  stat.dark ? "text-paper" : "text-ink",
-                )}
-              >
-                {stat.value}
-              </p>
-              <p className={cn("mt-0.5 text-body font-medium", stat.dark ? "text-paper" : "text-ink")}>
-                {stat.label}
-              </p>
-              <p className={cn("mt-0.5 text-body-sm", stat.dark ? "text-sage/60" : "text-ink-muted")}>
-                {stat.sub}
-              </p>
-            </div>
+    <Panel>
+      <PanelHeading title="This month" sub={month} />
+      <div className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-b-[20px] border-t border-line bg-line lg:grid-cols-4">
+        {items.map((item) => (
+          <div key={item.label} className="min-w-0 bg-white px-5 py-4 sm:px-6 sm:py-5">
+            <p className="text-body-sm text-ink-muted">{item.label}</p>
+            <p className="mt-1 truncate font-num text-[20px] leading-7 font-medium text-ink sm:text-[24px] sm:leading-8">
+              {loading ? "—" : item.value}
+            </p>
+            <p className="mt-1 text-xs text-ink-muted">{item.note}</p>
           </div>
-        );
-      })}
-    </div>
+        ))}
+      </div>
+    </Panel>
   );
 }

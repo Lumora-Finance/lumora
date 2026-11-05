@@ -3,7 +3,8 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { bookSlot } from "../../lib/money/booking";
 import { RULES } from "../../lib/money/rules";
 import {
-  available, book, call, CUTOFF, FakeSms, fund, hold, hours, makeSlot, makeUser, pool, q, resetDb, status, sweep, T0,
+  notices,
+  available, book, call, CUTOFF, fund, hold, hours, makeSlot, makeUser, pool, q, resetDb, status, sweep, T0,
 } from "./helpers";
 
 beforeEach(resetDb);
@@ -124,20 +125,20 @@ describe("book_slot", () => {
     expect(logged.length).toBe(0);
   });
 
-  it("sends the code to the buyer and never returns it to the farmer", async () => {
+  it("shows the code on the buyer's booking page and never to the farmer", async () => {
     const slot = await makeSlot();
     await fund(slot.buyer.id, 50_000_000);
     const farmer = await makeUser("farmer");
-    const sms = new FakeSms();
     const { db } = await import("./helpers");
 
-    const result = await bookSlot({ slotId: slot.slotId, farmerId: farmer.id, qty: 5, now: T0 }, { db, sms });
+    const result = await bookSlot({ slotId: slot.slotId, farmerId: farmer.id, qty: 5, now: T0 }, { db });
 
     expect(result.ok).toBe(true);
     expect(JSON.stringify(result)).not.toMatch(/delivery_code|buyer_phone/);
-    expect(sms.sent).toHaveLength(1);
-    expect(sms.sent[0].phone).toBe(slot.buyer.phone);
-    expect(sms.sent[0].body).toMatch(/\d{4}$/);
+    const buyerView = await call("money_booking_view", { p_booking: result.booking_id, p_viewer: slot.buyer.id });
+    const farmerView = await call("money_booking_view", { p_booking: result.booking_id, p_viewer: farmer.id });
+    expect(String(buyerView.delivery_code)).toMatch(/^\d{4}$/);
+    expect(farmerView.delivery_code).toBeNull();
   });
 
   it("doesn't let a buyer reduce capacity below what's booked", async () => {
@@ -175,11 +176,10 @@ describe("book_slot", () => {
     await q(`insert into commodity_follows values ($1, $2)`, [other.id, slot.commodityId]);
     const booked = await book(slot.slotId, farmer.id, 10);
 
-    await sweep(hours(54));
+    await sweep(hours(48));
 
     expect(await status(booked.booking_id)).toBe("released");
-    const outbox = await q<{ phone: string; body: string }>(`select phone, body from sms_outbox where phone = $1`, [other.phone]);
-    expect(outbox[0].body).toContain("freed up");
+    expect(await notices(other.id, "capacity_freed")).toHaveLength(1);
     // Past the normal cut-off, but before reopened_until.
     expect((await book(slot.slotId, other.id, 5, hours(60))).ok).toBe(true);
   });

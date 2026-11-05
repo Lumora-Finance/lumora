@@ -1,67 +1,23 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Calendar, Clock, MapPin, X, CheckCircle2, Store, Loader2 } from "lucide-react";
+import { Calendar, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { getAuth } from "firebase/auth";
 
 import app from "@/lib/firebase/config";
+import { type LiveBooking, LiveBookings } from "@/components/board/live-bookings";
 import { LogoVideo } from "@/components/dashboard/logo-video";
 import { Reveal } from "@/components/motion/reveal";
 import { cn } from "@/lib/utils";
 
-type Status = "confirmed" | "booked" | "cancelled" | "completed" | "no_show";
 type Tab = "upcoming" | "past" | "cancelled";
 
-type Booking = {
-  id: string;
-  code: string;
-  qty: number;
-  status: string;
-  created_at: string;
-  slot: {
-    date: string;
-    window_start: string;
-    window_end: string;
-    listing: {
-      spec: string;
-      unit_price_kobo: number;
-      location_area: string | null;
-      commodity: { name: string; unit: string };
-      buyer: { id: string; name: string };
-    } | null;
-  } | null;
-};
-
-const STATUS_STYLE: Record<string, string> = {
-  confirmed: "bg-sage-soft text-green",
-  booked: "bg-amber-soft text-amber",
-  completed: "bg-line text-ink-muted",
-  cancelled: "bg-danger/10 text-danger",
-  no_show: "bg-danger/10 text-danger",
-};
-
-function formatWindow(start: string, end: string) {
-  const fmt = (s: string) =>
-    new Date(s).toLocaleTimeString("en-NG", { hour: "numeric", minute: "2-digit" });
-  return `${fmt(start)} – ${fmt(end)}`;
-}
-
-function formatDate(iso: string) {
-  const d = new Date(iso);
-  const now = new Date();
-  const diff = d.getTime() - now.getTime();
-  if (diff > 0 && diff < 86_400_000) return "Tomorrow";
-  return d.toLocaleDateString("en-NG", { weekday: "short", day: "numeric", month: "short" });
-}
-
-function formatKobo(kobo: number, unit: string) {
-  return `₦${(kobo / 100).toLocaleString("en-NG")}/${unit}`;
-}
+type Booking = LiveBooking;
 
 function tabOf(b: Booking): Tab {
-  if (b.status === "cancelled" || b.status === "no_show") return "cancelled";
-  if (b.status === "completed") return "past";
+  if (["cancelled", "no_show", "released", "declined"].includes(b.status)) return "cancelled";
+  if (b.status === "settled") return "past";
   return "upcoming";
 }
 
@@ -82,7 +38,10 @@ export default function BookingsPage() {
       setLoading(true);
       setError(null);
       try {
-        const token = await getAuth(app).currentUser?.getIdToken();
+        const auth = getAuth(app);
+        // On a fresh load the saved session isn't back yet, and asking now would look signed out.
+        await auth.authStateReady();
+        const token = await auth.currentUser?.getIdToken();
         const res = await fetch("/api/bookings", {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
@@ -178,87 +137,7 @@ export default function BookingsPage() {
           </div>
         </Reveal>
       ) : (
-        <div className="flex flex-col gap-4">
-          {items.map((booking) => {
-            const listing = booking.slot?.listing;
-            const commodity = listing?.commodity?.name ?? "Produce";
-            const unit = listing?.commodity?.unit ?? "unit";
-            const buyerName = listing?.buyer?.name ?? "Buyer";
-            const location = listing?.location_area ?? "—";
-            const date = booking.slot?.date ? formatDate(booking.slot.date) : "—";
-            const window =
-              booking.slot?.window_start && booking.slot?.window_end
-                ? formatWindow(booking.slot.window_start, booking.slot.window_end)
-                : "—";
-            const priceStr = listing?.unit_price_kobo ? formatKobo(listing.unit_price_kobo, unit) : "—";
-            const status = booking.status as Status;
-
-            return (
-              <Reveal key={booking.id} effect="riseIn" config={{ stagger: 0 }}>
-                <div className="group relative overflow-hidden rounded-xl border border-line bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex size-9 items-center justify-center rounded-lg bg-sage-soft">
-                        <Store strokeWidth={1.5} className="size-4 text-green" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-ink">{commodity}</p>
-                        <p className="text-body-sm text-ink-muted">with {buyerName}</p>
-                      </div>
-                    </div>
-                    <span className={cn("shrink-0 rounded-full px-2.5 py-0.5 text-label font-medium capitalize", STATUS_STYLE[status] ?? "bg-line text-ink-muted")}>
-                      {status}
-                    </span>
-                  </div>
-
-                  <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    <div>
-                      <p className="text-label text-ink-muted">Quantity</p>
-                      <p className="font-num text-body-sm font-medium text-ink">{booking.qty} {unit}</p>
-                    </div>
-                    <div>
-                      <p className="text-label text-ink-muted">Price</p>
-                      <p className="font-num text-body-sm font-medium text-amber">{priceStr}</p>
-                    </div>
-                    <div className="flex items-start gap-1.5">
-                      <Clock strokeWidth={1.5} className="mt-0.5 size-3.5 shrink-0 text-ink-muted" />
-                      <div>
-                        <p className="text-label text-ink-muted">Date & Time</p>
-                        <p className="text-body-sm text-ink">{date} · {window}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-1.5">
-                      <MapPin strokeWidth={1.5} className="mt-0.5 size-3.5 shrink-0 text-ink-muted" />
-                      <div>
-                        <p className="text-label text-ink-muted">Location</p>
-                        <p className="text-body-sm text-ink">{location}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex items-center justify-between border-t border-line pt-3">
-                    <span className="font-num text-label text-ink-muted">{booking.code}</span>
-                    {tab === "upcoming" && (
-                      <div className="flex gap-2">
-                        <button className="rounded-lg bg-sage-soft px-3 py-1.5 text-label font-medium text-green hover:bg-sage-soft/80">
-                          View details
-                        </button>
-                        <button className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-label font-medium text-ink-muted hover:bg-danger/10 hover:text-danger">
-                          <X strokeWidth={2} className="size-3" /> Cancel
-                        </button>
-                      </div>
-                    )}
-                    {status === "completed" && (
-                      <span className="flex items-center gap-1.5 text-label text-success">
-                        <CheckCircle2 strokeWidth={2} className="size-3.5" /> Completed
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </Reveal>
-            );
-          })}
-        </div>
+        <LiveBookings bookings={items} />
       )}
     </div>
   );

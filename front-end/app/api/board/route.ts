@@ -18,5 +18,7 @@ export async function GET(request: Request) {
     cards: buildBoard(raw, sort),
     stock: raw.stock ?? {},
     follows: raw.follows ?? [],
+    reliability: raw.reliability ?? { on_time: 0, total: 0 },
+    completedDeliveries: raw.completed_deliveries ?? 0,
   });
 }

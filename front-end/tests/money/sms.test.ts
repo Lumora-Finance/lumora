@@ -45,9 +45,9 @@ describe("commands", () => {
     await fund(slot.buyer.id, 50_000_000);
     const farmer = await makeUser("farmer");
     const booked = await book(slot.slotId, farmer.id, 10);
-    await sweep(hours(48));
+    await sweep(hours(36));
 
-    expect(await text(farmer.phone, "YES", hours(49))).toContain("Confirmed");
+    expect(await text(farmer.phone, "YES", hours(37))).toContain("Confirmed");
     expect(await status(booked.booking_id)).toBe("confirmed");
   });
 
@@ -57,11 +57,11 @@ describe("commands", () => {
     const farmer = await makeUser("farmer");
     const first = await book(slot.slotId, farmer.id, 5);
     const second = await book(slot.slotId, farmer.id, 5);
-    await sweep(hours(48));
+    await sweep(hours(36));
 
-    expect(await text(farmer.phone, "YES", hours(49))).toContain("more than one");
+    expect(await text(farmer.phone, "YES", hours(37))).toContain("more than one");
     expect(await status(first.booking_id)).toBe("booked");
-    await text(farmer.phone, `YES ${second.code}`, hours(49));
+    await text(farmer.phone, `YES ${second.code}`, hours(37));
     expect(await status(second.booking_id)).toBe("confirmed");
     expect(await status(first.booking_id)).toBe("booked");
   });

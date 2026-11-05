@@ -1,6 +1,6 @@
 # Delivery logistics and location
 
-Lumora doesn't run transport: the farmer delivers or the buyer collects. For engineers working on the board, SMS or onboarding. Builds on `docs/money-flow.md`.
+Lumora doesn't run transport: the farmer delivers or the buyer collects. For engineers working on the board or onboarding. Builds on `docs/money-flow.md`, which also says how SMS is now unused.
 
 ## What exists
 
@@ -30,8 +30,8 @@ The other party's details come only from `logistics_booking_contact`, which chec
 | A number could be typed by someone who doesn't own it | **Open.** Phone numbers from `/onboarding` aren't verified, yet SMS treats a phone number as identity. It needs an OTP before real money |
 | Highest-price sort mixes units | ₦28,000 a basket sorts above ₦3,800 a kg. It reads fine with one crop at a time, but a crop filter would be better |
 | Delivery photos | Stored in a public bucket under random names, so they aren't listed but anyone with the link can see them |
-| Farmer fee on take-home | Settlement charges farmers nothing, so `FARMER_FEE_PCT` in `lib/pricing.ts` is 0, with no free-delivery count. A fee has to change there and in settlement together |
-| My flock stepper | It only changes what the page works out, and isn't saved. Declared stock is its starting value |
+| Farmer fee on take-home | Take-home uses `RULES.FARMER_FEE_PCT` (1%), and is free within the farmer's first deliveries, the same as settlement |
+| My flock stepper | It saves as declared stock for the next 7 days, so backup requests can find the farmer. A saved flock also limits how much they can book |
 | Listings are for one day | The form creates one day at a time. Recurring days from the README aren't built |
 
 ## Before this works for real

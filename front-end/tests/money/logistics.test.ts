@@ -10,6 +10,7 @@ import { DECLINE_REASONS, declineProblem } from "../../lib/logistics/decline";
 import { normalisePhone, readLocationChoice, validPhone } from "../../lib/logistics/location-input";
 import { areaMenu } from "../../lib/logistics/sms-onboarding";
 import { handleInboundSms } from "../../lib/money/sms-commands";
+import { largestHoldKobo, type ListingDraft, listingBody, stepProblem } from "../../lib/logistics/listing-draft";
 import { FARMER_FEE_PCT, takeHomeKobo } from "../../lib/pricing";
 import {
   arrive, balance, book, call, confirmedBooking, db, FakeSms, fund, hours, makeSlot, makeUser, pool, PRICE, q, resetDb, T0, WINDOW_START,
@@ -558,16 +559,17 @@ describe("address privacy", () => {
 
 describe("market board", () => {
   it("works out take-home from the average weight", () => {
-    // 30 x 3 kg x ₦3,500
-    expect(takeHomeKobo({ units: 30, minWeightKg: 2.5, maxWeightKg: 3.5, priceKobo: 350_000 })).toBe(31_500_000);
+    // 30 x 3 kg x ₦3,500, less 1%
+    expect(takeHomeKobo({ units: 30, minWeightKg: 2.5, maxWeightKg: 3.5, priceKobo: 350_000 })).toBe(31_185_000);
+    expect(takeHomeKobo({ units: 30, minWeightKg: 2.5, maxWeightKg: 3.5, priceKobo: 350_000, freeDeliveriesLeft: 1 })).toBe(31_500_000);
     expect(takeHomeKobo({ units: 0, minWeightKg: 2.5, maxWeightKg: 3.5, priceKobo: 350_000 })).toBe(0);
-    expect(takeHomeKobo({ units: 14, minWeightKg: 1, maxWeightKg: 1, priceKobo: 2_800_000 })).toBe(39_200_000);
+    expect(takeHomeKobo({ units: 14, minWeightKg: 1, maxWeightKg: 1, priceKobo: 2_800_000 })).toBe(38_808_000);
   });
 
-  it("takes a farmer fee off only outside free deliveries, and charges none today", () => {
+  it("takes the farmer fee off only outside free deliveries", () => {
     const base = { units: 10, minWeightKg: 3, maxWeightKg: 3, priceKobo: 100_000 };
-    expect(FARMER_FEE_PCT).toBe(0);
-    expect(takeHomeKobo(base)).toBe(3_000_000);
+    expect(FARMER_FEE_PCT).toBe(1);
+    expect(takeHomeKobo(base)).toBe(2_970_000);
     expect(takeHomeKobo({ ...base, farmerFeePct: 2 })).toBe(2_940_000);
     expect(takeHomeKobo({ ...base, farmerFeePct: 2, freeDeliveriesLeft: 3 })).toBe(3_000_000);
   });
@@ -581,7 +583,7 @@ describe("market board", () => {
     });
     await call("money_farmer_reply", { p_booking: b.booking.booking_id, p_farmer: b.farmer.id, p_reply: "yes", p_now: hours(2, WINDOW_START).toISOString() });
     expect(await balance("farmer_pending", b.farmer.id)).toBe(
-      takeHomeKobo({ units: 10, minWeightKg: 2.5, maxWeightKg: 3.5, priceKobo: PRICE }),
+      takeHomeKobo({ units: 10, minWeightKg: 2.5, maxWeightKg: 3.5, priceKobo: PRICE, freeDeliveriesLeft: 3 }),
     );
   });
 
@@ -618,7 +620,7 @@ describe("market board", () => {
     expect(await call("logistics_follow_commodity", { p_farmer: farmer.id, p_commodity: "Goats" })).toMatchObject({ code: "unknown_commodity" });
   });
 
-  it("texts followers in the buyer's area when a new demand posts, and nobody else", async () => {
+  it("tells followers in the buyer's area when a new demand posts, and nobody else", async () => {
     const near = await makeUser("farmer");
     await setLocation(near.id, "Rayfield");
     const far = await makeUser("farmer");
@@ -636,9 +638,58 @@ describe("market board", () => {
     });
     expect(result.ok).toBe(true);
 
-    const sent = await q<{ phone: string; body: string }>(`select phone, body from sms_outbox where body like '%wants%'`);
-    expect(sent.map((row) => row.phone)).toEqual([near.phone]);
-    expect(sent[0].body).toBe("Caterer D in Rayfield wants chickens. Send BUYERS CHICKEN to see the price.");
-    expect(sent[0].body).not.toContain("12 Rayfield Road");
+    const sent = await q<{ user_id: string; data: object }>(`select user_id, data from notifications where kind = 'new_demand'`);
+    expect(sent.map((row) => row.user_id)).toEqual([near.id]);
+    expect(sent[0].data).toMatchObject({ buyer: "Caterer D", area: "Rayfield", goods: "broilers" });
+    expect(JSON.stringify(sent[0].data)).not.toContain("12 Rayfield Road");
+  });
+});
+
+describe("the post demand steps", () => {
+  const NOW = new Date("2026-12-07T08:00:00Z");
+  const draft: ListingDraft = {
+    commodity: "Live broilers", mode: "farmer_delivers", address: "12 Rayfield Road", date: "2026-12-10", windowStart: "07:00", windowEnd: "11:00",
+    price: "3500", capacity: "30", minQty: "1", minWeight: "2.5", maxWeight: "3.5", spec: "",
+  };
+
+  it("passes a complete draft on every step", () => {
+    for (const step of [1, 2, 3, 4]) expect(stepProblem(step, draft, NOW)).toBeNull();
+  });
+
+  it("asks for an address only when the farmer delivers", () => {
+    expect(stepProblem(1, { ...draft, address: "  " }, NOW)).toMatch(/address/);
+    expect(stepProblem(1, { ...draft, address: "", mode: "buyer_collects" }, NOW)).toBeNull();
+  });
+
+  it("stops a window that's too late, backwards, or inside the cut-off", () => {
+    expect(stepProblem(2, { ...draft, windowEnd: "12:00" }, NOW)).toMatch(/by 11:00/);
+    expect(stepProblem(2, { ...draft, commodity: "Tomatoes", windowEnd: "12:00" }, NOW)).toBeNull();
+    expect(stepProblem(2, { ...draft, windowEnd: "06:00" }, NOW)).toMatch(/after the start/);
+    expect(stepProblem(2, { ...draft, date: "2026-12-08" }, NOW)).toMatch(/later day/);
+    expect(stepProblem(2, { ...draft, date: "" }, NOW)).toMatch(/Choose a day/);
+  });
+
+  it("checks the numbers", () => {
+    expect(stepProblem(3, { ...draft, price: "abc" }, NOW)).toMatch(/price/);
+    expect(stepProblem(3, { ...draft, price: "0" }, NOW)).toMatch(/price/);
+    expect(stepProblem(3, { ...draft, capacity: "2.5" }, NOW)).toMatch(/how many/);
+    expect(stepProblem(3, { ...draft, minQty: "31" }, NOW)).toMatch(/smallest order/);
+    expect(stepProblem(3, { ...draft, maxWeight: "2" }, NOW)).toMatch(/largest weight/);
+  });
+
+  it("doesn't ask for weights on baskets and crates, and sends 1 for them", () => {
+    const tomatoes: ListingDraft = { ...draft, commodity: "Tomatoes", minWeight: "", maxWeight: "" };
+    expect(stepProblem(3, tomatoes, NOW)).toBeNull();
+    expect(listingBody(tomatoes)).toMatchObject({ minWeight: 1, maxWeight: 1 });
+  });
+
+  it("works out the largest hold the same way as book_slot", () => {
+    expect(largestHoldKobo(draft)).toBe(30 * 3.5 * 350_000);
+    expect(largestHoldKobo({ ...draft, commodity: "Eggs", price: "5600", capacity: "25" })).toBe(25 * 560_000);
+    expect(largestHoldKobo({ ...draft, price: "" })).toBeNull();
+  });
+
+  it("sends no address when the buyer collects", () => {
+    expect(listingBody({ ...draft, mode: "buyer_collects" })).toMatchObject({ address: null, unitPriceKobo: 350_000, capacity: 30 });
   });
 });

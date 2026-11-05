@@ -15,6 +15,7 @@ const ENDPOINTS: Record<string, string> = {
   stats: "/api/dashboard/stats",
   posts: "/api/dashboard/posts",
   transactions: "/api/dashboard/transactions",
+  me: "/api/me",
 };
 
 type DashboardState<T> = {
@@ -58,6 +59,8 @@ export function useDashboardData<T>(key: string): DashboardState<T> & { refetch:
         // Get a fresh ID token. getIdToken(false) returns the cached token if
         // it hasn't expired; pass true to force a refresh if needed.
         const auth = getAuth(app);
+        // On a fresh load the saved session isn't back yet, and asking now would look signed out.
+        await auth.authStateReady();
         const token = auth.currentUser
           ? await auth.currentUser.getIdToken(false)
           : null;

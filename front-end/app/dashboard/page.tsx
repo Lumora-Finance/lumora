@@ -1,228 +1,92 @@
 "use client";
 
-import Image from "next/image";
-import { useRef, useState } from "react";
-import { AlertCircle, ArrowRight, Sparkles } from "lucide-react";
+import { AlertCircle, ArrowRight, Plus } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
-import { LogoVideo } from "@/components/dashboard/logo-video";
+import { useProfile } from "@/components/auth/use-profile";
 import { BoardPreview } from "@/components/dashboard/board-preview";
+import { MoneyChart } from "@/components/dashboard/money-chart";
 import { MyPosts } from "@/components/dashboard/my-posts";
+import { NextUp } from "@/components/dashboard/next-up";
 import { PostModal } from "@/components/dashboard/post-button";
 import { RecentTransactions } from "@/components/dashboard/recent-transactions";
+import { Schedule } from "@/components/dashboard/schedule";
 import { StatsRow } from "@/components/dashboard/stats-row";
-import { UpcomingBookings } from "@/components/dashboard/upcoming-bookings";
 import { Reveal } from "@/components/motion/reveal";
-import { useProfile } from "@/components/auth/use-profile";
-import { useDashboardData } from "@/lib/hooks/use-dashboard-data";
-import { fx, useGSAP, playOnEnter } from "@/lib/gsap/effects";
-import { cn } from "@/lib/utils";
+import { apiFetch } from "@/lib/logistics/client";
 
-const CROPS = [
-  {
-    src: "/images/hero-farm.jpg",
-    pos: "object-[52%_25%]",
-    cls: "absolute top-6 right-12 size-20 lg:size-24 hidden sm:block",
-  },
-  {
-    src: "/images/step-farmer.jpg",
-    pos: "object-[28%_10%]",
-    cls: "absolute bottom-6 right-6 size-16 lg:size-20",
-  },
-];
-
+/** Reads top to bottom: what's next, how the month is going, money and the week, posts and who's near. */
 export default function DashboardPage() {
   const [postOpen, setPostOpen] = useState(false);
+  const [needsLocation, setNeedsLocation] = useState(false);
   const { user, profile } = useProfile();
-  const heroRef = useRef<HTMLDivElement>(null);
-  const { data: stats } = useDashboardData<{
-    activePosts: number;
-    upcomingBookings: number;
-    monthlyKobo: number;
-    monthlyCount: number;
-  }>("stats");
 
-  const profileIncomplete = user && !user.phoneNumber;
-  const displayName = profile?.display_name ?? user?.displayName ?? user?.email?.split("@")[0] ?? "there";
+  const displayName = profile?.display_name ?? user?.displayName ?? user?.email?.split("@")[0] ?? "";
   const firstName = displayName.split(" ")[0];
-  const photoURL = profile?.photo_url ?? user?.photoURL ?? null;
-  const initials = displayName
-    .split(" ")
-    .slice(0, 2)
-    .map((w: string) => w[0])
-    .join("")
-    .toUpperCase();
 
-  useGSAP(
-    () => {
-      const root = heroRef.current;
-      if (!root) return;
-
-      // ledger lines
-
-      // stat chips pop in
-      playOnEnter(
-        fx("chipPop", root.querySelectorAll("[data-chip]"), { stagger: 0.08 }),
-        root,
-        "top 85%",
-      );
-
-      // float crop photos
-      fx("floatDrift", root.querySelectorAll("[data-crop]"));
-    },
-    { scope: heroRef },
-  );
+  // Only someone we can see has no location yet. If our API can't answer, nobody is nagged.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    apiFetch(user, "/api/me")
+      .then((response) => (response.ok ? response.json() : undefined))
+      .then((profile: { area?: string | null } | null | undefined) => {
+        if (!cancelled && profile !== undefined) setNeedsLocation(!profile?.area);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   return (
     <>
-      <div className="mx-auto w-full max-w-[1120px] px-4 py-6 md:px-6 lg:px-8">
-
-        {/* ── Hero strip ──────────────────────────────────────── */}
-        <div
-          ref={heroRef}
-          data-rhythm="field"
-          className="relative isolate mb-8 overflow-hidden rounded-2xl bg-field px-6 py-10 text-paper lg:px-10 lg:py-12"
-        >
-          <LogoVideo />
-
-          {/* Floating crop photos */}
-          {CROPS.map((crop, i) => (
-            <div
-              key={i}
-              data-crop
-              aria-hidden="true"
-              className={cn("overflow-hidden rounded-full", crop.cls)}
-            >
-              <Image
-                src={crop.src}
-                alt=""
-                width={200}
-                height={200}
-                className={cn("size-full object-cover", crop.pos)}
-              />
-            </div>
-          ))}
-
-          {/* Greeting row */}
-          <div className="flex items-center gap-4">
-            {/* Avatar */}
-            <div className="relative size-12 shrink-0 overflow-hidden rounded-full ring-2 ring-sage/30 lg:size-14">
-              {photoURL ? (
-                <Image
-                  src={photoURL}
-                  alt={displayName}
-                  fill
-                  className="object-cover"
-                  referrerPolicy="no-referrer"
-                  sizes="56px"
-                />
-              ) : (
-                <span className="flex h-full w-full items-center justify-center bg-field-soft font-num text-heading font-medium text-sage">
-                  {initials}
-                </span>
-              )}
-            </div>
-            <div>
-              <p className="text-body text-sage/70">Welcome back</p>
-              <h1 className="font-display text-display-lg-sm font-medium tracking-tight text-paper md:text-[2rem]">
-                Good day, {firstName} ✦
-              </h1>
-            </div>
+      <div className="mx-auto w-full max-w-[1120px] space-y-4 px-4 py-5 md:px-6 lg:space-y-5 lg:px-8 lg:py-7">
+        <header className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="font-display text-[28px] leading-[1.2] font-medium text-ink sm:text-[32px]">Dashboard</h1>
+            <p className="mt-0.5 truncate text-body-sm text-ink-muted sm:text-base">
+              {firstName ? `Welcome, ${firstName}. ` : ""}Here&apos;s what&apos;s moving.
+            </p>
           </div>
-
-          {/* Stat chips */}
-          <div className="mt-8 flex flex-wrap gap-3">
-            <div
-              data-chip
-              className="flex flex-col rounded-[20px_6px_20px_6px] bg-field-soft/70 px-4 py-3"
-            >
-              <span className="text-body-sm text-sage/70">Active Posts</span>
-              <span className="font-num text-number-lg font-medium text-paper">
-                {stats?.activePosts ?? "—"}
-              </span>
-            </div>
-            <div
-              data-chip
-              className="flex flex-col rounded-[6px_20px_6px_20px] bg-field-soft/70 px-4 py-3"
-            >
-              <span className="text-body-sm text-sage/70">Bookings</span>
-              <span className="font-num text-number-lg font-medium text-paper">
-                {stats?.upcomingBookings ?? "—"}
-              </span>
-            </div>
-            <div
-              data-chip
-              className="flex flex-col rounded-[20px_6px_20px_6px] bg-amber/20 px-4 py-3"
-            >
-              <span className="text-body-sm text-amber/80">This Month</span>
-              <span className="font-num text-number-lg font-medium text-amber">
-                {stats?.monthlyKobo != null
-                  ? `₦${(stats.monthlyKobo / 100).toLocaleString("en-NG")}`
-                  : "—"}
-              </span>
-            </div>
-          </div>
-
-          {/* Quick action */}
           <button
+            type="button"
             onClick={() => setPostOpen(true)}
-            className="mt-6 flex items-center gap-2 rounded-full bg-paper px-5 py-2.5 text-body font-medium text-field transition-all duration-200 hover:bg-sage-soft hover:shadow-md"
+            className="inline-flex h-12 shrink-0 items-center gap-2 rounded-2xl bg-field px-4 font-medium text-paper transition-[background-color,transform] duration-150 [-webkit-tap-highlight-color:transparent] hover:bg-field-soft focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:outline-none active:scale-[0.97] motion-reduce:active:scale-100 sm:px-5"
           >
-            <Sparkles strokeWidth={1.5} className="size-4" />
-            Post demand or listing
+            <Plus aria-hidden="true" strokeWidth={2} className="size-4" />
+            New post
           </button>
-        </div>
+        </header>
 
-        {/* ── Profile incomplete banner ───────────────────────── */}
-        {profileIncomplete && (
-          <Reveal effect="riseIn">
-            <div className="mb-6 flex items-center gap-3 rounded-xl border border-amber/30 bg-amber-soft/60 px-4 py-3.5">
-              <AlertCircle strokeWidth={1.5} className="size-5 shrink-0 text-amber" />
-              <p className="flex-1 text-body-sm text-ink">
-                <span className="font-medium">Complete your profile</span> — add your phone number
-                and location to post demand or list produce.
-              </p>
-              <Link
-                href="/dashboard/profile"
-                className="flex shrink-0 items-center gap-1 text-body-sm font-medium text-amber hover:underline"
-              >
-                Complete now
-                <ArrowRight strokeWidth={2} className="size-3.5" />
-              </Link>
-            </div>
-          </Reveal>
+        {needsLocation && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl bg-amber-soft px-4 py-3">
+            <AlertCircle aria-hidden="true" strokeWidth={1.75} className="size-5 shrink-0 text-[#9A6A1A]" />
+            <p className="min-w-0 flex-1 text-body-sm text-ink">Add your location so people nearby can find you.</p>
+            <Link href="/dashboard/profile" className="inline-flex min-h-11 items-center gap-1 text-body-sm font-medium text-[#9A6A1A] hover:underline lg:min-h-0">
+              Add location
+              <ArrowRight aria-hidden="true" strokeWidth={2} className="size-3.5" />
+            </Link>
+          </div>
         )}
 
-        {/* ── Stats row ──────────────────────────────────────── */}
-        <Reveal effect="riseIn">
-          <StatsRow />
-        </Reveal>
+        <Reveal effect="riseIn"><NextUp /></Reveal>
+        <Reveal effect="riseIn"><StatsRow /></Reveal>
 
-        {/* ── Main grid ──────────────────────────────────────── */}
-        <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-[1fr_380px]">
-          {/* Left column */}
-          <div className="flex flex-col gap-6">
-            <Reveal effect="riseIn">
-              <MyPosts onPost={() => setPostOpen(true)} />
-            </Reveal>
-            <Reveal effect="riseIn">
-              <RecentTransactions />
-            </Reveal>
-          </div>
-
-          {/* Right column */}
-          <div className="flex flex-col gap-6">
-            <Reveal effect="riseIn">
-              <UpcomingBookings />
-            </Reveal>
-            <Reveal effect="riseIn">
-              <BoardPreview />
-            </Reveal>
-          </div>
+        <div className="grid grid-cols-1 gap-4 lg:gap-5 xl:grid-cols-[1.2fr_1fr]">
+          <Reveal effect="riseIn"><MoneyChart /></Reveal>
+          <Reveal effect="riseIn"><Schedule /></Reveal>
         </div>
+
+        <div className="grid grid-cols-1 gap-4 lg:gap-5 xl:grid-cols-[1.2fr_1fr]">
+          <Reveal effect="riseIn"><MyPosts onPost={() => setPostOpen(true)} /></Reveal>
+          <Reveal effect="riseIn"><BoardPreview /></Reveal>
+        </div>
+
+        <Reveal effect="riseIn"><RecentTransactions /></Reveal>
       </div>
 
-      {/* Post modal */}
       <PostModal open={postOpen} onClose={() => setPostOpen(false)} />
     </>
   );

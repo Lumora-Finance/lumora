@@ -1,11 +1,10 @@
 import { connection } from "next/server";
 
+import { createResendMailer } from "@/lib/email/mailer";
 import { serverMoneyDb } from "@/lib/money/db";
 import { createPaystackClient } from "@/lib/money/paystack";
 import { runMoneyJob, runReconciliation } from "@/lib/money/jobs";
 import { secretMatches } from "@/lib/money/secret";
-import { createSmsSender } from "@/lib/money/sms-sender";
-
 
 /** `?task=reconcile` runs the nightly check. Otherwise this is the 5-minute job. */
 export async function GET(request: Request) {
@@ -22,6 +21,7 @@ export async function GET(request: Request) {
   if (new URL(request.url).searchParams.get("task") === "reconcile") {
     return Response.json(await runReconciliation({ db, paystack }));
   }
-
-  return Response.json(await runMoneyJob({ db, paystack, sms: createSmsSender() }));
+  return Response.json(
+    await runMoneyJob({ db, paystack, mailer: createResendMailer(), emailSecret: process.env.EMAIL_ACTION_SECRET }),
+  );
 }

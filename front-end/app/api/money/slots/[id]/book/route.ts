@@ -1,7 +1,6 @@
 import { requestUser } from "@/lib/money/auth";
 import { bookSlot } from "@/lib/money/booking";
 import { serverMoneyDb } from "@/lib/money/db";
-import { createSmsSender } from "@/lib/money/sms-sender";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const db = serverMoneyDb();
@@ -14,7 +13,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const result = await bookSlot(
     { slotId: id, farmerId: user.id, qty: body?.qty as number },
-    { db, sms: createSmsSender() },
+    { db },
   );
   return Response.json(result, { status: result.ok ? 200 : 409 });
 }

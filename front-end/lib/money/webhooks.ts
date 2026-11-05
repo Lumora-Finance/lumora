@@ -1,5 +1,4 @@
 import type { MoneyDb } from "./db";
-import { type FlutterwaveClient, verifyWebhookSignature as verifyFlwSignature } from "./flutterwave";
 import { type PaystackClient, verifyWebhookSignature } from "./paystack";
 
 type WebhookData = {
@@ -74,6 +73,7 @@ async function handleDeposit(
     verified.currency === "NGN" &&
     verified.amountKobo !== null &&
     verified.amountKobo > 0 &&
+    verified.amountKobo === Number(data.amount) &&
     verified.reference === data.reference;
 
   if (!matches) {

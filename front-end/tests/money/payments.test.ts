@@ -1,20 +1,26 @@
+import { createHmac } from "node:crypto";
+
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { addPayoutAccount } from "../../lib/money/booking";
-import { createFlutterwaveClient, verifyWebhookSignature } from "../../lib/money/flutterwave";
+import { createFlutterwaveClient } from "../../lib/money/flutterwave";
 import { runMoneyJob, runReconciliation, sendOutbox, sendPayouts, sendRefunds } from "../../lib/money/jobs";
-import { handleFlutterwaveWebhook } from "../../lib/money/webhooks";
+import { verifyWebhookSignature } from "../../lib/money/paystack";
+import { handlePaystackWebhook } from "../../lib/money/webhooks";
 import {
-  arrive, available, balance, call, confirmedBooking, db, FakeFlutterwave, FakeSms, hours, ledgerTotal, makeUser, pool,
+  arrive, available, balance, call, confirmedBooking, db, FakeMailer, FakePaystack, FakeSms, hours, ledgerTotal, makeUser, pool,
   q, record, resetDb, T0, WINDOW_START,
 } from "./helpers";
 
 beforeEach(resetDb);
 afterAll(() => pool.end());
 
-const SECRET = "test-hash";
-const webhook = (flutterwave: FakeFlutterwave, body: object, signature: string | null = SECRET) =>
-  handleFlutterwaveWebhook({ signature, body, secretHash: SECRET }, { db, flutterwave, now: T0 });
+const SECRET = "test-secret";
+const sign = (rawBody: string) => createHmac("sha512", SECRET).update(rawBody).digest("hex");
+const webhook = (paystack: FakePaystack, body: { event: string; data: Record<string, unknown> }, signature?: string) => {
+  const rawBody = JSON.stringify(body);
+  return handlePaystackWebhook({ signature: signature ?? sign(rawBody), rawBody, body, secretKey: SECRET }, { db, paystack, now: T0 });
+};
 
 async function buyerWithAccount() {
   const buyer = await makeUser("buyer");
@@ -22,12 +28,12 @@ async function buyerWithAccount() {
   return { ...buyer, ref: `ref-${buyer.id}` };
 }
 
-function deposit(flutterwave: FakeFlutterwave, id: number, ref: string, naira: number, overrides: Record<string, unknown> = {}) {
-  flutterwave.transactions.set(id, {
-    id, status: "successful", amountKobo: naira * 100, currency: "NGN", txRef: ref, paymentType: "bank_transfer", feeKobo: 0,
+function deposit(paystack: FakePaystack, id: number, ref: string, naira: number, overrides: Record<string, unknown> = {}) {
+  paystack.transactions.set(ref, {
+    id, reference: ref, status: "success", amountKobo: naira * 100, currency: "NGN", paymentChannel: "bank_transfer", feeKobo: 0,
     ...overrides,
   });
-  return { event: "charge.completed", data: { id, status: "successful", amount: naira, currency: "NGN", tx_ref: ref } };
+  return { event: "charge.success", data: { id, status: "success", amount: naira * 100, currency: "NGN", reference: ref } };
 }
 
 /** A settled booking with a payout waiting, and a farmer whose account matches. */
@@ -41,21 +47,22 @@ async function settledWithPayout() {
   return { b, payout: { ...payout, amount_kobo: Number(payout.amount_kobo) } };
 }
 
-const transferEvent = (id: number, reference: string, status = "SUCCESSFUL") => ({
-  event: "transfer.completed",
-  data: { id, reference, status },
+const transferEvent = (code: string, reference: string, event = "transfer.success") => ({
+  event,
+  data: { transfer_code: code, reference, status: event === "transfer.success" ? "success" : "failed" },
 });
 
 describe("webhook signature", () => {
   it("fails closed", () => {
-    expect(verifyWebhookSignature("x", undefined)).toBe(false);
-    expect(verifyWebhookSignature(null, "x")).toBe(false);
-    expect(verifyWebhookSignature("wrong", "right")).toBe(false);
-    expect(verifyWebhookSignature("right", "right")).toBe(true);
+    expect(verifyWebhookSignature(sign("body"), "body", undefined)).toBe(false);
+    expect(verifyWebhookSignature(null, "body", SECRET)).toBe(false);
+    expect(verifyWebhookSignature("wrong", "body", SECRET)).toBe(false);
+    expect(verifyWebhookSignature(sign("other"), "body", SECRET)).toBe(false);
+    expect(verifyWebhookSignature(sign("body"), "body", SECRET)).toBe(true);
   });
 
   it("credits nothing on a bad signature", async () => {
-    const fw = new FakeFlutterwave();
+    const fw = new FakePaystack();
     const buyer = await buyerWithAccount();
     const outcome = await webhook(fw, deposit(fw, 1, buyer.ref, 1000), "forged");
     expect(outcome.httpStatus).toBe(401);
@@ -65,7 +72,7 @@ describe("webhook signature", () => {
 
 describe("deposits", () => {
   it("credits a verified deposit, and a duplicate webhook doesn't credit twice", async () => {
-    const fw = new FakeFlutterwave();
+    const fw = new FakePaystack();
     const buyer = await buyerWithAccount();
     const body = deposit(fw, 1, buyer.ref, 1000);
 
@@ -76,7 +83,7 @@ describe("deposits", () => {
   });
 
   it("doesn't double-credit parallel duplicates", async () => {
-    const fw = new FakeFlutterwave();
+    const fw = new FakePaystack();
     const buyer = await buyerWithAccount();
     const body = deposit(fw, 1, buyer.ref, 1000);
     await Promise.all(Array.from({ length: 8 }, () => webhook(fw, body)));
@@ -87,46 +94,45 @@ describe("deposits", () => {
   it.each([
     ["amount", { amountKobo: 1 }],
     ["currency", { currency: "USD" }],
-    ["reference", { txRef: "someone-else" }],
+    ["reference", { reference: "someone-else" }],
     ["status", { status: "failed" }],
   ])("refuses a deposit whose verified %s doesn't match", async (_, overrides) => {
-    const fw = new FakeFlutterwave();
+    const fw = new FakePaystack();
     const buyer = await buyerWithAccount();
     expect(await webhook(fw, deposit(fw, 1, buyer.ref, 1000, overrides))).toMatchObject({ result: "verification_failed" });
     expect(await available(buyer.id)).toBe(0);
     expect(await q(`select 1 from money_alerts where kind = 'deposit_verification_failed'`)).toHaveLength(1);
   });
 
-  it("asks Flutterwave to send again if verification can't be reached", async () => {
-    const fw = new FakeFlutterwave();
+  it("asks Paystack to send again if verification can't be reached", async () => {
+    const fw = new FakePaystack();
     const buyer = await buyerWithAccount();
-    const body = { event: "charge.completed", data: { id: 99, status: "successful", amount: 1000, currency: "NGN", tx_ref: buyer.ref } };
+    const body = { event: "charge.success", data: { id: 99, status: "success", amount: 100_000, currency: "NGN", reference: buyer.ref } };
     expect(await webhook(fw, body)).toMatchObject({ httpStatus: 500 });
     expect(await available(buyer.id)).toBe(0);
   });
 
-  it("refuses card funding and raises an alert", async () => {
-    const fw = new FakeFlutterwave();
+  it("credits card funding, as Paystack checkout reports it", async () => {
+    const fw = new FakePaystack();
     const buyer = await buyerWithAccount();
-    expect(await webhook(fw, deposit(fw, 1, buyer.ref, 1000, { paymentType: "card" }))).toMatchObject({ result: "not_bank_transfer" });
-    expect(await available(buyer.id)).toBe(0);
-    expect(await q(`select 1 from money_alerts where kind = 'deposit_not_bank_transfer'`)).toHaveLength(1);
+    expect(await webhook(fw, deposit(fw, 1, buyer.ref, 1000, { paymentChannel: "card" }))).toMatchObject({ result: "credited" });
+    expect(await available(buyer.id)).toBe(100_000);
   });
 
   it("holds funding over ₦500,000 for a new buyer, then refunds the excess", async () => {
-    const fw = new FakeFlutterwave();
+    const fw = new FakePaystack();
     const buyer = await buyerWithAccount();
     await webhook(fw, deposit(fw, 1, buyer.ref, 600_000));
 
     expect(await available(buyer.id)).toBe(50_000_000);
     expect(await balance("buyer_over_cap", buyer.id)).toBe(10_000_000);
 
-    await sendRefunds({ db, flutterwave: fw, now: hours(47) });
+    await sendRefunds({ db, paystack: fw, now: hours(47) });
     expect(fw.refunds).toEqual([]);
-    await sendRefunds({ db, flutterwave: fw, now: hours(48) });
+    await sendRefunds({ db, paystack: fw, now: hours(48) });
     expect(fw.refunds).toEqual([[1, 10_000_000]]);
     expect(await balance("buyer_over_cap", buyer.id)).toBe(0);
-    await sendRefunds({ db, flutterwave: fw, now: hours(49) });
+    await sendRefunds({ db, paystack: fw, now: hours(49) });
     expect(fw.refunds).toHaveLength(1);
     expect(await ledgerTotal()).toBe(0);
   });
@@ -134,129 +140,128 @@ describe("deposits", () => {
 
 describe("payouts", () => {
   it("creates one transfer for one settlement, with the settlement id as reference", async () => {
-    const fw = new FakeFlutterwave();
+    const fw = new FakePaystack();
     const { payout } = await settledWithPayout();
 
-    await sendPayouts({ db, flutterwave: fw, now: hours(3, WINDOW_START) });
-    await sendPayouts({ db, flutterwave: fw, now: hours(4, WINDOW_START) });
+    await sendPayouts({ db, paystack: fw, now: hours(3, WINDOW_START) });
+    await sendPayouts({ db, paystack: fw, now: hours(4, WINDOW_START) });
 
     expect(fw.createCalls).toBe(1);
     expect([...fw.transfers.values()][0].reference).toBe(payout.settlement_id);
   });
 
   it("doesn't let parallel job runs create two transfers", async () => {
-    const fw = new FakeFlutterwave();
+    const fw = new FakePaystack();
     await settledWithPayout();
     const at = hours(3, WINDOW_START);
-    await Promise.all(Array.from({ length: 6 }, () => sendPayouts({ db, flutterwave: fw, now: at })));
+    await Promise.all(Array.from({ length: 6 }, () => sendPayouts({ db, paystack: fw, now: at })));
     expect(fw.createCalls).toBe(1);
   });
 
-  it("recovers from a crash after Flutterwave accepted, without a second transfer", async () => {
-    const fw = new FakeFlutterwave();
+  it("recovers from a crash after Paystack accepted, without a second transfer", async () => {
+    const fw = new FakePaystack();
     const { payout } = await settledWithPayout();
     fw.failAfterCreate = true;
-    const first = await sendPayouts({ db, flutterwave: fw, now: hours(3, WINDOW_START) });
+    const first = await sendPayouts({ db, paystack: fw, now: hours(3, WINDOW_START) });
     expect(first.unknown).toBe(1);
 
     // Still claimed, so it's left alone until the 15-minute claim expires.
-    await sendPayouts({ db, flutterwave: fw, now: hours(3.1, WINDOW_START) });
+    await sendPayouts({ db, paystack: fw, now: hours(3.1, WINDOW_START) });
     expect(fw.createCalls).toBe(1);
 
-    await sendPayouts({ db, flutterwave: fw, now: hours(4, WINDOW_START) });
+    await sendPayouts({ db, paystack: fw, now: hours(4, WINDOW_START) });
     expect(fw.createCalls).toBe(1);
     const [row] = await q<{ status: string }>(`select status from money_payouts where id = $1`, [payout.id]);
     expect(row.status).toBe("in_flight");
   });
 
   it("marks paid only on a verified webhook, and a duplicate doesn't pay twice", async () => {
-    const fw = new FakeFlutterwave();
+    const fw = new FakePaystack();
     const { b, payout } = await settledWithPayout();
-    await sendPayouts({ db, flutterwave: fw, now: hours(3, WINDOW_START) });
+    await sendPayouts({ db, paystack: fw, now: hours(3, WINDOW_START) });
     const transfer = [...fw.transfers.values()][0];
 
     expect(await balance("farmer_paid", b.farmer.id)).toBe(0);
 
-    // Flutterwave's own record still says pending, so the webhook's word isn't taken for it.
-    expect(await webhook(fw, transferEvent(transfer.id, payout.settlement_id))).toMatchObject({ result: "pending" });
+    // Paystack's own record still says pending, so the webhook's word isn't taken for it.
+    expect(await webhook(fw, transferEvent(transfer.code, payout.settlement_id))).toMatchObject({ result: "pending" });
     expect(await balance("farmer_paid", b.farmer.id)).toBe(0);
 
-    transfer.status = "SUCCESSFUL";
-    expect(await webhook(fw, transferEvent(transfer.id, payout.settlement_id))).toMatchObject({ result: "paid" });
+    transfer.status = "success";
+    expect(await webhook(fw, transferEvent(transfer.code, payout.settlement_id))).toMatchObject({ result: "paid" });
     expect(await balance("farmer_paid", b.farmer.id)).toBe(payout.amount_kobo);
     expect(await balance("farmer_pending", b.farmer.id)).toBe(0);
 
-    expect(await webhook(fw, transferEvent(transfer.id, payout.settlement_id))).toMatchObject({ result: "duplicate" });
-    await Promise.all(Array.from({ length: 5 }, () => webhook(fw, transferEvent(transfer.id, payout.settlement_id))));
+    expect(await webhook(fw, transferEvent(transfer.code, payout.settlement_id))).toMatchObject({ result: "duplicate" });
+    await Promise.all(Array.from({ length: 5 }, () => webhook(fw, transferEvent(transfer.code, payout.settlement_id))));
     expect(await balance("farmer_paid", b.farmer.id)).toBe(payout.amount_kobo);
     expect(await ledgerTotal()).toBe(0);
   });
 
   it("refuses a webhook whose transfer doesn't match the payout", async () => {
-    const fw = new FakeFlutterwave();
+    const fw = new FakePaystack();
     const { b, payout } = await settledWithPayout();
-    await sendPayouts({ db, flutterwave: fw, now: hours(3, WINDOW_START) });
+    await sendPayouts({ db, paystack: fw, now: hours(3, WINDOW_START) });
     const transfer = [...fw.transfers.values()][0];
-    transfer.status = "SUCCESSFUL";
+    transfer.status = "success";
     transfer.amountKobo = 1;
-    expect(await webhook(fw, transferEvent(transfer.id, payout.settlement_id))).toMatchObject({ result: "verification_failed" });
+    expect(await webhook(fw, transferEvent(transfer.code, payout.settlement_id))).toMatchObject({ result: "verification_failed" });
     expect(await balance("farmer_paid", b.farmer.id)).toBe(0);
   });
 
   it("on failure keeps the money pending, tells the farmer, and retries the next day", async () => {
-    const fw = new FakeFlutterwave();
+    const fw = new FakePaystack();
     const { b, payout } = await settledWithPayout();
-    await sendPayouts({ db, flutterwave: fw, now: hours(3, WINDOW_START) });
+    await sendPayouts({ db, paystack: fw, now: hours(3, WINDOW_START) });
     const transfer = [...fw.transfers.values()][0];
-    transfer.status = "FAILED";
+    transfer.status = "failed";
 
-    expect(await webhook(fw, transferEvent(transfer.id, payout.settlement_id, "FAILED"))).toMatchObject({ result: "failed" });
+    expect(await webhook(fw, transferEvent(transfer.code, payout.settlement_id, "transfer.failed"))).toMatchObject({ result: "failed" });
     expect(await balance("farmer_pending", b.farmer.id)).toBe(payout.amount_kobo);
-    expect(await q(`select 1 from sms_outbox where phone = $1 and body like '%check your account details%'`, [b.farmer.phone])).toHaveLength(1);
+    expect(await q(`select 1 from notifications where user_id = $1 and kind = 'payout_failed'`, [b.farmer.id])).toHaveLength(1);
 
     const [row] = await q<{ next_attempt_at: Date }>(`select next_attempt_at from money_payouts where id = $1`, [payout.id]);
-    await sendPayouts({ db, flutterwave: fw, now: new Date(row.next_attempt_at.getTime() - 60_000) });
-    expect(fw.retryCalls).toBe(0);
-
-    await sendPayouts({ db, flutterwave: fw, now: new Date(row.next_attempt_at.getTime() + 60_000) });
-    expect(fw.retryCalls).toBe(1);
+    await sendPayouts({ db, paystack: fw, now: new Date(row.next_attempt_at.getTime() - 60_000) });
     expect(fw.createCalls).toBe(1);
+
+    await sendPayouts({ db, paystack: fw, now: new Date(row.next_attempt_at.getTime() + 60_000) });
+    expect(fw.createCalls).toBe(2);
 
     // A retry's reference has a suffix. It still has to find its way back to the payout.
     const retried = [...fw.transfers.values()].at(-1)!;
-    retried.status = "SUCCESSFUL";
-    expect(await webhook(fw, transferEvent(retried.id, retried.reference))).toMatchObject({ result: "paid" });
+    retried.status = "success";
+    expect(await webhook(fw, transferEvent(retried.code, retried.reference))).toMatchObject({ result: "paid" });
     expect(await balance("farmer_paid", b.farmer.id)).toBe(payout.amount_kobo);
   });
 
-  it("treats a rejection from Flutterwave as a failure", async () => {
-    const fw = new FakeFlutterwave();
+  it("treats a rejection from Paystack as a failure", async () => {
+    const fw = new FakePaystack();
     const { payout } = await settledWithPayout();
     fw.rejectNextCreate = "Account is invalid";
-    const outcome = await sendPayouts({ db, flutterwave: fw, now: hours(3, WINDOW_START) });
+    const outcome = await sendPayouts({ db, paystack: fw, now: hours(3, WINDOW_START) });
     expect(outcome.failed).toBe(1);
     const [row] = await q<{ status: string; last_error: string }>(`select status, last_error from money_payouts where id = $1`, [payout.id]);
     expect(row).toMatchObject({ status: "failed", last_error: "Account is invalid" });
   });
 
   it("only pays name-matched accounts, and reminds the farmer daily", async () => {
-    const fw = new FakeFlutterwave();
+    const fw = new FakePaystack();
     const { b } = await settledWithPayout();
     await q(`update payout_accounts set name_match = false where farmer_id = $1`, [b.farmer.id]);
 
-    await sendPayouts({ db, flutterwave: fw, now: hours(3, WINDOW_START) });
+    await sendPayouts({ db, paystack: fw, now: hours(3, WINDOW_START) });
     expect(fw.createCalls).toBe(0);
 
     await call("money_sweep", { p_now: hours(3, WINDOW_START).toISOString() });
-    expect(await q(`select 1 from sms_outbox where body like '%Add a bank account%'`)).toHaveLength(1);
+    expect(await q(`select 1 from notifications where kind = 'payout_needs_account'`)).toHaveLength(1);
   });
 
   it("stores a mismatched account as unmatched, and refuses one already on another farmer", async () => {
-    const fw = new FakeFlutterwave();
+    const fw = new FakePaystack();
     const amina = await makeUser("farmer", "Amina Bello");
     const other = await makeUser("farmer", "Chidi Obi");
     const add = (farmerId: string, accountNumber: string) =>
-      addPayoutAccount({ farmerId, bankCode: "044", accountNumber }, { db, flutterwave: fw });
+      addPayoutAccount({ farmerId, bankCode: "044", accountNumber }, { db, paystack: fw });
 
     expect(await add(amina.id, "0690000032")).toMatchObject({ ok: true, name_match: true });
     expect(await add(other.id, "0690000032")).toMatchObject({ code: "bank_account_in_use" });
@@ -265,59 +270,61 @@ describe("payouts", () => {
 });
 
 describe("reconciliation", () => {
-  it("matches when buckets equal Flutterwave's balance plus in-flight payouts", async () => {
-    const fw = new FakeFlutterwave();
+  it("matches when buckets equal Paystack's balance plus in-flight payouts", async () => {
+    const fw = new FakePaystack();
     const { b, payout } = await settledWithPayout();
-    await sendPayouts({ db, flutterwave: fw, now: hours(3, WINDOW_START) });
+    await sendPayouts({ db, paystack: fw, now: hours(3, WINDOW_START) });
 
-    fw.balance = 50_000_000 - payout.amount_kobo; // Flutterwave has already sent it.
-    expect(await runReconciliation({ db, flutterwave: fw })).toMatchObject({ matched: true });
+    fw.balance = 50_000_000 - payout.amount_kobo; // Paystack has already sent it.
+    expect(await runReconciliation({ db, paystack: fw })).toMatchObject({ matched: true });
 
     const transfer = [...fw.transfers.values()][0];
-    transfer.status = "SUCCESSFUL";
-    await webhook(fw, transferEvent(transfer.id, payout.settlement_id));
+    transfer.status = "success";
+    await webhook(fw, transferEvent(transfer.code, payout.settlement_id));
     expect(await balance("farmer_paid", b.farmer.id)).toBe(payout.amount_kobo);
-    expect(await runReconciliation({ db, flutterwave: fw })).toMatchObject({ matched: true });
+    expect(await runReconciliation({ db, paystack: fw })).toMatchObject({ matched: true });
     expect(await q(`select 1 from money_alerts where kind = 'reconciliation_mismatch'`)).toHaveLength(0);
   });
 
   it("detects a mismatch, writes an alert, and stops new payouts until resolved", async () => {
-    const fw = new FakeFlutterwave();
+    const fw = new FakePaystack();
     await settledWithPayout();
     fw.balance = 123;
 
-    const result = await runReconciliation({ db, flutterwave: fw });
+    const result = await runReconciliation({ db, paystack: fw });
     expect(result).toMatchObject({ matched: false, difference_kobo: 50_000_000 - 123 });
     const alerts = await q<{ id: string }>(`select id from money_alerts where kind = 'reconciliation_mismatch'`);
     expect(alerts).toHaveLength(1);
 
-    await sendPayouts({ db, flutterwave: fw, now: hours(3, WINDOW_START) });
+    await sendPayouts({ db, paystack: fw, now: hours(3, WINDOW_START) });
     expect(fw.createCalls).toBe(0);
 
     const admin = await makeUser("admin");
     await call("money_resolve_alert", { p_alert: alerts[0].id, p_actor: admin.id });
-    await sendPayouts({ db, flutterwave: fw, now: hours(3, WINDOW_START) });
+    await sendPayouts({ db, paystack: fw, now: hours(3, WINDOW_START) });
     expect(fw.createCalls).toBe(1);
   });
 
   it("accounts for provider fees on deposits and transfers", async () => {
-    const fw = new FakeFlutterwave();
+    const fw = new FakePaystack();
     const buyer = await buyerWithAccount();
     await webhook(fw, deposit(fw, 1, buyer.ref, 1000, { feeKobo: 1_400 }));
     fw.balance = 100_000 - 1_400;
-    expect(await runReconciliation({ db, flutterwave: fw })).toMatchObject({ matched: true });
+    expect(await runReconciliation({ db, paystack: fw })).toMatchObject({ matched: true });
     expect(await ledgerTotal()).toBe(0);
   });
 });
 
 describe("the job", () => {
-  it("runs the sweep, payouts and SMS together", async () => {
-    const fw = new FakeFlutterwave();
-    const sms = new FakeSms();
+  it("runs the sweep, payouts and emails together, and sends no SMS", async () => {
+    const paystack = new FakePaystack();
+    const mailer = new FakeMailer();
     await settledWithPayout();
-    const result = await runMoneyJob({ db, flutterwave: fw, sms, now: hours(3, WINDOW_START) });
+    const queuedSms = await q(`select 1 from sms_outbox where status = 'queued'`);
+    const result = await runMoneyJob({ db, paystack, mailer, emailSecret: "secret", now: hours(3, WINDOW_START) });
     expect(result.payouts.sent).toBe(1);
-    expect(sms.sent.length).toBeGreaterThan(0);
+    expect(mailer.sent.length).toBeGreaterThan(0);
+    expect(await q(`select 1 from sms_outbox where status = 'queued'`)).toHaveLength(queuedSms.length);
   });
 
   it("requeues an SMS that fails to send", async () => {

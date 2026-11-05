@@ -3,6 +3,7 @@ import { Pool } from "pg";
 import type { MoneyDb, MoneyResult } from "../../lib/money/db";
 import type { FlutterwaveClient, FlwTransaction, FlwTransfer } from "../../lib/money/flutterwave";
 import type { SmsSender } from "../../lib/money/jobs";
+import type { PaystackClient } from "../../lib/money/paystack";
 
 export const pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL, max: 30 });
 
@@ -30,6 +31,7 @@ export const call = (fn: string, args: Record<string, unknown> = {}) => db.rpc<M
 export async function resetDb() {
   await pool.query(`truncate money_ledger, money_balances, money_holds, money_events, money_pending_fees,
     money_receivables, money_payouts, money_settlements, money_funding_accounts, money_deposits, money_alerts,
+    email_outbox, action_tokens, notifications, backup_notified, backup_requests, code_reports, booking_codes,
     sms_outbox, sms_inbound, sms_menus, strikes, disputes, payout_accounts, deliveries, bookings, slots,
     demand_listings, commodity_follows, producer_stock, user_locations, listing_private, sms_onboarding, users cascade`);
   // The seeded commodities stay. Only the ones tests made go.
@@ -41,8 +43,8 @@ let phoneCounter = 0;
 export async function makeUser(role: string, name = `${role} ${++phoneCounter}`, area = "Jos") {
   const phone = `+234800${String(++phoneCounter).padStart(7, "0")}`;
   const [row] = await q<{ id: string }>(
-    `insert into users (phone, name, role, area, firebase_uid) values ($1, $2, $3, $4, $5) returning id`,
-    [phone, name, role, area, `fb-${phone}`],
+    `insert into users (phone, name, role, area, firebase_uid, email) values ($1, $2, $3, $4, $5, $6) returning id`,
+    [phone, name, role, area, `fb-${phone}`, `user${phoneCounter}@example.test`],
   );
   return { id: row.id, phone, name, firebaseUid: `fb-${phone}` };
 }
@@ -53,8 +55,8 @@ export const hours = (n: number, from: Date = T0) => new Date(from.getTime() + n
 export const WINDOW_START = hours(72);
 export const WINDOW_END = hours(76);
 export const CUTOFF = hours(48);
-export const CONFIRM_BY = hours(48); // window start - 24h
-export const CONFIRM_DEADLINE = hours(54); // confirm_by + 6h
+export const CONFIRM_BY = hours(36); // cut-off - 12h
+export const CONFIRM_DEADLINE = CUTOFF;
 export const PRICE = 350_000; // ₦3,500/kg
 
 let txCounter = 1000;
@@ -134,6 +136,13 @@ export async function record(b: { booking: { booking_id: string }; buyer: { id: 
   });
 }
 
+/** What one person has been told, oldest first. */
+export const notices = (userId: string, kind?: string) =>
+  q<{ kind: string; data: Record<string, unknown>; booking_id: string | null }>(
+    `select kind, data, booking_id from notifications where user_id = $1 and ($2::text is null or kind = $2) order by created_at, id`,
+    [userId, kind ?? null],
+  );
+
 /** Every entry moves money from somewhere to somewhere, so the buckets must always net to zero. */
 export async function ledgerTotal() {
   const [row] = await q<{ total: string }>(`select coalesce(sum(balance_kobo), 0) as total from money_balances`);
@@ -198,6 +207,82 @@ export class FakeFlutterwave implements FlutterwaveClient {
   }
   async createVirtualAccount() {
     return { accountNumber: "0000000000", bankName: "Test", orderRef: null };
+  }
+}
+
+type FakeTransaction = { id: number; reference: string; status: string; amountKobo: number | null; feeKobo: number; currency: string; paymentChannel: string };
+type FakeTransfer = { id: number; code: string; reference: string; status: string; amountKobo: number; feeKobo: number };
+
+/** Paystack's records, which the code has to re-read rather than trust a webhook. */
+export class FakePaystack implements PaystackClient {
+  transactions = new Map<string, FakeTransaction>();
+  transfers = new Map<string, FakeTransfer>();
+  createCalls = 0;
+  balance = 0;
+  refunds: [number, number][] = [];
+  rejectNextCreate: string | null = null;
+  failAfterCreate = false;
+  private nextId = 5000;
+
+  async initializeTransaction() {
+    return { authorizationUrl: "https://paystack.test/pay", accessCode: "code" };
+  }
+  async verifyTransaction(reference: string) {
+    const found = this.transactions.get(reference);
+    if (!found) throw new Error("not found");
+    return found;
+  }
+  async refund(id: number, kobo: number) {
+    this.refunds.push([id, kobo]);
+  }
+  async resolveAccount() {
+    return "AMINA BELLO";
+  }
+  async createCustomer() {
+    return "CUS_test";
+  }
+  async createDedicatedVirtualAccount() {
+    return { accountNumber: "0000000000", bankName: "Test" };
+  }
+  async createTransferRecipient() {
+    return "RCP_test";
+  }
+  async createTransfer(input: { reference: string; amountKobo: number }) {
+    this.createCalls += 1;
+    if (this.rejectNextCreate) {
+      const { PaystackRejected } = await import("../../lib/money/paystack");
+      const message = this.rejectNextCreate;
+      this.rejectNextCreate = null;
+      throw new PaystackRejected(message);
+    }
+    const id = ++this.nextId;
+    const transfer: FakeTransfer = { id, code: `TRF_${id}`, status: "pending", reference: input.reference, amountKobo: input.amountKobo, feeKobo: 0 };
+    this.transfers.set(transfer.code, transfer);
+    if (this.failAfterCreate) {
+      this.failAfterCreate = false;
+      throw new Error("network dropped after Paystack accepted");
+    }
+    return { ...transfer };
+  }
+  async findTransferByReference(reference: string) {
+    return [...this.transfers.values()].find((transfer) => transfer.reference === reference) ?? null;
+  }
+  async getTransfer(code: string) {
+    const found = this.transfers.get(code);
+    if (!found) throw new Error("not found");
+    return found;
+  }
+  async ledgerBalanceKobo() {
+    return this.balance;
+  }
+}
+
+export class FakeMailer {
+  sent: { id: string; to: string; subject: string; html: string; text: string }[] = [];
+  failing = false;
+  async send(email: { id: string; to: string; subject: string; html: string; text: string }) {
+    if (this.failing) throw new Error("Email down");
+    this.sent.push(email);
   }
 }
 
