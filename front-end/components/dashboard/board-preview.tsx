@@ -25,9 +25,17 @@ function formatKobo(kobo: number, unit: string) {
   return `₦${(kobo / 100).toLocaleString("en-NG")}/${unit}`;
 }
 
+/** Board response shape from /api/board. */
+type BoardResponse = {
+  cards: Slot[];
+  area: string | null;
+  stock: Record<string, number>;
+  follows: string[];
+};
+
 export function BoardPreview() {
-  const { data, loading } = useDashboardData<Slot[]>("board");
-  const slots = data ?? [];
+  const { data, loading } = useDashboardData<BoardResponse>("board");
+  const slots = data?.cards ?? [];
 
   return (
     <div className="rounded-xl border border-line bg-white shadow-sm">

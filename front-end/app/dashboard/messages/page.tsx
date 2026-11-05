@@ -18,56 +18,11 @@ type Conversation = {
   messages: Message[];
 };
 
-const CONVS: Conversation[] = [
-  {
-    id: "1",
-    name: "Rayfield Restaurant",
-    commodity: "Live Broilers",
-    lastMsg: "What time can you deliver?",
-    time: "2:14pm",
-    unread: 2,
-    messages: [
-      { id: "a", from: "them", text: "Hi, we saw your broiler listing. Are you available Thursday?", time: "1:45pm" },
-      { id: "b", from: "me", text: "Yes, I can bring 30 birds between 7 and 11am.", time: "1:52pm" },
-      { id: "c", from: "them", text: "Great. Our price is ₦3,500/kg. Does that work?", time: "2:01pm" },
-      { id: "d", from: "me", text: "That works. I'll book the slot now.", time: "2:08pm" },
-      { id: "e", from: "them", text: "What time can you deliver?", time: "2:14pm" },
-    ],
-  },
-  {
-    id: "2",
-    name: "Grand Hotel Jos",
-    commodity: "Live Turkey",
-    lastMsg: "Booking confirmed ✓",
-    time: "Yesterday",
-    unread: 0,
-    messages: [
-      { id: "a", from: "them", text: "We need 8 turkeys for Friday. Can you supply?", time: "Mon 9am" },
-      { id: "b", from: "me", text: "Yes, I have 12 available at 5–7kg each.", time: "Mon 9:15am" },
-      { id: "c", from: "them", text: "Booking confirmed ✓", time: "Mon 9:30am" },
-    ],
-  },
-  {
-    id: "3",
-    name: "Barkin Ladi Produce",
-    commodity: "Tomatoes",
-    lastMsg: "See you Thursday!",
-    time: "Mon",
-    unread: 0,
-    messages: [
-      { id: "a", from: "me", text: "Hi, I saw your demand for tomatoes. I have Grade A Roma.", time: "Sun 3pm" },
-      { id: "b", from: "them", text: "How many baskets do you have?", time: "Sun 3:20pm" },
-      { id: "c", from: "me", text: "40 baskets available this week.", time: "Sun 3:22pm" },
-      { id: "d", from: "them", text: "See you Thursday!", time: "Sun 3:45pm" },
-    ],
-  },
-];
-
 export default function MessagesPage() {
   const { user } = useAuthUser();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [input, setInput] = useState("");
-  const [convs, setConvs] = useState(CONVS);
+  const [convs, setConvs] = useState<Conversation[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
