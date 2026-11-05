@@ -1,15 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Calendar, Check, Loader2, MapPin, Phone, Truck, X, KeyRound } from "lucide-react";
+import { Calendar, Check, MapPin, Truck, X, KeyRound } from "lucide-react";
 import Link from "next/link";
-import { getToken } from "@/lib/firebase/auth";
 
-import { LogoVideo } from "@/components/dashboard/logo-video";
+
+import { getToken } from "@/lib/firebase/auth";
 import { Reveal } from "@/components/motion/reveal";
 import { TransactionPinModal } from "@/components/dashboard/transaction-pin-modal";
 import { cn } from "@/lib/utils";
+import { BusyBar } from "@/components/loader/busy-bar";
 import { CardsSkeleton } from "@/components/loader/skeletons";
+import { HillsCard, HillsStats } from "@/components/profile/hills-card";
 import { trackTask } from "@/lib/loading/progress";
 
 type Tab = "upcoming" | "past" | "cancelled";
@@ -200,10 +202,12 @@ function BookingCard({
               <button
                 onClick={() => requirePin(handleMarkDelivered)}
                 disabled={saving}
-                className="flex items-center gap-1.5 rounded-lg bg-green px-4 py-2 text-body-sm font-medium text-paper hover:bg-green-hover disabled:opacity-50"
+                aria-busy={saving}
+                className="relative flex items-center gap-1.5 overflow-hidden rounded-lg bg-green px-4 py-2 text-body-sm font-medium text-paper hover:bg-green-hover disabled:opacity-50"
               >
-                {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Check strokeWidth={2} className="size-3.5" />}
+                <Check strokeWidth={2} className="size-3.5" />
                 Mark delivered
+                <BusyBar active={saving} />
               </button>
             )}
             {canEnterOtp && (
@@ -243,9 +247,11 @@ function BookingCard({
               <button
                 onClick={() => requirePin(handleOtpSubmit)}
                 disabled={otpInput.length !== 6 || saving}
-                className="rounded-lg bg-green px-4 py-2 text-body-sm font-medium text-paper hover:bg-green-hover disabled:opacity-50"
+                aria-busy={saving}
+                className="relative overflow-hidden rounded-lg bg-green px-4 py-2 text-body-sm font-medium text-paper hover:bg-green-hover disabled:opacity-50"
               >
-                {saving ? <Loader2 className="size-4 animate-spin" /> : "Confirm"}
+                Confirm
+                <BusyBar active={saving} />
               </button>
               <button onClick={() => { setShowOtp(false); setOtpInput(""); setOtpError(null); }}
                 className="rounded-lg border border-line px-3 py-2 text-body-sm text-ink-muted hover:text-ink">
@@ -271,11 +277,6 @@ function BookingCard({
     </>
   );
 }
-
-const CROPS = [
-  { src: "/images/step-scale.jpg", cls: "absolute top-4 right-8 size-14 hidden sm:block" },
-  { src: "/images/step-buyer.jpg", cls: "absolute bottom-4 right-4 size-12" },
-];
 
 export default function BookingsPage() {
   const [tab, setTab] = useState<Tab>("upcoming");
@@ -307,34 +308,26 @@ export default function BookingsPage() {
 
   const items = bookings.filter((b) => tabOf(b) === tab);
   const upcoming = bookings.filter((b) => tabOf(b) === "upcoming");
+  const confirmed = upcoming.filter((b) => b.status === "confirmed");
 
   return (
     <div className="mx-auto w-full max-w-[1120px] px-4 py-6 md:px-6 lg:px-8">
 
-      {/* Hero */}
-      <div data-rhythm="field"
-        className="relative isolate mb-8 overflow-hidden rounded-2xl bg-field px-6 py-10 text-paper lg:px-10 lg:py-12">
-        <LogoVideo />
-        {CROPS.map((c, i) => (
-          <div key={i} aria-hidden className={cn("overflow-hidden rounded-full", c.cls)}>
-            <img src={c.src} alt="" className="size-full object-cover" />
+      <HillsCard className="mb-8">
+        <div className="px-5 pt-24 pb-6 sm:px-10 sm:pt-28 sm:pb-9 lg:px-14 lg:pt-32 lg:pb-11">
+          <p data-card="rise" className="text-body-sm font-medium text-ink/70">My activity</p>
+          <h1 data-card="rise" className="mt-1 text-[26px] leading-tight font-medium tracking-tight text-ink sm:text-[34px]">My bookings</h1>
+          <div className="mt-6 sm:mt-8">
+            <HillsStats
+              stats={[
+                { value: loading ? null : confirmed.length, label: "confirmed" },
+                { value: loading ? null : upcoming.length, label: "upcoming" },
+                { value: loading ? null : bookings.length, label: "total" },
+              ]}
+            />
           </div>
-        ))}
-        <p className="text-label font-medium text-sage/70">My Activity</p>
-        <h1 className="mt-2 font-display text-display-lg-sm font-medium text-paper md:text-[2rem]">My Bookings</h1>
-        {!loading && (
-          <div className="mt-6 flex flex-wrap gap-3">
-            <div className="flex flex-col rounded-xl bg-sage/20 px-4 py-3">
-              <span className="text-label text-sage/70">Upcoming</span>
-              <span className="font-num text-number-lg font-medium text-paper">{upcoming.length}</span>
-            </div>
-            <div className="flex flex-col rounded-xl bg-field-soft/70 px-4 py-3">
-              <span className="text-label text-paper/50">Total</span>
-              <span className="font-num text-number-lg font-medium text-paper/80">{bookings.length}</span>
-            </div>
-          </div>
-        )}
-      </div>
+        </div>
+      </HillsCard>
 
       {/* Tabs */}
       <Reveal effect="riseIn">

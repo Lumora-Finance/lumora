@@ -1,20 +1,22 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useRef, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
-  ArrowLeft, MapPin, Clock, MessageSquare, TrendingUp, Shield, CheckCircle2,
-  Calendar, Package, BarChart3, Loader2, User, Send, Star,
+  ArrowLeft, MapPin, Clock, Shield, CheckCircle2,
+  Calendar, Package, BarChart3, Send, Star,
 } from "lucide-react";
 import Link from "next/link";
-import { getToken } from "@/lib/firebase/auth";
 
-import { LogoVideo } from "@/components/dashboard/logo-video";
+
+import { getToken } from "@/lib/firebase/auth";
 import { Reveal } from "@/components/motion/reveal";
 import { TransactionPinModal } from "@/components/dashboard/transaction-pin-modal";
-import { fx, playOnEnter, useGSAP } from "@/lib/gsap/effects";
 import { cn } from "@/lib/utils";
+import { BusyBar } from "@/components/loader/busy-bar";
 import { DetailSkeleton } from "@/components/loader/skeletons";
+import { Skeleton } from "@/components/ui/skeleton";
+import { HILLS_ACTION, HILLS_ACTION_QUIET, HillsCard } from "@/components/profile/hills-card";
 import { trackTask } from "@/lib/loading/progress";
 
 const TABS = [
@@ -62,7 +64,6 @@ type Listing = {
 export default function ListingDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const heroRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<Tab>("overview");
   const [listing, setListing] = useState<Listing | null>(null);
   const [loading, setLoading] = useState(true);
@@ -108,11 +109,6 @@ export default function ListingDetailPage() {
     return () => { cancelled = true; };
   }, [id]);
 
-  useGSAP(() => {
-    const root = heroRef.current;
-    if (!root) return;
-    playOnEnter(fx("riseIn", root.querySelectorAll("[data-rise]"), { stagger: 0.08 }), root, "top 85%");
-  }, { scope: heroRef });
 
   async function loadOffers() {
     if (!listing) return;
@@ -212,71 +208,69 @@ export default function ListingDetailPage() {
         <ArrowLeft strokeWidth={1.5} className="size-4" /> Back to marketplace
       </Link>
 
-      {/* Hero */}
-      <div ref={heroRef}
-        className="relative isolate mb-6 overflow-hidden rounded-2xl bg-field px-6 py-8 text-paper lg:px-10 lg:py-10">
-        <LogoVideo />
+      <HillsCard className="mb-6">
+        <div className="px-5 pt-24 pb-6 sm:px-10 sm:pt-28 sm:pb-9 lg:px-14 lg:pt-32 lg:pb-11">
+          <div data-card="rise" className="flex items-center gap-2">
+            <span className="rounded-full bg-white px-2.5 py-1 font-num text-label font-medium text-green">DEMAND</span>
+            <span className="rounded-full bg-white px-2.5 py-1 font-num text-label font-medium text-ink capitalize">{listing.status}</span>
+          </div>
 
-        <div data-rise className="flex items-center gap-2">
-          <span className="rounded-full bg-green/20 px-2.5 py-1 font-num text-label font-medium text-sage">DEMAND</span>
-          <span className={cn("rounded-full px-2.5 py-1 font-num text-label font-medium",
-            listing.status === "active" ? "bg-sage/20 text-sage" : "bg-amber/20 text-amber")}>
-            {listing.status}
-          </span>
-        </div>
+          <h1 data-card="rise" className="mt-3 text-[26px] leading-tight font-medium tracking-tight break-words text-ink sm:text-[34px]">
+            {listing.commodity?.name}
+          </h1>
+          {listing.spec && <p data-card="rise" className="mt-1 text-body text-ink/80">{listing.spec}</p>}
 
-        <h1 data-rise className="mt-3 font-display text-display-lg-sm font-medium text-paper md:text-[2rem]">
-          {listing.commodity?.name}
-        </h1>
-        <p data-rise className="mt-1 text-body text-paper/70">{listing.spec ?? ""}</p>
+          <div data-card="rise" className="mt-4 flex flex-wrap items-baseline gap-x-2">
+            <span className="font-num text-[30px] leading-tight font-medium tracking-tight text-ink sm:text-[38px]">₦{priceNaira.toLocaleString()}</span>
+            <span className="text-body-sm text-ink/70">per {unit}</span>
+          </div>
 
-        <div data-rise className="mt-4 flex items-baseline gap-2">
-          <span className="font-num text-[2.2rem] font-medium text-amber">₦{priceNaira.toLocaleString()}</span>
-          <span className="text-body-sm text-paper/60">per {unit}</span>
-        </div>
+          <div data-card="rise" className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-body-sm text-ink-muted">
+            {listing.area && (
+              <span className="flex items-center gap-1.5"><MapPin aria-hidden="true" strokeWidth={1.5} className="size-4" />{listing.area}</span>
+            )}
+            {firstSlot && (
+              <span className="flex items-center gap-1.5">
+                <Clock aria-hidden="true" strokeWidth={1.5} className="size-4" />
+                {new Date(firstSlot.date).toLocaleDateString("en-NG", { weekday: "short", day: "numeric", month: "short" })}
+              </span>
+            )}
+            <Link href={`/dashboard/profile/${listing.buyer.id}`} className="flex min-h-8 items-center gap-1.5 transition-colors duration-150 hover:text-ink">
+              <Shield aria-hidden="true" strokeWidth={1.5} className="size-4" />
+              {listing.buyer.name} (buyer)
+            </Link>
+          </div>
 
-        <div data-rise className="mt-4 flex flex-wrap items-center gap-4 text-body-sm text-paper/70">
-          {listing.area && (
-            <span className="flex items-center gap-1.5"><MapPin strokeWidth={1.5} className="size-4" />{listing.area}</span>
-          )}
-          {firstSlot && (
-            <span className="flex items-center gap-1.5">
-              <Clock strokeWidth={1.5} className="size-4" />
-              {new Date(firstSlot.date).toLocaleDateString("en-NG", { weekday: "short", day: "numeric", month: "short" })}
-            </span>
-          )}
-          <Link href={`/dashboard/profile/${listing.buyer.id}`}
-            className="flex items-center gap-1.5 hover:text-paper">
-            <Shield strokeWidth={1.5} className="size-4" />
-            {listing.buyer.name} (buyer)
-          </Link>
-        </div>
-
-        <div data-rise className="mt-6 flex flex-wrap gap-3">
-          {bookingDone ? (
-            <div className="flex items-center gap-2 rounded-xl bg-green/20 px-5 py-2.5 text-body-sm font-medium text-paper">
-              <CheckCircle2 strokeWidth={2} className="size-4" /> Booking confirmed!
-            </div>
-          ) : firstSlot ? (
-            <button onClick={() => handleBook(firstSlot.id)} disabled={booking || remaining === 0}
-              className="flex items-center gap-2 rounded-xl bg-amber px-5 py-2.5 text-body-sm font-medium text-ink hover:bg-amber/90 disabled:opacity-50">
-              <TrendingUp strokeWidth={1.5} className="size-4" />
-              {booking ? "Booking…" : remaining === 0 ? "Slot full" : `Book ${listing.min_qty} ${unit}${listing.min_qty > 1 ? "s" : ""}`}
+          <div data-card="pop" className="mt-6 flex flex-col gap-3 sm:mt-8 sm:flex-row sm:flex-wrap">
+            {bookingDone ? (
+              <div role="status" className={HILLS_ACTION_QUIET}>
+                <CheckCircle2 aria-hidden="true" strokeWidth={2} className="mr-2 size-4 text-green" /> Booking confirmed!
+              </div>
+            ) : firstSlot ? (
+              <button
+                type="button"
+                onClick={() => handleBook(firstSlot.id)}
+                disabled={booking || remaining === 0}
+                className={`${HILLS_ACTION} disabled:pointer-events-none disabled:opacity-50`}
+              >
+                {booking ? "Booking…" : remaining === 0 ? "Slot full" : `Book ${listing.min_qty} ${unit}${listing.min_qty > 1 ? "s" : ""}`}
+              </button>
+            ) : (
+              <span className={`${HILLS_ACTION_QUIET} pointer-events-none text-ink-muted`}>No open slots</span>
+            )}
+            <button
+              type="button"
+              onClick={() => router.push(`/dashboard/messages?to=${encodeURIComponent(listing.buyer.name)}`)}
+              className={HILLS_ACTION_QUIET}
+            >
+              Message {listing.buyer.name}
             </button>
-          ) : (
-            <span className="rounded-xl bg-field-soft/40 px-5 py-2.5 text-body-sm font-medium text-paper/50">No open slots</span>
-          )}
-          <button
-            onClick={() => router.push(`/dashboard/messages?to=${encodeURIComponent(listing.buyer.name)}`)}
-            className="flex items-center gap-2 rounded-xl border border-sage/30 bg-field-soft/60 px-5 py-2.5 text-body-sm font-medium text-paper hover:bg-field-soft">
-            <MessageSquare strokeWidth={1.5} className="size-4" /> Message {listing.buyer.name}
-          </button>
-          <Link href={`/dashboard/profile/${listing.buyer.id}`}
-            className="flex items-center gap-2 rounded-xl border border-sage/30 bg-field-soft/60 px-5 py-2.5 text-body-sm font-medium text-paper hover:bg-field-soft">
-            <User strokeWidth={1.5} className="size-4" /> View profile
-          </Link>
+            <Link href={`/dashboard/profile/${listing.buyer.id}`} className={HILLS_ACTION_QUIET}>
+              View profile
+            </Link>
+          </div>
         </div>
-      </div>
+      </HillsCard>
 
       {/* Image gallery */}
       {listing.images && listing.images.length > 0 && (
@@ -439,9 +433,10 @@ export default function ListingDetailPage() {
                 <button
                   onClick={() => { setPinOpen("offer"); }}
                   disabled={offerSubmitting}
-                  className="mt-4 flex items-center gap-2 rounded-xl bg-amber px-5 py-2.5 text-body-sm font-medium text-ink hover:bg-amber/90 disabled:opacity-50">
-                  {offerSubmitting ? <Loader2 className="size-4 animate-spin" /> : <Send strokeWidth={1.5} className="size-4" />}
+                  className="relative overflow-hidden mt-4 flex items-center gap-2 rounded-xl bg-amber px-5 py-2.5 text-body-sm font-medium text-ink hover:bg-amber/90 disabled:opacity-50">
+                  <Send strokeWidth={1.5} className="size-4" />
                   Submit offer (PIN required)
+                  <BusyBar active={offerSubmitting} />
                 </button>
               </div>
             ) : (
@@ -455,7 +450,7 @@ export default function ListingDetailPage() {
             <div>
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-body font-medium text-ink">All Offers {offers.length > 0 ? `(${offers.length})` : ""}</h3>
-                {offersLoading && <Loader2 className="size-4 animate-spin text-ink-muted" />}
+                {offersLoading && <Skeleton aria-label="Loading offers" className="h-4 w-16" />}
               </div>
               {offers.length === 0 ? (
                 <p className="text-body-sm text-ink-muted py-4">No offers yet.</p>

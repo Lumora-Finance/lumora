@@ -1,17 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Play, Pause, Pencil, MoreHorizontal, Sparkles, Trash2, X, Check } from "lucide-react";
+
 import Link from "next/link";
 
 import { getToken } from "@/lib/firebase/auth";
-import { LogoVideo } from "@/components/dashboard/logo-video";
 import { PostModal } from "@/components/dashboard/post-button";
 import { Reveal } from "@/components/motion/reveal";
-import { fx, playOnEnter, useGSAP } from "@/lib/gsap/effects";
 import { cn } from "@/lib/utils";
 import { BusyBar } from "@/components/loader/busy-bar";
 import { RowsSkeleton } from "@/components/loader/skeletons";
+import { HILLS_ACTION, HillsCard, HillsStats } from "@/components/profile/hills-card";
 import { trackTask } from "@/lib/loading/progress";
 
 type Post = {
@@ -40,6 +40,7 @@ const ACCENT: Record<string, string> = {
 function formatKobo(kobo: number) {
   return `₦${(kobo / 100).toLocaleString("en-NG")}`;
 }
+
 
 async function patchListing(id: string, body: object) {
   const token = await getToken();
@@ -208,7 +209,6 @@ function PostCard({
 }
 
 export default function PostsPage() {
-  const heroRef = useRef<HTMLDivElement>(null);
   const [postOpen, setPostOpen] = useState(false);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -240,11 +240,6 @@ export default function PostsPage() {
     setPosts((prev) => prev.map((p) => p.id === id ? { ...p, ...updates } : p));
   }
 
-  useGSAP(() => {
-    const root = heroRef.current;
-    if (!root) return;
-    playOnEnter(fx("chipPop", root.querySelectorAll("[data-chip]"), { stagger: 0.1 }), root, "top 85%");
-  }, { scope: heroRef });
 
   const active = posts.filter((p) => p.status === "active");
   const paused = posts.filter((p) => p.status === "paused");
@@ -253,34 +248,26 @@ export default function PostsPage() {
     <>
       <div className="mx-auto w-full max-w-[1120px] px-4 py-6 md:px-6 lg:px-8">
 
-        <div ref={heroRef} data-rhythm="field"
-          className="relative isolate mb-8 overflow-hidden rounded-2xl bg-field px-6 py-10 text-paper lg:px-10 lg:py-12">
-          <LogoVideo />
-          <p className="text-label font-medium text-sage/70">Your Market Presence</p>
-          <h1 className="mt-2 font-display text-display-lg-sm font-medium text-paper md:text-[2rem]">My Posts</h1>
+        <HillsCard className="mb-8">
+          <div className="px-5 pt-32 pb-6 sm:px-10 sm:pt-40 sm:pb-9 lg:px-14 lg:pt-48 lg:pb-11">
+            <p data-card="rise" className="text-body-sm font-medium text-ink/70">Your market presence</p>
+            <h1 data-card="rise" className="mt-1 text-[26px] leading-tight font-medium tracking-tight text-ink sm:text-[34px]">My posts</h1>
+            <p data-card="rise" className="mt-1 text-body text-ink/80">What you&apos;ve asked farmers for</p>
 
-          {!loading && (
-            <div className="mt-6 flex flex-wrap gap-3">
-              <div data-chip className="flex flex-col rounded-xl bg-sage/20 px-4 py-3">
-                <span className="text-label text-sage/70">Active</span>
-                <span className="font-num text-number-lg font-medium text-paper">{active.length}</span>
-              </div>
-              <div data-chip className="flex flex-col rounded-xl bg-field-soft/70 px-4 py-3">
-                <span className="text-label text-paper/50">Paused</span>
-                <span className="font-num text-number-lg font-medium text-paper/80">{paused.length}</span>
-              </div>
-              <div data-chip className="flex flex-col rounded-xl bg-amber/20 px-4 py-3">
-                <span className="text-label text-amber/70">Total</span>
-                <span className="font-num text-number-lg font-medium text-amber">{posts.length}</span>
+            <div className="mt-7 flex flex-col gap-6 sm:mt-9 sm:flex-row sm:items-center sm:justify-between">
+              <HillsStats
+                stats={[
+                  { value: loading ? null : active.length, label: "active" },
+                  { value: loading ? null : paused.length, label: "paused" },
+                  { value: loading ? null : posts.length, label: "total" },
+                ]}
+              />
+              <div data-card="pop" className="sm:shrink-0">
+                <button type="button" onClick={() => setPostOpen(true)} className={HILLS_ACTION}>New post</button>
               </div>
             </div>
-          )}
-
-          <button onClick={() => setPostOpen(true)}
-            className="mt-6 flex items-center gap-2 rounded-full bg-paper px-5 py-2.5 text-body font-medium text-field transition-all hover:bg-sage-soft hover:shadow-md">
-            <Sparkles strokeWidth={1.5} className="size-4" /> New post
-          </button>
-        </div>
+          </div>
+        </HillsCard>
 
         {loading ? (
           <RowsSkeleton label="Loading your posts" />
@@ -288,12 +275,12 @@ export default function PostsPage() {
           <div className="rounded-xl border border-danger/30 bg-danger/5 p-6 text-center text-danger">{error}</div>
         ) : posts.length === 0 ? (
           <Reveal effect="riseIn">
-            <div className="flex flex-col items-center gap-4 rounded-2xl bg-field px-8 py-16 text-center text-paper">
-              <p className="font-display text-title font-medium">No posts yet</p>
-              <p className="text-body text-paper/60">Post your first demand to start receiving bookings.</p>
-              <button onClick={() => setPostOpen(true)}
-                className="mt-2 rounded-full bg-paper px-5 py-2.5 text-body-sm font-medium text-field hover:bg-sage-soft">
-                Create your first post →
+            <div className="flex flex-col items-center gap-2 rounded-[20px] border border-line bg-white px-6 py-14 text-center">
+              <p className="text-[20px] font-medium text-ink">No posts yet</p>
+              <p className="text-body text-ink-muted">Post your first demand to start receiving bookings.</p>
+              <button type="button" onClick={() => setPostOpen(true)}
+                className="mt-3 min-h-11 font-medium text-green underline-offset-4 hover:underline">
+                Create your first post
               </button>
             </div>
           </Reveal>

@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  ArrowDownLeft, ArrowUpRight, Wallet as WalletIcon, Plus, ChevronUp,
+  ArrowDownLeft, ArrowUpRight,
   CheckCircle2, History, X,
 } from "lucide-react";
+
+
 import { getToken } from "@/lib/firebase/auth";
-import { LogoVideo } from "@/components/dashboard/logo-video";
 import { Reveal } from "@/components/motion/reveal";
 import { useAuthUser } from "@/components/auth/use-auth-user";
 import { cn } from "@/lib/utils";
 import { RowsSkeleton } from "@/components/loader/skeletons";
+import { HILLS_ACTION, HILLS_ACTION_QUIET, HillsCard, HillsStats } from "@/components/profile/hills-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trackTask } from "@/lib/loading/progress";
 import { FundModal, WithdrawModal } from "@/components/wallet/wallet-modals";
@@ -33,6 +35,8 @@ type WalletTx = {
   ref: string;
 };
 
+const FIGURE = "font-num whitespace-nowrap";
+
 const STATUS_STYLE: Record<string, string> = {
   completed: "bg-sage-soft text-green",
   pending: "bg-amber-soft text-amber",
@@ -51,8 +55,8 @@ function relDate(iso: string) {
   return d.toLocaleDateString("en-NG", { weekday: "short", day: "numeric", month: "short" });
 }
 
+
 export default function WalletPage() {
-  const heroRef = useRef<HTMLDivElement>(null);
   const { user } = useAuthUser();
 
   const [wallet, setWallet] = useState<WalletData | null>(null);
@@ -104,72 +108,38 @@ export default function WalletPage() {
   return (
     <div className="mx-auto w-full max-w-[1120px] px-4 py-6 md:px-6 lg:px-8">
 
-      {/* Hero */}
-      <div
-        ref={heroRef}
-        data-rhythm="field"
-        className="relative isolate mb-8 overflow-hidden rounded-2xl bg-field px-6 py-8 text-paper md:px-8 md:py-10 lg:px-12 lg:py-14"
-      >
-        <LogoVideo />
+      <HillsCard className="mb-8">
+        <div className="px-5 pt-24 pb-6 sm:px-10 sm:pt-28 sm:pb-9 lg:px-14 lg:pt-32 lg:pb-11">
+          <p data-card="rise" className="text-body-sm font-medium text-ink/70">Lumora wallet</p>
+          <h1 data-card="rise" className="mt-1 text-[26px] leading-tight font-medium tracking-tight break-words text-ink sm:text-[34px]">Hello, {firstName}</h1>
 
-        <div className="flex items-center gap-2.5">
-          <div className="flex size-9 items-center justify-center rounded-xl bg-sage/15">
-            <WalletIcon strokeWidth={1.5} className="size-5 text-sage" />
-          </div>
-          <div>
-            <p className="text-label font-medium text-sage/60">Lumora Wallet</p>
-            <h1 className="font-display text-[1.6rem] font-medium leading-tight text-paper md:text-[2rem]">
-              Hello, {firstName}
-            </h1>
-          </div>
-        </div>
-
-        {/* Balance card */}
-        <div className="mt-8 overflow-hidden rounded-[24px_8px_24px_8px] border border-sage/15 bg-gradient-to-br from-sage/10 via-field-soft/40 to-field-soft/10 p-6 md:p-8">
-          <p className="text-body-sm font-medium text-sage/50">Available balance</p>
-          {walletLoading ? (
-            <Skeleton aria-label="Checking your balance" className="mt-3 h-11 w-52" />
-          ) : (
-            <p className="mt-3 font-num text-[2.4rem] font-medium leading-none tracking-tight text-paper md:text-[3rem]">
-              {formatKobo(available)}
-            </p>
-          )}
-
-          <div className="mt-6 flex flex-wrap gap-x-8 gap-y-2">
-            <div>
-              <p className="font-num text-label text-sage/40">TOTAL IN</p>
-              <p className="mt-0.5 font-num text-body-sm font-medium text-sage">{formatKobo(totalIn)}</p>
-            </div>
-            <div>
-              <p className="font-num text-label text-sage/40">TOTAL OUT</p>
-              <p className="mt-0.5 font-num text-body-sm font-medium text-amber">{formatKobo(totalOut)}</p>
-            </div>
-            {pending > 0 && (
-              <div>
-                <p className="font-num text-label text-sage/40">PENDING</p>
-                <p className="mt-0.5 font-num text-body-sm font-medium text-paper/70">{formatKobo(pending)}</p>
-              </div>
+          <div data-card="rise" className="mt-5 sm:mt-6">
+            <p className="text-body-sm text-ink/70">Available balance</p>
+            {walletLoading ? (
+              <Skeleton aria-label="Checking your balance" className="mt-1.5 h-11 w-52 max-w-full" />
+            ) : (
+              <p className="mt-0.5 font-num text-[28px] leading-tight font-medium tracking-tight break-words text-ink min-[400px]:text-[34px] sm:text-[44px]">
+                {formatKobo(available)}
+              </p>
             )}
           </div>
 
-          <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-            <button
-              type="button"
-              onClick={() => setModal("fund")}
-              className="flex items-center justify-center gap-2 rounded-xl bg-amber px-6 py-3 text-body font-medium text-ink transition-all duration-200 hover:bg-amber/90 hover:shadow-lg hover:shadow-amber/20"
-            >
-              <Plus strokeWidth={2} className="size-4" /> Add funds
-            </button>
-            <button
-              type="button"
-              onClick={() => setModal("withdraw")}
-              className="flex items-center justify-center gap-2 rounded-xl border border-sage/25 bg-field-soft/40 px-6 py-3 text-body font-medium text-paper transition-all duration-200 hover:bg-field-soft hover:border-sage/40"
-            >
-              <ChevronUp strokeWidth={2} className="size-4" /> Withdraw
-            </button>
+          <div className="mt-6 flex flex-col gap-6 sm:mt-8 lg:flex-row lg:items-center lg:justify-between">
+            <HillsStats
+              rowsOnPhones
+              stats={[
+                { value: walletLoading ? null : <span className={FIGURE}>{formatKobo(totalIn)}</span>, label: "total in" },
+                { value: walletLoading ? null : <span className={FIGURE}>{formatKobo(totalOut)}</span>, label: "total out" },
+                ...(pending > 0 ? [{ value: <span className={FIGURE}>{formatKobo(pending)}</span>, label: "pending" }] : []),
+              ]}
+            />
+            <div data-card="pop" className="flex flex-col gap-3 sm:flex-row lg:shrink-0">
+              <button type="button" onClick={() => setModal("fund")} className={HILLS_ACTION}>Add funds</button>
+              <button type="button" onClick={() => setModal("withdraw")} className={HILLS_ACTION_QUIET}>Withdraw</button>
+            </div>
           </div>
         </div>
-      </div>
+      </HillsCard>
 
       {/* Banners */}
       {success && (
