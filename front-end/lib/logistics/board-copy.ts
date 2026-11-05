@@ -1,17 +1,7 @@
 /** The plain words on farmer screens and in SMS. No "slot", "capacity", "listing", "bid" or "demand". */
 const TIME_ZONE = "Africa/Lagos";
 
-export function distanceLabel(km: number): string {
-  const shown = Math.max(km, 1);
-  if (km < 5) return `Very close to you · about ${shown} km`;
-  if (km <= 15) return `Close to you · about ${shown} km`;
-  return `Far from you · about ${shown} km`;
-}
-
 export const priceUnitLabel = (unit: string) => `for every ${unit}`;
-
-export const needsLabel = (remaining: number, name: string, plural: string) =>
-  `Needs ${remaining} more ${remaining === 1 ? name : plural}`;
 
 const parts = (date: Date) => {
   const value = new Intl.DateTimeFormat("en-GB", {
@@ -52,10 +42,6 @@ export function shortWhenLabel(start: Date, now: Date): string {
   const from = parts(start);
   return `${dayWord(start, now) ?? from.weekday.slice(0, 3)} ${timeOfDay(from.hour)}`;
 }
-
-export const COLLECTS_LABEL = "They will come to your farm";
-export const SELL_LABEL = "Sell to them";
-export const FULL_LABEL = "They have enough for this day";
 
 const smsNaira = (kobo: number) => {
   const fraction = kobo % 100;

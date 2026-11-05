@@ -13,7 +13,7 @@ export type PickedLocation =
   | { kind: "area"; area: string };
 
 const AREA_BUTTON =
-  "min-h-12 rounded-md border border-line bg-white px-3 py-2 text-center text-base font-medium text-ink transition-colors duration-200 ease-out hover:bg-sage-soft focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none disabled:opacity-50";
+  "min-h-12 rounded-2xl border border-line bg-white px-3 py-2 text-center text-base font-medium text-ink transition-colors duration-200 ease-out hover:bg-sage-soft focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none disabled:opacity-50";
 
 /**
  * "Use my location" and the area buttons. People never type coordinates. If location is refused or
@@ -57,13 +57,13 @@ export function LocationPicker({
           We found you near {found.area}. Is that right?
         </p>
         <div className="mt-4 grid grid-cols-2 gap-3">
-          <Button size="lg" className="h-12 text-base" disabled={disabled} onClick={() => onPick(found)}>
+          <Button size="lg" className="h-12 rounded-full text-base" disabled={disabled} onClick={() => onPick(found)}>
             Yes
           </Button>
           <Button
             size="lg"
             variant="outline"
-            className="h-12 text-base"
+            className="h-12 rounded-full text-base"
             disabled={disabled}
             onClick={() => setFound(null)}
           >
@@ -78,7 +78,7 @@ export function LocationPicker({
 
   return (
     <div>
-      <Button size="lg" className="h-14 w-full text-base" disabled={locating || disabled} onClick={useMyLocation}>
+      <Button size="lg" className="h-14 w-full rounded-full text-base" disabled={locating || disabled} onClick={useMyLocation}>
         {locating ? (
           <LoaderCircle aria-hidden="true" strokeWidth={1.5} className="size-5 animate-spin motion-reduce:animate-none" />
         ) : (
@@ -103,7 +103,7 @@ export function LocationPicker({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Type your area"
-              className="h-12 w-full rounded-md border border-line bg-white pr-3 pl-10 text-base outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="h-12 w-full rounded-2xl border border-line bg-white pr-3 pl-10 text-base outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
             />
           </label>
           <ul className="mt-3 grid gap-2">

@@ -1,5 +1,5 @@
-import { BoardView } from "@/components/board/board-view";
+import { MarketBoard } from "@/components/board/market-board";
 
 export default function BoardPage() {
-  return <BoardView />;
+  return <MarketBoard />;
 }

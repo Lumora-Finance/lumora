@@ -13,5 +13,10 @@ export async function GET(request: Request) {
 
   const sort: BoardSort = new URL(request.url).searchParams.get("sort") === "nearest" ? "nearest" : "price";
   const raw = await db.rpc<RawBoard>("logistics_board", { p_farmer: user.id });
-  return Response.json({ area: raw.farmer_area?.name ?? null, cards: buildBoard(raw, sort) });
+  return Response.json({
+    area: raw.farmer_area?.name ?? null,
+    cards: buildBoard(raw, sort),
+    stock: raw.stock ?? {},
+    follows: raw.follows ?? [],
+  });
 }

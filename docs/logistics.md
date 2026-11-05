@@ -9,7 +9,7 @@ Lumora doesn't run transport: the farmer delivers or the buyer collects. For eng
 | Areas, distance | `areas` table, `lib/geo.ts` (haversine × 1.3, rounded), `lib/logistics/areas.ts` |
 | Location capture | `components/location/*`, `/onboarding`, profile, `/dashboard/agent/add-farmer` |
 | SMS sign-up | `lib/logistics/sms-onboarding.ts` (unknown number or `JOIN`) |
-| Board | `/dashboard/board`, `lib/logistics/board.ts`, `lib/logistics/board-copy.ts` |
+| Board | `/dashboard/board`, `components/board/market-board.tsx`, `crate-card.tsx`, `lib/logistics/board.ts`, `crate.ts`, `lib/pricing.ts` |
 | Listing form | `/dashboard/listings/new`, `logistics_create_listing` |
 | Delivery form | `/dashboard/bookings/[id]/record`, `logistics_record_delivery` |
 | Privacy | `user_locations` and `listing_private`, read through `logistics_booking_contact` |
@@ -30,6 +30,8 @@ The other party's details come only from `logistics_booking_contact`, which chec
 | A number could be typed by someone who doesn't own it | **Open.** Phone numbers from `/onboarding` aren't verified, yet SMS treats a phone number as identity. It needs an OTP before real money |
 | Highest-price sort mixes units | ₦28,000 a basket sorts above ₦3,800 a kg. It reads fine with one crop at a time, but a crop filter would be better |
 | Delivery photos | Stored in a public bucket under random names, so they aren't listed but anyone with the link can see them |
+| Farmer fee on take-home | Settlement charges farmers nothing, so `FARMER_FEE_PCT` in `lib/pricing.ts` is 0, with no free-delivery count. A fee has to change there and in settlement together |
+| My flock stepper | It only changes what the page works out, and isn't saved. Declared stock is its starting value |
 | Listings are for one day | The form creates one day at a time. Recurring days from the README aren't built |
 
 ## Before this works for real

@@ -3,14 +3,14 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { nearest, roadKm } from "../../lib/geo";
 import { AREAS, nearestArea } from "../../lib/logistics/areas";
 import { buildBoard, type RawBoard } from "../../lib/logistics/board";
-import {
-  COLLECTS_LABEL, distanceLabel, needsLabel, priceUnitLabel, shortWhenLabel, smsBoardLine, whenLabel,
-} from "../../lib/logistics/board-copy";
+import { priceUnitLabel, shortWhenLabel, smsBoardLine, whenLabel } from "../../lib/logistics/board-copy";
 import { captureLocation } from "../../lib/logistics/capture-location";
+import { distanceWord, needsMore, slotShape, stepStock, takesLabel, unitsTaken, unitWords } from "../../lib/logistics/crate";
 import { DECLINE_REASONS, declineProblem } from "../../lib/logistics/decline";
-import { normalisePhone, readLocationChoice } from "../../lib/logistics/location-input";
+import { normalisePhone, readLocationChoice, validPhone } from "../../lib/logistics/location-input";
 import { areaMenu } from "../../lib/logistics/sms-onboarding";
 import { handleInboundSms } from "../../lib/money/sms-commands";
+import { FARMER_FEE_PCT, takeHomeKobo } from "../../lib/pricing";
 import {
   arrive, balance, book, call, confirmedBooking, db, FakeSms, fund, hours, makeSlot, makeUser, pool, PRICE, q, resetDb, T0, WINDOW_START,
 } from "./helpers";
@@ -133,6 +133,11 @@ describe("saving a location", () => {
     expect(await call("logistics_agent_add_farmer", { ...args, p_agent: agent.id })).toMatchObject({ code: "phone_in_use" });
   });
 
+  it("accepts real phone numbers and refuses others", () => {
+    for (const phone of ["0803 000 0000", "+2348030000000", "08030000000"]) expect(validPhone(phone)).toBe(true);
+    for (const phone of ["", "12345", "not a phone", undefined]) expect(validPhone(phone)).toBe(false);
+  });
+
   it("treats 0803 and +234803 as the same phone", () => {
     expect(normalisePhone("0803 000 0000")).toBe("+2348030000000");
     expect(normalisePhone("2348030000000")).toBe("+2348030000000");
@@ -151,14 +156,13 @@ describe("saving a location", () => {
 
 describe("plain language", () => {
   it.each([
-    [0, "Very close to you · about 1 km"],
-    [4, "Very close to you · about 4 km"],
-    [5, "Close to you · about 5 km"],
-    [15, "Close to you · about 15 km"],
-    [16, "Far from you · about 16 km"],
-    [22, "Far from you · about 22 km"],
-  ])("labels %i km as %s", (km, label) => {
-    expect(distanceLabel(km)).toBe(label);
+    [0, "very close"],
+    [4, "very close"],
+    [5, "close"],
+    [15, "close"],
+    [16, "far"],
+  ])("calls %i km %s", (km, label) => {
+    expect(distanceWord(km)).toBe(label);
   });
 
   const now = at("2026-12-07T08:00:00Z"); // A Monday, 9am in Jos.
@@ -182,9 +186,6 @@ describe("plain language", () => {
   it("words prices and quantities plainly", () => {
     expect(priceUnitLabel("kg")).toBe("for every kg");
     expect(priceUnitLabel("basket")).toBe("for every basket");
-    expect(needsLabel(40, "chicken", "chickens")).toBe("Needs 40 more chickens");
-    expect(needsLabel(1, "chicken", "chickens")).toBe("Needs 1 more chicken");
-    expect(COLLECTS_LABEL).toBe("They will come to your farm");
   });
 
   it("writes the SMS line as specified", () => {
@@ -552,5 +553,92 @@ describe("address privacy", () => {
     const reply = await text(stranger.phone, "BUYERS");
     expect(reply).not.toContain("BUYER-ADDRESS");
     expect(reply).not.toContain(buyer.phone);
+  });
+});
+
+describe("market board", () => {
+  it("works out take-home from the average weight", () => {
+    // 30 x 3 kg x ₦3,500
+    expect(takeHomeKobo({ units: 30, minWeightKg: 2.5, maxWeightKg: 3.5, priceKobo: 350_000 })).toBe(31_500_000);
+    expect(takeHomeKobo({ units: 0, minWeightKg: 2.5, maxWeightKg: 3.5, priceKobo: 350_000 })).toBe(0);
+    expect(takeHomeKobo({ units: 14, minWeightKg: 1, maxWeightKg: 1, priceKobo: 2_800_000 })).toBe(39_200_000);
+  });
+
+  it("takes a farmer fee off only outside free deliveries, and charges none today", () => {
+    const base = { units: 10, minWeightKg: 3, maxWeightKg: 3, priceKobo: 100_000 };
+    expect(FARMER_FEE_PCT).toBe(0);
+    expect(takeHomeKobo(base)).toBe(3_000_000);
+    expect(takeHomeKobo({ ...base, farmerFeePct: 2 })).toBe(2_940_000);
+    expect(takeHomeKobo({ ...base, farmerFeePct: 2, freeDeliveriesLeft: 3 })).toBe(3_000_000);
+  });
+
+  it("promises what settlement pays when the weight comes in at the average", async () => {
+    const b = await confirmedBooking();
+    await arrive(b, WINDOW_START);
+    await call("money_record_delivery", {
+      p_booking: b.booking.booking_id, p_buyer: b.buyer.id, p_units_received: 10, p_units_declined: 0,
+      p_decline_reasons: [] as unknown as object, p_measured_kg: 30, p_scale_photos: ["u"], p_now: hours(1, WINDOW_START).toISOString(),
+    });
+    await call("money_farmer_reply", { p_booking: b.booking.booking_id, p_farmer: b.farmer.id, p_reply: "yes", p_now: hours(2, WINDOW_START).toISOString() });
+    expect(await balance("farmer_pending", b.farmer.id)).toBe(
+      takeHomeKobo({ units: 10, minWeightKg: 2.5, maxWeightKg: 3.5, priceKobo: PRICE }),
+    );
+  });
+
+  it("words a crate for each commodity", () => {
+    const baskets = unitWords("basket", "basket of tomatoes", "baskets of tomatoes");
+    expect(needsMore(14, baskets)).toBe("Needs 14 more baskets");
+    expect(needsMore(1, baskets)).toBe("Needs 1 more basket");
+    expect(needsMore(40, unitWords("kg", "chicken", "chickens"))).toBe("Needs 40 more chickens");
+    expect([slotShape("kg"), slotShape("crate"), slotShape("basket")]).toEqual(["round", "crate", "basket"]);
+  });
+
+  it("says how much a crate takes", () => {
+    expect(unitsTaken(30, 12)).toBe(12);
+    expect(unitsTaken(30, 40)).toBe(30);
+    expect(takesLabel(12, 30)).toBe("Takes 12 of your 30");
+    expect(takesLabel(30, 30)).toBe("Takes all 30");
+    expect(stepStock(30, 1)).toBe(35);
+    expect(stepStock(0, -1)).toBe(0);
+  });
+
+  it("gives the board weights, declared stock and follows", async () => {
+    const slot = await makeSlot();
+    const farmer = await makeUser("farmer");
+    const [chicken] = await q<{ id: string }>(`select id from commodities where name = 'Live broilers'`);
+    await q(`insert into producer_stock (farmer_id, commodity_id, date, qty_declared) values ($1, $2, '2026-12-05', 99), ($1, $2, '2026-12-08', 45), ($1, $2, '2026-12-09', 70)`, [farmer.id, chicken.id]);
+    await call("logistics_follow_commodity", { p_farmer: farmer.id, p_commodity: "Live broilers" });
+    await call("logistics_follow_commodity", { p_farmer: farmer.id, p_commodity: "Live broilers" });
+
+    const raw = await db.rpc<RawBoard>("logistics_board", { p_farmer: farmer.id, p_now: T0.toISOString() });
+    // The soonest day still to come, not an old one.
+    expect(raw.stock).toEqual({ "Live broilers": 45 });
+    expect(raw.follows).toEqual(["Live broilers"]);
+    expect(buildBoard(raw, "price")[0]).toMatchObject({ slotId: slot.slotId, minWeightKg: 2.5, maxWeightKg: 3.5 });
+    expect(await call("logistics_follow_commodity", { p_farmer: farmer.id, p_commodity: "Goats" })).toMatchObject({ code: "unknown_commodity" });
+  });
+
+  it("texts followers in the buyer's area when a new demand posts, and nobody else", async () => {
+    const near = await makeUser("farmer");
+    await setLocation(near.id, "Rayfield");
+    const far = await makeUser("farmer");
+    await setLocation(far.id, "Barkin Ladi");
+    const notFollowing = await makeUser("farmer");
+    await setLocation(notFollowing.id, "Rayfield");
+    for (const farmer of [near, far]) await call("logistics_follow_commodity", { p_farmer: farmer.id, p_commodity: "Live broilers" });
+
+    const buyer = await makeUser("buyer", "Caterer D");
+    await setLocation(buyer.id, "Rayfield");
+    const result = await call("logistics_create_listing", {
+      p_buyer: buyer.id, p_commodity: "Live broilers", p_unit_price_kobo: PRICE, p_capacity: 40, p_min_qty: 5, p_min_weight: 2.5,
+      p_max_weight: 3.5, p_mode: "farmer_delivers", p_date: "2026-12-20", p_window_start: "07:00", p_window_end: "11:00",
+      p_cutoff_hours: 24, p_address: "12 Rayfield Road", p_spec: null, p_now: T0.toISOString(),
+    });
+    expect(result.ok).toBe(true);
+
+    const sent = await q<{ phone: string; body: string }>(`select phone, body from sms_outbox where body like '%wants%'`);
+    expect(sent.map((row) => row.phone)).toEqual([near.phone]);
+    expect(sent[0].body).toBe("Caterer D in Rayfield wants chickens. Send BUYERS CHICKEN to see the price.");
+    expect(sent[0].body).not.toContain("12 Rayfield Road");
   });
 });

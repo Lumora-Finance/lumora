@@ -112,9 +112,6 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-3 py-2">
-        <p className="mb-3 px-3 font-num text-label font-medium uppercase tracking-widest text-sage/40">
-          Navigation
-        </p>
         <ul className="space-y-1">
           {NAV.map(({ href, label, icon: Icon, exact }, index) => {
             const active = isActive(href, exact);
