@@ -2,12 +2,15 @@
 
 import Image from "next/image";
 import { useRef, useState } from "react";
-import { Sparkles, SlidersHorizontal, Zap } from "lucide-react";
+import { Sparkles, SlidersHorizontal, Zap, Search } from "lucide-react";
 
-import { MarketplaceBoard } from "@/components/marketplace/marketplace-board";
+import { MarketCard } from "@/components/marketplace/market-card";
+import { FilterPanel, type FilterState } from "@/components/marketplace/filter-panel";
+import { OfferModal } from "@/components/marketplace/offer-modal";
 import { Reveal } from "@/components/motion/reveal";
 import { fx, playOnEnter, useGSAP } from "@/lib/gsap/effects";
 import { cn } from "@/lib/utils";
+import { MARKET_ITEMS, type MarketItem, type Offer } from "@/lib/demo/market";
 
 const CROPS = [
   { src: "/images/hero-farm.jpg", pos: "object-[52%_25%]", cls: "absolute top-4 right-10 size-16 hidden sm:block" },
@@ -17,7 +20,16 @@ const CROPS = [
 
 export default function MarketplacePage() {
   const heroRef = useRef<HTMLDivElement>(null);
-  const [activeTab, setActiveTab] = useState<"demand" | "listings">("demand");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [offerItem, setOfferItem] = useState<MarketItem | null>(null);
+  const [offerOpen, setOfferOpen] = useState(false);
+  const [filters, setFilters] = useState<FilterState>({
+    commodity: "All",
+    area: "All areas",
+    type: "all",
+    sort: "newest",
+  });
+  const [offers, setOffers] = useState<Record<string, Offer[]>>({});
 
   useGSAP(
     () => {
@@ -30,104 +42,182 @@ export default function MarketplacePage() {
     { scope: heroRef },
   );
 
-  return (
-    <div className="mx-auto w-full max-w-[1120px] px-4 py-6 md:px-6 lg:px-8">
+  // Apply filters
+  let items = MARKET_ITEMS.filter((item) => {
+    if (filters.type !== "all" && item.type !== filters.type) return false;
+    if (filters.commodity !== "All" && item.commodity !== filters.commodity) return false;
+    if (filters.area !== "All areas" && item.area !== filters.area) return false;
+    return true;
+  });
 
-      {/* ── Hero ─────────────────────────────────────────────── */}
-      <div
-        ref={heroRef}
-        data-rhythm="field"
-        className="relative isolate mb-8 overflow-hidden rounded-2xl bg-field px-6 py-10 text-paper lg:px-10 lg:py-12"
-      >
-        {/* Ledger lines */}
-        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 flex flex-col justify-center gap-8 px-8">
-          <span data-ledger aria-hidden className="h-px w-full bg-sage/15" />
-          <span data-ledger aria-hidden className="h-px w-[80%] bg-sage/10" />
-          <span data-ledger aria-hidden className="h-px w-[55%] bg-sage/8" />
+  // Sort
+  if (filters.sort === "price-high") items.sort((a, b) => b.price - a.price);
+  else if (filters.sort === "price-low") items.sort((a, b) => a.price - b.price);
+
+  function handleOffer(item: MarketItem) {
+    setOfferItem(item);
+    setOfferOpen(true);
+  }
+
+  function submitOffer(offer: Offer) {
+    setOffers((prev) => ({
+      ...prev,
+      [offer.itemId]: [...(prev[offer.itemId] ?? []), offer],
+    }));
+  }
+
+  return (
+    <>
+      <div className="mx-auto w-full max-w-[1120px] px-4 py-6 md:px-6 lg:px-8">
+
+        {/* ── Hero ─────────────────────────────────────────────── */}
+        <div
+          ref={heroRef}
+          data-rhythm="field"
+          className="relative isolate mb-8 overflow-hidden rounded-2xl bg-field px-6 py-10 text-paper lg:px-10 lg:py-12"
+        >
+          <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 flex flex-col justify-center gap-8 px-8">
+            <span data-ledger aria-hidden className="h-px w-full bg-sage/15" />
+            <span data-ledger aria-hidden className="h-px w-[80%] bg-sage/10" />
+            <span data-ledger aria-hidden className="h-px w-[55%] bg-sage/8" />
+          </div>
+
+          {CROPS.map((c, i) => (
+            <div key={i} data-crop aria-hidden className={cn("overflow-hidden rounded-full", c.cls)}>
+              <Image src={c.src} alt="" width={160} height={160} className={cn("size-full object-cover", c.pos)} />
+            </div>
+          ))}
+
+          <p data-rise className="text-label font-medium text-sage/70">Lumora · Demand Board</p>
+          <h1 data-rise className="mt-2 font-display text-display-lg-sm font-medium text-paper md:text-display-lg">
+            See who&apos;s buying
+            <br />
+            <span className="text-sage">before you sell.</span>
+          </h1>
+          <p data-rise className="mt-3 max-w-[32rem] text-body leading-relaxed text-paper/70">
+            Every active buyer and farmer near Jos. Real bids, live capacity. Make an offer or list your produce.
+          </p>
+
+          {/* Search bar */}
+          <div data-rise className="mt-6 flex items-center gap-2">
+            <div className="flex flex-1 items-center gap-2 rounded-xl bg-field-soft/60 px-4 py-3 backdrop-blur-sm">
+              <Search strokeWidth={1.5} className="size-4 text-sage/50" />
+              <input
+                placeholder="Search commodity, buyer, or area…"
+                className="flex-1 bg-transparent text-body text-paper placeholder-sage/40 outline-none"
+              />
+            </div>
+            <button
+              onClick={() => setFilterOpen(true)}
+              className="flex items-center gap-2 rounded-xl bg-paper px-4 py-3 text-body-sm font-medium text-field transition-colors hover:bg-sage-soft"
+            >
+              <SlidersHorizontal strokeWidth={1.5} className="size-4" />
+              Filters
+            </button>
+          </div>
         </div>
 
-        {/* Floating crops */}
-        {CROPS.map((c, i) => (
-          <div key={i} data-crop aria-hidden className={cn("overflow-hidden rounded-full", c.cls)}>
-            <Image src={c.src} alt="" width={160} height={160} className={cn("size-full object-cover", c.pos)} />
-          </div>
-        ))}
-
-        <p data-rise className="text-label font-medium text-sage/70">Lumora · Demand Board</p>
-        <h1 data-rise className="mt-2 font-display text-display-lg-sm font-medium text-paper md:text-display-lg">
-          See who&apos;s buying
-          <br />
-          <span className="text-sage">before you sell.</span>
-        </h1>
-        <p data-rise className="mt-3 max-w-[32rem] text-body leading-relaxed text-paper/70">
-          Every active buyer near Jos. Real bids, live capacity. Book a slot before it fills.
-        </p>
-
-        {/* Tab switcher */}
-        <div data-rise className="mt-6 flex gap-2">
-          {(["demand", "listings"] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={cn(
-                "rounded-full px-5 py-2 text-body-sm font-medium capitalize transition-all duration-200",
-                activeTab === tab
-                  ? "bg-paper text-field"
-                  : "bg-field-soft/60 text-paper/70 hover:bg-field-soft hover:text-paper",
-              )}
-            >
-              {tab === "demand" ? "📣 Demand" : "🌾 Listings"}
+        {/* ── AI Match Banner ──────────────────────────────────── */}
+        <Reveal effect="riseIn">
+          <div className="mb-5 flex items-center gap-3 rounded-xl border border-amber/30 bg-amber-soft/60 px-4 py-3">
+            <Sparkles strokeWidth={1.5} className="size-5 shrink-0 text-amber" />
+            <p className="flex-1 text-body-sm text-ink">
+              <span className="font-medium">AI found 3 buyers near you</span> that match your last broiler listing — priced{" "}
+              <span className="font-num font-medium text-amber">₦3,800/kg</span> or above.
+            </p>
+            <button className="flex shrink-0 items-center gap-1 rounded-lg bg-amber px-3 py-1.5 text-label font-medium text-ink hover:bg-amber/90">
+              <Zap strokeWidth={2} className="size-3.5" />
+              See matches
             </button>
+          </div>
+        </Reveal>
+
+        {/* ── Quick filter chips ──────────────────────────────── */}
+        <Reveal effect="riseIn">
+          <div className="mb-6 flex items-center gap-2 overflow-x-auto pb-1">
+            {["All", "Demand", "Listings", "Broilers", "Tomatoes", "Eggs", "Turkey"].map((chip) => {
+              const active =
+                (chip === "All" && filters.type === "all" && filters.commodity === "All") ||
+                (chip === "Demand" && filters.type === "demand") ||
+                (chip === "Listings" && filters.type === "listing") ||
+                (chip === "Broilers" && filters.commodity === "Live Broilers") ||
+                (chip === "Tomatoes" && filters.commodity === "Tomatoes") ||
+                (chip === "Eggs" && filters.commodity === "Eggs") ||
+                (chip === "Turkey" && filters.commodity === "Live Turkey");
+
+              return (
+                <button
+                  key={chip}
+                  onClick={() => {
+                    if (chip === "All") setFilters({ ...filters, type: "all", commodity: "All" });
+                    else if (chip === "Demand") setFilters({ ...filters, type: "demand" });
+                    else if (chip === "Listings") setFilters({ ...filters, type: "listing" });
+                    else setFilters({ ...filters, commodity: chip === "Broilers" ? "Live Broilers" : chip });
+                  }}
+                  className={cn(
+                    "shrink-0 rounded-full border px-3.5 py-1.5 text-body-sm font-medium transition-colors",
+                    active
+                      ? "border-green bg-sage-soft text-green"
+                      : "border-line text-ink-muted hover:border-green hover:text-green",
+                  )}
+                >
+                  {chip}
+                </button>
+              );
+            })}
+          </div>
+        </Reveal>
+
+        {/* ── Grid ────────────────────────────────────────────── */}
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {items.map((item, index) => (
+            <Reveal key={item.id} effect="riseIn" config={{ stagger: 0 }}>
+              <div className={cn(
+                index % 3 === 0 && "rotate-[-0.2deg] hover:rotate-0",
+                index % 3 === 1 && "rotate-[0.15deg] hover:rotate-0",
+                "transition-transform duration-300",
+              )}>
+                <MarketCard item={item} onOffer={handleOffer} />
+              </div>
+            </Reveal>
           ))}
         </div>
+
+        {/* Empty state */}
+        {items.length === 0 && (
+          <div className="flex flex-col items-center gap-4 rounded-2xl bg-field px-8 py-16 text-center text-paper">
+            <div aria-hidden className="flex flex-col items-center gap-3 opacity-20">
+              <span className="h-px w-48 bg-sage" />
+              <span className="h-px w-32 bg-sage" />
+              <span className="h-px w-20 bg-sage" />
+            </div>
+            <p className="font-display text-title font-medium text-paper">No matches found</p>
+            <p className="text-body text-paper/60">Try adjusting your filters to see more results.</p>
+            <button
+              onClick={() => setFilters({ commodity: "All", area: "All areas", type: "all", sort: "newest" })}
+              className="mt-2 rounded-full bg-paper px-5 py-2.5 text-body-sm font-medium text-field hover:bg-sage-soft"
+            >
+              Clear all filters →
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* ── AI Match Banner ──────────────────────────────────── */}
-      <Reveal effect="riseIn">
-        <div className="mb-5 flex items-center gap-3 rounded-xl border border-amber/30 bg-amber-soft/60 px-4 py-3">
-          <Sparkles strokeWidth={1.5} className="size-5 shrink-0 text-amber" />
-          <p className="flex-1 text-body-sm text-ink">
-            <span className="font-medium">AI found 3 buyers near you</span> that match your last broiler listing — priced{" "}
-            <span className="font-num font-medium text-amber">₦3,800/kg</span> or above.
-          </p>
-          <button className="flex shrink-0 items-center gap-1 rounded-lg bg-amber px-3 py-1.5 text-label font-medium text-ink hover:bg-amber/90">
-            <Zap strokeWidth={2} className="size-3.5" />
-            See matches
-          </button>
-        </div>
-      </Reveal>
+      {/* Filter panel */}
+      <FilterPanel
+        open={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        filters={filters}
+        onApply={setFilters}
+      />
 
-      {/* ── Filter row ──────────────────────────────────────── */}
-      <Reveal effect="riseIn">
-        <div className="mb-6 flex items-center gap-3 overflow-x-auto pb-1">
-          <button className="flex shrink-0 items-center gap-2 rounded-lg border border-line bg-white px-3.5 py-2 text-body-sm font-medium text-ink-muted hover:border-green hover:text-green">
-            <SlidersHorizontal strokeWidth={1.5} className="size-4" />
-            Filter
-          </button>
-          {["All areas", "Jos North", "Rayfield", "Bukuru", "Barkin Ladi", "Farin Gada"].map((area) => (
-            <button
-              key={area}
-              className={cn(
-                "shrink-0 rounded-full border px-3.5 py-1.5 text-body-sm font-medium transition-colors",
-                area === "All areas"
-                  ? "border-green bg-sage-soft text-green"
-                  : "border-line text-ink-muted hover:border-green hover:text-green",
-              )}
-            >
-              {area}
-            </button>
-          ))}
-        </div>
-      </Reveal>
-
-      {/* ── Board ────────────────────────────────────────────── */}
-      <Reveal effect="riseIn">
-        <div className="rotate-[-0.1deg] hover:rotate-0 transition-transform duration-500">
-          <div className="mx-auto w-full">
-            <MarketplaceBoard />
-          </div>
-        </div>
-      </Reveal>
-    </div>
+      {/* Offer modal */}
+      <OfferModal
+        open={offerOpen}
+        onClose={() => setOfferOpen(false)}
+        item={offerItem}
+        onMakeOffer={submitOffer}
+      />
+    </>
   );
 }
