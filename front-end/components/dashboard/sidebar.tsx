@@ -9,6 +9,7 @@ import {
   ShoppingBag,
   Store,
   User,
+  Wallet,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -24,6 +25,7 @@ const NAV = [
   { href: "/dashboard/marketplace", label: "Marketplace", icon: Store },
   { href: "/dashboard/bookings", label: "My Bookings", icon: BookOpen },
   { href: "/dashboard/messages", label: "Messages", icon: MessageSquare },
+  { href: "/dashboard/wallet", label: "Wallet", icon: Wallet },
   { href: "/dashboard/transactions", label: "Transactions", icon: BarChart3 },
   { href: "/dashboard/posts", label: "My Posts", icon: ShoppingBag },
   { href: "/dashboard/profile", label: "Profile", icon: User },
