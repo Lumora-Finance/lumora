@@ -7,8 +7,8 @@ import { useRouter } from "next/navigation";
 
 import { BusyBar } from "@/components/loader/busy-bar";
 import { DetailSkeleton } from "@/components/loader/skeletons";
-import { ProfileLocation } from "@/components/location/profile-location";
-import { ProfileReliability } from "@/components/location/profile-reliability";
+import { LocationSearch } from "@/components/profile/location-search";
+import { PhoneInput, validateNigerianPhone } from "@/components/profile/phone-input";
 import { Reveal } from "@/components/motion/reveal";
 import { CopyProfileLink, ProfileCard } from "@/components/profile/profile-card";
 import { TransactionPinModal } from "@/components/dashboard/transaction-pin-modal";
@@ -50,11 +50,16 @@ export default function ProfilePage() {
   const [phone, setPhone] = useState("");
   const [bio, setBio] = useState("");
   const [role, setRole] = useState("");
+  const [location, setLocation] = useState("");
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [pinOpen, setPinOpen] = useState(false);
   const [summary, setSummary] = useState<Summary | null>(null);
   const verified = Boolean(summary?.verified);
+
+  // Validation errors
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -77,6 +82,7 @@ export default function ProfilePage() {
         if (me.name) setName(me.name);
         if (me.phone) setPhone(me.phone);
         if (me.role) setRole(me.role);
+        if (me.area) setLocation(me.area);
       } catch {
         if (!cancelled) setSummary({ booking_count: 0, listing_count: 0 });
       } finally {
@@ -104,18 +110,32 @@ export default function ProfilePage() {
   async function saveProfile(e: React.FormEvent) {
     e.preventDefault();
     if (!user) return;
+
+    // Validate
+    let valid = true;
+    if (!name.trim()) { setNameError("Full name is required"); valid = false; }
+    else setNameError(null);
+
+    const phoneErr = validateNigerianPhone(phone);
+    if (phoneErr) { setPhoneError(phoneErr); valid = false; }
+    else setPhoneError(null);
+
+    if (!valid) return;
+
     setSaving(true);
     try {
-      // Update name and phone via the existing /api/me POST endpoint
-      const res = await apiFetch(user, "/api/me", { name, phone, role }).catch(() => null);
+      const res = await apiFetch(user, "/api/me", { name: name.trim(), phone, role }).catch(() => null);
       if (res?.ok) {
-        // Also sync display name and photo to DB
+        // Save location separately if set
+        if (location) {
+          await apiFetch(user, "/api/me/location", { area: location }).catch(() => {});
+        }
         await apiFetch(user, "/api/profile/sync", {
           email: user.email ?? "",
-          display_name: name,
+          display_name: name.trim(),
           photo_url: user.photoURL ?? "",
         }).catch(() => {});
-        setSummary((current) => ({ ...current, name, display_name: name }));
+        setSummary((current) => ({ ...current, name: name.trim(), display_name: name.trim(), area: location || current?.area }));
         setSaved(true);
         setTimeout(() => setSaved(false), 2500);
       }
@@ -180,34 +200,66 @@ export default function ProfilePage() {
             <h2 className="text-heading font-medium text-ink">Edit Profile</h2>
 
             <div className="mt-5 space-y-4">
-              {[
-                { id: "profile-name", label: "Full name", value: name, onChange: setName, type: "text", placeholder: "Your full name" },
-                { id: "profile-phone", label: "Phone number", value: phone, onChange: setPhone, type: "tel", placeholder: "+234 800 000 0000" },
-              ].map((field) => (
-                <div key={field.label}>
-                  <label htmlFor={field.id} className="mb-1.5 block text-body-sm font-medium text-ink">{field.label}</label>
-                  <input
-                    id={field.id}
-                    type={field.type}
-                    value={field.value}
-                    onChange={(e) => field.onChange(e.target.value)}
-                    placeholder={field.placeholder}
-                    className="w-full rounded-lg border border-line bg-paper px-3.5 py-2.5 text-body text-ink placeholder-ink-muted outline-none transition-colors focus:border-green focus:ring-3 focus:ring-green/20"
-                  />
-                </div>
-              ))}
-
-              <ProfileLocation />
-              <ProfileReliability />
-
+              {/* Full name */}
               <div>
-                <label className="mb-1.5 block text-body-sm font-medium text-ink">Bio <span className="text-ink-muted font-normal">(optional)</span></label>
+                <label htmlFor="profile-name" className="mb-1.5 block text-body-sm font-medium text-ink">
+                  Full name
+                </label>
+                <input
+                  id="profile-name"
+                  type="text"
+                  value={name}
+                  onChange={(e) => { setName(e.target.value); if (nameError) setNameError(null); }}
+                  placeholder="Your full name"
+                  className={cn(
+                    "w-full rounded-2xl border bg-white px-4 py-3 text-base text-ink placeholder:text-ink-muted/70 outline-none transition-colors focus:border-green focus:ring-3 focus:ring-ring/40",
+                    nameError ? "border-danger ring-3 ring-danger/20" : "border-line",
+                  )}
+                />
+                {nameError && <p role="alert" className="mt-1.5 text-body-sm text-danger">{nameError}</p>}
+              </div>
+
+              {/* Phone number */}
+              <div>
+                <label htmlFor="phone" className="mb-1.5 block text-body-sm font-medium text-ink">
+                  Phone number
+                </label>
+                <PhoneInput
+                  id="phone"
+                  value={phone}
+                  onChange={(val) => { setPhone(val); if (phoneError) setPhoneError(null); }}
+                  error={phoneError}
+                  disabled={saving}
+                />
+              </div>
+
+              {/* Location */}
+              <div>
+                <label htmlFor="location" className="mb-1.5 block text-body-sm font-medium text-ink">
+                  Your location
+                </label>
+                <LocationSearch
+                  id="location"
+                  value={location}
+                  onChange={setLocation}
+                  disabled={saving}
+                />
+                <p className="mt-1.5 text-body-sm text-ink-muted">
+                  Others only see your area until you have a booking together.
+                </p>
+              </div>
+
+              {/* Bio */}
+              <div>
+                <label className="mb-1.5 block text-body-sm font-medium text-ink">
+                  Bio <span className="font-normal text-ink-muted">(optional)</span>
+                </label>
                 <textarea
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
                   rows={3}
                   placeholder="Tell buyers or farmers about yourself…"
-                  className="w-full resize-none rounded-lg border border-line bg-paper px-3.5 py-2.5 text-body text-ink placeholder-ink-muted outline-none transition-colors focus:border-green focus:ring-3 focus:ring-green/20"
+                  className="w-full resize-none rounded-2xl border border-line bg-white px-4 py-3 text-base text-ink placeholder:text-ink-muted/70 outline-none transition-colors focus:border-green focus:ring-3 focus:ring-ring/40"
                 />
               </div>
             </div>
