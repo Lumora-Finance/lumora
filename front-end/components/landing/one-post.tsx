@@ -7,7 +7,7 @@ import { useRef } from "react";
 import { formatNaira } from "@/lib/format";
 import { fx, gsap, ScrollTrigger, useGSAP } from "@/lib/gsap/effects";
 
-import { CONTAINER, Num, SECTION_SPACING } from "./shared";
+import { CONTAINER, EYEBROW, Num } from "./shared";
 
 // This section deliberately uses no brand green, so buttons and focus rings are ink here.
 const PILL =
@@ -21,24 +21,37 @@ const KEYS = Array.from({ length: 9 });
 
 /** Draws the arc between the two objects, from where they really are right now. */
 function updateArc(root: HTMLElement) {
-  const stage = root.querySelector("[data-post-stage]");
+  const stage = root.querySelector<HTMLElement>("[data-post-stage]");
   const browser = root.querySelector("[data-post-browser]");
   const phone = root.querySelector("[data-post-phone]");
   if (!stage || !browser || !phone) return;
 
+  // The stage may be part way through its entrance, so its scale is taken out of the measurements.
   const box = stage.getBoundingClientRect();
-  const from = browser.getBoundingClientRect();
-  const to = phone.getBoundingClientRect();
+  const scale = box.width / stage.offsetWidth || 1;
+  const measure = (element: Element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      left: (rect.left - box.left) / scale,
+      right: (rect.right - box.left) / scale,
+      top: (rect.top - box.top) / scale,
+      bottom: (rect.bottom - box.top) / scale,
+      width: rect.width / scale,
+      height: rect.height / scale,
+    };
+  };
+  const from = measure(browser);
+  const to = measure(phone);
   let d: string;
 
   if (window.matchMedia("(min-width: 768px)").matches) {
-    const start = { x: from.right - box.left, y: from.top - box.top + from.height * 0.42 };
-    const end = { x: to.left - box.left, y: to.top - box.top + to.height * 0.32 };
+    const start = { x: from.right, y: from.top + from.height * 0.42 };
+    const end = { x: to.left, y: to.top + to.height * 0.32 };
     const middle = (start.x + end.x) / 2;
     d = `M${start.x} ${start.y}C${middle} ${start.y - 90} ${middle} ${end.y - 90} ${end.x} ${end.y}`;
   } else {
-    const start = { x: from.left - box.left + from.width / 2, y: from.bottom - box.top };
-    const end = { x: to.left - box.left + to.width / 2, y: to.top - box.top };
+    const start = { x: from.left + from.width / 2, y: from.bottom };
+    const end = { x: to.left + to.width / 2, y: to.top };
     const third = (end.y - start.y) / 3;
     d = `M${start.x} ${start.y}C${start.x + 44} ${start.y + third} ${end.x - 44} ${end.y - third} ${end.x} ${end.y}`;
   }
@@ -113,7 +126,8 @@ function buildTimeline(root: HTMLElement) {
   timeline.to(screen, { scrollTop: keepInView(finalMessage), duration: 0.25, ease: "power1.out" }, 7.45);
 
   ScrollTrigger.create({
-    trigger: one("[data-post-stage]"),
+    // The stage's wrapper, because the stage itself is being scaled by its entrance.
+    trigger: one("[data-post-stage]").parentElement,
     start: "60% bottom",
     onEnter: () => timeline.restart(),
     onLeaveBack: () => {
@@ -166,16 +180,17 @@ export function OnePost() {
     <section
       ref={scope}
       id="producers"
-      data-rhythm="paper"
+      data-bg="paper"
       aria-labelledby="one-post-title"
-      className={`scroll-mt-4 ${SECTION_SPACING}`}
+      className="scroll-mt-4 pt-10 pb-10 lg:pt-16 lg:pb-0"
     >
       {/* The hero nav and step cards also link here, under the old buyers section's name. */}
       <span id="buyers" className="block scroll-mt-4" />
       <div className={CONTAINER}>
         <div
           data-post-stage
-          className="relative isolate overflow-hidden rounded-[20px] bg-paper px-[18px] py-7 md:px-9 md:py-11"
+          data-entrance
+          className="relative isolate overflow-hidden rounded-[20px] border border-[#E2DDD2] bg-paper px-[18px] py-16 md:px-9"
         >
           <svg aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 size-full">
             <path data-arc data-arc-base fill="none" stroke="#D9D2C3" strokeWidth={1} />
@@ -190,9 +205,10 @@ export function OnePost() {
             <circle data-arc-dot r={5} fill="#C08A2E" opacity={0} />
           </svg>
 
+          <p className={`${EYEBROW} text-ink-muted`}>For buyers and farmers</p>
           <h2
             id="one-post-title"
-            className="font-display text-[26px] leading-[1.2] font-medium text-ink md:text-[34px]"
+            className="mt-1 font-display text-[26px] leading-[1.2] font-medium text-ink md:text-[34px]"
           >
             One post. Every farmer nearby knows.
           </h2>
@@ -203,7 +219,7 @@ export function OnePost() {
           <div className="mt-9 grid grid-cols-1 items-center justify-items-center gap-y-[70px] md:grid-cols-[minmax(0,1fr)_120px_210px] md:justify-items-stretch md:gap-y-0">
             <div
               data-post-browser
-              className="w-full max-w-[420px] overflow-hidden rounded-[14px] border border-[#E2DDD2] bg-white md:justify-self-end"
+              className="w-full max-w-[420px] overflow-hidden rounded-[14px] md:max-w-none border border-[#E2DDD2] bg-white md:justify-self-end"
             >
               <div className="flex items-center gap-1.5 border-b border-[#EEE9DF] px-3.5 py-2.5">
                 <span className="size-2 rounded-full bg-[#E2DDD2]" />
@@ -297,13 +313,13 @@ export function OnePost() {
             </p>
             <div className="flex flex-wrap gap-2">
               <Link
-                href="/auth/signup?role=buyer"
+                href="/auth/login"
                 className={`${PILL} bg-ink text-paper hover:bg-ink/85`}
               >
                 Post your demand
               </Link>
               <Link
-                href="/auth/signup?role=producer"
+                href="/auth/login"
                 className={`${PILL} border border-[#D9D2C3] text-ink hover:bg-[#EEE9DF]`}
               >
                 See buyers near you

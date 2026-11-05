@@ -6,7 +6,7 @@ import { DEFAULT_PRODUCE, DEMAND, type Produce } from "@/lib/demo/demand";
 import { formatNaira } from "@/lib/format";
 import { fx, gsap, isReducedMotion, playOnEnter, useGSAP } from "@/lib/gsap/effects";
 
-import { CONTAINER, SECTION_SPACING } from "./shared";
+import { CONTAINER, EYEBROW } from "./shared";
 
 const WIDTH = 680;
 const HEIGHT = 200;
@@ -124,7 +124,8 @@ export function DemandExplorer() {
       if (!root || !path || isReducedMotion()) return stopMotion;
 
       // A stroke that ignores the chart's stretching measures its dashes in screen pixels,
-      // so the drawn length has to be worked out on screen too.
+      // so the drawn length has to be worked out on screen too. The panel may still be scaled
+      // by its entrance when this runs, so the length is padded to cover it at full size.
       const box = path.getBoundingClientRect();
       const scaleX = box.width / path.getBBox().width;
       const scaleY = box.height / Math.max(1, path.getBBox().height);
@@ -136,7 +137,7 @@ export function DemandExplorer() {
         length += Math.hypot((point.x - previous.x) * scaleX, (point.y - previous.y) * scaleY);
         previous = point;
       }
-      length = Math.ceil(length) + 2;
+      length = Math.ceil(length * 1.1);
 
       const intro = gsap.timeline({
         onComplete: () => {
@@ -160,9 +161,20 @@ export function DemandExplorer() {
       );
       intro.add(fx("riseIn", root.querySelectorAll("[data-stat]"), { stagger: 0.08 }), "-=0.1");
 
+      const number = bigNumber.current;
+      if (number) {
+        intro.add(fx("numberRoll", number, { from: 0, to: state.number }), 0);
+        number.textContent = "0";
+      }
+
       live.current.intro = intro;
-      playOnEnter(intro, root.querySelector("[data-demand-panel]") ?? root, "60% bottom");
-      return stopMotion;
+      // The wrapper, because the panel itself is being scaled by its entrance.
+      const panel = root.querySelector("[data-demand-panel]");
+      playOnEnter(intro, panel?.parentElement ?? root, "60% bottom");
+      return () => {
+        stopMotion();
+        if (number) number.textContent = String(state.number);
+      };
     },
     { scope },
   );
@@ -242,15 +254,16 @@ export function DemandExplorer() {
     <section
       ref={scope}
       id="prices"
-      data-rhythm="white"
+      data-bg="white"
       aria-labelledby="demand-title"
-      className={`scroll-mt-4 ${SECTION_SPACING}`}
+      className="scroll-mt-4 pt-10 pb-10 lg:pt-40 lg:pb-16"
     >
       <div className={CONTAINER}>
-        <div data-demand-panel className="rounded-[20px] bg-paper p-[22px] text-ink md:p-9">
+        <div data-demand-panel data-entrance className="rounded-[20px] bg-paper p-[22px] text-ink md:p-9">
+          <p className={`${EYEBROW} text-ink-muted`}>Before you start a farm</p>
           <h2
             id="demand-title"
-            className="font-display text-2xl leading-[1.2] font-medium md:text-[30px]"
+            className="mt-1 font-display text-2xl leading-[1.2] font-medium md:text-[30px]"
           >
             Thinking of starting a farm? Ask the market first.
           </h2>

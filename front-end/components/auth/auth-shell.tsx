@@ -6,7 +6,8 @@ import { Num } from "@/components/landing/shared";
 
 /**
  * The two view transitions sit before any DOM node, as they must to fire on navigation,
- * so the page lays out without a wrapper: the photo is fixed beside the form on desktop.
+ * so the page lays out without a wrapper: the photo is fixed beside the form on desktop,
+ * and hidden on smaller screens.
  */
 export function AuthShell({ children }: { children: ReactNode }) {
   return (
@@ -42,13 +43,14 @@ export function AuthShell({ children }: { children: ReactNode }) {
 
       <ViewTransition name="farm-photo" share="farm-morph" default="none">
         {/* Pexels photo 33624059, free licence. Must not imply this person endorses Lumora. */}
-        <aside className="relative order-first mx-2 mt-2 h-48 overflow-hidden rounded-2xl bg-field text-paper sm:h-60 md:mx-3 md:mt-3 lg:fixed lg:top-3 lg:right-3 lg:bottom-3 lg:mx-0 lg:mt-0 lg:h-auto lg:w-[calc(50%-1.5rem)]">
+        <aside className="hidden overflow-hidden rounded-2xl bg-field text-paper lg:fixed lg:top-3 lg:right-3 lg:bottom-3 lg:block lg:w-[calc(50%-1.5rem)]">
           <Image
             src="/images/signup.jpg"
             alt="A smiling woman in a large straw hat at a market in Jos"
             fill
             preload
-            sizes="(min-width: 1024px) 50vw, 100vw"
+            // The panel is hidden below lg, so small screens only preload the tiniest version.
+            sizes="(min-width: 1024px) 50vw, 1px"
             className="object-cover object-[28%_20%]"
           />
           <div

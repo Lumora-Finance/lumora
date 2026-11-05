@@ -450,6 +450,27 @@ export function playOnEnter(animation: gsap.core.Animation, trigger: Element, st
   return ScrollTrigger.create({ trigger, start, once: true, onEnter: () => animation.play() });
 }
 
+/**
+ * A panel settles into place as its section arrives. The radius is drawn with a clip-path,
+ * over the panel's own 20px corners, so this stays on the compositor.
+ */
+export function panelEntrance(
+  panel: Element,
+  trigger: Element | null = panel.parentElement,
+  { rounded = true }: { rounded?: boolean } = {},
+) {
+  return gsap.fromTo(
+    panel,
+    { scale: 0.94, ...(rounded ? { clipPath: "inset(0px round 32px)" } : {}) },
+    {
+      scale: 1,
+      ...(rounded ? { clipPath: "inset(0px round 20px)" } : {}),
+      ease: "none",
+      scrollTrigger: { trigger, start: "top 90%", end: "top 40%", scrub: true },
+    },
+  );
+}
+
 /** Stops a looping animation while its section is off screen. */
 export function pauseOffscreen(
   animations: gsap.core.Animation[],
