@@ -110,7 +110,7 @@ describe("settlement", () => {
       .toMatchObject({ code: "scale_photo_required" });
     expect(await call("money_record_delivery", { ...base, p_units_declined: 2, p_decline_reasons: [] as unknown as object, p_scale_photos: ["u"] }))
       .toMatchObject({ code: "decline_reason_required" });
-    expect(await call("money_record_delivery", { ...base, p_units_declined: 2, p_decline_reasons: [{ reason: "sick" }] as unknown as object, p_scale_photos: ["u"] }))
+    expect(await call("money_record_delivery", { ...base, p_units_declined: 2, p_decline_reasons: [{ reason: "underweight" }, { reason: "outside_spec" }] as unknown as object, p_scale_photos: ["u"] }))
       .toMatchObject({ ok: true, gross_kobo: 20 * PRICE });
   });
 

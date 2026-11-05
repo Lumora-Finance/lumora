@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowRight, ShieldAlert, Wheat, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 
 import { cn } from "@/lib/utils";
@@ -45,6 +46,7 @@ export function PostModal({
   onClose: () => void;
 }) {
   const modalRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
 
   // Close on Escape
   useEffect(() => {
@@ -108,6 +110,9 @@ export function PostModal({
               <button
                 key={opt.type}
                 disabled={locked}
+                onClick={() => {
+                  if (opt.type === "demand") router.push("/dashboard/listings/new");
+                }}
                 className={cn(
                   "group relative flex w-full items-start gap-4 overflow-hidden rounded-xl border p-5 text-left transition-all duration-200",
                   locked

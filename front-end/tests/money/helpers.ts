@@ -31,7 +31,9 @@ export async function resetDb() {
   await pool.query(`truncate money_ledger, money_balances, money_holds, money_events, money_pending_fees,
     money_receivables, money_payouts, money_settlements, money_funding_accounts, money_deposits, money_alerts,
     sms_outbox, sms_inbound, sms_menus, strikes, disputes, payout_accounts, deliveries, bookings, slots,
-    demand_listings, commodities, commodity_follows, producer_stock, users cascade`);
+    demand_listings, commodity_follows, producer_stock, user_locations, listing_private, sms_onboarding, users cascade`);
+  // The seeded commodities stay. Only the ones tests made go.
+  await pool.query(`delete from commodities where name like 'broiler-%'`);
   await pool.query(`update money_flags set value = false`);
 }
 
@@ -67,6 +69,7 @@ export async function fund(buyerId: string, kobo: number, now: Date = T0) {
 
 export async function makeSlot(options: { capacity?: number; minQty?: number; buyer?: { id: string; phone: string; name: string } } = {}) {
   const buyer = options.buyer ?? (await makeUser("buyer"));
+  const [area] = await q<{ id: string }>(`select id from areas where name = 'Angwan Rukuba'`);
   const [commodity] = await q<{ id: string }>(
     `insert into commodities (name) values ($1) returning id`,
     [`broiler-${++phoneCounter}`],
@@ -74,8 +77,8 @@ export async function makeSlot(options: { capacity?: number; minQty?: number; bu
   const capacity = options.capacity ?? 80;
   const [listing] = await q<{ id: string }>(
     `insert into demand_listings (buyer_id, commodity_id, unit_price_kobo, capacity_per_day, min_qty,
-       min_unit_weight_kg, max_unit_weight_kg) values ($1, $2, $3, $4, $5, 2.5, 3.5) returning id`,
-    [buyer.id, commodity.id, PRICE, capacity, options.minQty ?? 1],
+       min_unit_weight_kg, max_unit_weight_kg, area_id) values ($1, $2, $3, $4, $5, 2.5, 3.5, $6) returning id`,
+    [buyer.id, commodity.id, PRICE, capacity, options.minQty ?? 1, area.id],
   );
   const [slot] = await q<{ id: string }>(
     `insert into slots (listing_id, date, window_start, window_end, cutoff_at, capacity_total, capacity_remaining)

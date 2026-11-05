@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { Calendar, Clock, MapPin, X, CheckCircle2, Store } from "lucide-react";
 import Link from "next/link";
 
+import { LiveBookings } from "@/components/board/live-bookings";
 import { Reveal } from "@/components/motion/reveal";
 import { fx, playOnEnter, useGSAP } from "@/lib/gsap/effects";
 import { cn } from "@/lib/utils";

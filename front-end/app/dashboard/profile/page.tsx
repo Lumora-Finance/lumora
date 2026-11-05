@@ -6,13 +6,13 @@ import { Camera, CheckCircle2, ShieldAlert, LogOut, Trash2 } from "lucide-react"
 import { signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
 
+import { ProfileLocation } from "@/components/location/profile-location";
 import { Reveal } from "@/components/motion/reveal";
 import { fx, playOnEnter, useGSAP } from "@/lib/gsap/effects";
 import { useAuthUser } from "@/components/auth/use-auth-user";
 import { getFirebaseAuth } from "@/lib/firebase/auth";
 import { cn } from "@/lib/utils";
 
-const AREAS = ["Jos North", "Jos South", "Rayfield", "Bukuru", "Barkin Ladi", "Farin Gada", "Angwan Rukuba", "Terminus"];
 
 export default function ProfilePage() {
   const heroRef = useRef<HTMLDivElement>(null);
@@ -27,7 +27,6 @@ export default function ProfilePage() {
 
   const [name, setName] = useState(displayName);
   const [phone, setPhone] = useState("");
-  const [area, setArea] = useState("Jos North");
   const [bio, setBio] = useState("");
   const [saved, setSaved] = useState(false);
 
@@ -164,16 +163,7 @@ export default function ProfilePage() {
                 </div>
               ))}
 
-              <div>
-                <label className="mb-1.5 block text-body-sm font-medium text-ink">Area</label>
-                <select
-                  value={area}
-                  onChange={(e) => setArea(e.target.value)}
-                  className="w-full rounded-lg border border-line bg-paper px-3.5 py-2.5 text-body text-ink outline-none transition-colors focus:border-green focus:ring-3 focus:ring-green/20"
-                >
-                  {AREAS.map((a) => <option key={a}>{a}</option>)}
-                </select>
-              </div>
+              <ProfileLocation />
 
               <div>
                 <label className="mb-1.5 block text-body-sm font-medium text-ink">Bio <span className="text-ink-muted font-normal">(optional)</span></label>

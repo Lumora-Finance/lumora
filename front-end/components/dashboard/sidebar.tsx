@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   LogOut,
   MessageSquare,
+  MapPin,
   ShoppingBag,
   Store,
   User,
@@ -23,6 +24,7 @@ import { useAuthUser } from "@/components/auth/use-auth-user";
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/dashboard/marketplace", label: "Marketplace", icon: Store },
+  { href: "/dashboard/board", label: "Buyers near you", icon: MapPin },
   { href: "/dashboard/bookings", label: "My Bookings", icon: BookOpen },
   { href: "/dashboard/messages", label: "Messages", icon: MessageSquare },
   { href: "/dashboard/wallet", label: "Wallet", icon: Wallet },

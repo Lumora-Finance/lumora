@@ -8,8 +8,8 @@ const FIREBASE_KEYS = createRemoteJWKSet(
 
 export type MoneyUser = { id: string; phone: string; name: string; role: string };
 
-/** The signed-in user behind a request, from their Firebase ID token. */
-export async function requestUser(request: Request, db: MoneyDb): Promise<MoneyUser | null> {
+/** The verified Firebase uid behind a request. They may not have a row in `users` yet. */
+export async function firebaseUid(request: Request): Promise<string | null> {
   const token = request.headers.get("authorization")?.replace(/^Bearer /, "");
   const project = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
   if (!token || !project) return null;
@@ -18,9 +18,15 @@ export async function requestUser(request: Request, db: MoneyDb): Promise<MoneyU
       issuer: `https://securetoken.google.com/${project}`,
       audience: project,
     });
-    if (!payload.sub) return null;
-    return await db.rpc<MoneyUser | null>("money_user_by_firebase", { p_uid: payload.sub });
+    return payload.sub ?? null;
   } catch {
     return null;
   }
+}
+
+/** The signed-in user behind a request, from their Firebase ID token. */
+export async function requestUser(request: Request, db: MoneyDb): Promise<MoneyUser | null> {
+  const uid = await firebaseUid(request);
+  if (!uid) return null;
+  return db.rpc<MoneyUser | null>("money_user_by_firebase", { p_uid: uid });
 }

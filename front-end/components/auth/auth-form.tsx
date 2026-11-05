@@ -26,7 +26,8 @@ import { useAuthUser } from "./use-auth-user";
 type Mode = "signup" | "login";
 type Values = { email: string; password: string };
 
-const AFTER_SIGN_IN = "/dashboard";
+// Onboarding sends anyone already set up straight on to the dashboard.
+const AFTER_SIGN_IN = "/onboarding";
 
 const schemas = {
   signup: z.object({

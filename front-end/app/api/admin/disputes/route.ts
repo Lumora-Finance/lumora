@@ -1,9 +1,13 @@
+import { connection } from "next/server";
+
 import { requestUser } from "@/lib/money/auth";
 import { serverMoneyDb } from "@/lib/money/db";
 
 const DECISIONS = new Set(["pay_recorded", "pay_booked_minimum", "custom"]);
 
 export async function GET(request: Request) {
+  // Personal to each request, so it must never be prerendered at build time.
+  await connection();
   const db = serverMoneyDb();
   const user = await requestUser(request, db);
   if (user?.role !== "admin") return new Response("Forbidden", { status: 403 });

@@ -23,6 +23,11 @@ describe("parseCommand", () => {
     ["CANCEL LM-12345", { name: "CANCEL", code: "LM-12345" }],
     ["BOOK 1 20 THU", { name: "BOOK", position: 1, qty: 20, day: "THU" }],
     ["BUYERS BROILER", { name: "BUYERS", commodity: "BROILER" }],
+    ["BUYERS", { name: "BUYERS", commodity: null }],
+    ["SELL 1 20", { name: "BOOK", position: 1, qty: 20, day: null }],
+    ["sell 2 5 thu", { name: "BOOK", position: 2, qty: 5, day: "THU" }],
+    ["BOOK 1 20", { name: "BOOK", position: 1, qty: 20, day: null }],
+    ["JOIN", { name: "JOIN" }],
   ])("reads %s", (input, expected) => {
     expect(parseCommand(input)).toEqual(expected);
   });
@@ -109,18 +114,18 @@ describe("commands", () => {
     expect(await text(farmer.phone, `BUYERS ${commodity}`)).toContain("1) ");
     await book(slot.slotId, rival.id, 10);
 
-    expect(await text(farmer.phone, "BOOK 1 12 THU", T0, sms)).toBe("Only 5 left. Reply BOOK 1 5 THU.");
+    expect(await text(farmer.phone, "BOOK 1 12 THU", T0, sms)).toBe("They only need 5 more. Reply SELL 1 5.");
     const reply = await text(farmer.phone, "BOOK 1 5 THU", T0, sms);
-    expect(reply).toContain("Booked 5");
+    expect(reply).toContain("selling 5");
     expect(reply).not.toMatch(/\b\d{4}\b/);
     expect(sms.sent).toHaveLength(1);
     expect(sms.sent[0].phone).toBe(slot.buyer.phone);
   });
 
   it("explains itself to an unknown number, and for an unknown command", async () => {
-    expect(await text("+2340000000000", "YES")).toContain("isn't on Lumora");
+    expect(await text("+2340000000000", "YES")).toContain("What is your name?");
     const farmer = await makeUser("farmer");
-    expect(await text(farmer.phone, "hello")).toContain("Commands:");
+    expect(await text(farmer.phone, "hello")).toContain("BUYERS CHICKEN");
   });
 
   it("goes quiet when a number sends too much, per number", async () => {
