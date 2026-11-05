@@ -27,7 +27,7 @@ describe("settlement", () => {
   it("releases exactly reserve - gross and charges the fee once", async () => {
     const b = await delivered(30);
     const gross = 30 * PRICE;
-    const fee = gross * 0.015;
+    const fee = gross * 0.01;
 
     await reply(b, "yes");
 
@@ -57,13 +57,13 @@ describe("settlement", () => {
     await arrive(b, WINDOW_START);
     await record(b, 92.4, hours(1, WINDOW_START), 20);
 
-    const sent = await q<{ body: string }>(`select body from sms_outbox where phone = $1`, [farmer.phone]);
-    expect(sent.at(-1)?.body).toBe(`${booked.code}: 92.4 kg × ₦3,500 = ₦323,400. Reply YES or DISPUTE.`);
+    const [told] = await q<{ data: { measured_kg: number; gross_kobo: number } }>(`select data from notifications where user_id = $1 and kind = 'weigh_in'`, [farmer.id]);
+    expect(told.data).toMatchObject({ measured_kg: 92.4, gross_kobo: 32_340_000 });
 
     await call("money_farmer_reply", { p_booking: booked.booking_id, p_farmer: farmer.id, p_reply: "yes", p_now: hours(2, WINDOW_START).toISOString() });
     expect(await balance("farmer_pending", farmer.id)).toBe(32_340_000);
-    expect(await balance("lumora_revenue")).toBe(485_100);
-    expect(await available(slot.buyer.id)).toBe(50_000_000 - 32_340_000 - 485_100);
+    expect(await balance("lumora_revenue")).toBe(323_400);
+    expect(await available(slot.buyer.id)).toBe(50_000_000 - 32_340_000 - 323_400);
   });
 
   it("charges the fee once when a YES and the deadline job arrive together", async () => {
@@ -78,7 +78,7 @@ describe("settlement", () => {
     ]);
     expect(await status(b.booking.booking_id)).toBe("settled");
     expect(await balance("farmer_pending", b.farmer.id)).toBe(30 * PRICE);
-    expect(await balance("lumora_revenue")).toBe(30 * PRICE * 0.015);
+    expect(await balance("lumora_revenue")).toBe(30 * PRICE * 0.01);
     expect(await q(`select 1 from money_payouts where farmer_id = $1`, [b.farmer.id])).toHaveLength(1);
     expect(await ledgerTotal()).toBe(0);
   });
@@ -121,7 +121,7 @@ describe("settlement", () => {
     await record(b, 35, hours(1, WINDOW_START));
     await reply(b, "yes");
 
-    const fee = RESERVE * 0.015;
+    const fee = RESERVE * 0.01;
     expect(await available(b.buyer.id)).toBe(0);
     expect(await balance("lumora_revenue")).toBe(0);
     const [owed] = await q<{ amount_kobo: string }>(`select amount_kobo from money_receivables where buyer_id = $1`, [b.buyer.id]);
@@ -202,7 +202,7 @@ describe("disputes", () => {
     const total = 32 * PRICE;
     expect(await decide(disputeId, "custom", total, admin.id)).toMatchObject({ ok: true, final_kobo: total, status: "settled" });
     expect(await balance("farmer_pending", b.farmer.id)).toBe(total);
-    expect(await balance("lumora_revenue")).toBe(total * 0.015);
+    expect(await balance("lumora_revenue")).toBe(total * 0.01);
 
     const [event] = await q<{ actor: string; after: { decision: string } }>(`select actor, after from money_events where entity = 'dispute'`);
     expect(event.actor).toBe(admin.id);
@@ -279,7 +279,7 @@ describe("money helpers", () => {
   it("keeps the TypeScript and SQL rules identical", async () => {
     for (const [name, value] of Object.entries(RULES)) {
       const [row] = await q<{ value: string }>(`select money_rule($1) as value`, [name]);
-      expect(Number(row.value), name).toBe(value);
+      expect(Number(row.value), name).toBe(Number(value));
     }
   });
 

@@ -5,7 +5,7 @@ import { createFlutterwaveClient, verifyWebhookSignature } from "../../lib/money
 import { runMoneyJob, runReconciliation, sendOutbox, sendPayouts, sendRefunds } from "../../lib/money/jobs";
 import { handleFlutterwaveWebhook } from "../../lib/money/webhooks";
 import {
-  arrive, available, balance, call, confirmedBooking, db, FakeFlutterwave, FakeSms, hours, ledgerTotal, makeUser, pool,
+  arrive, available, balance, call, confirmedBooking, db, FakeFlutterwave, FakeMailer, FakeSms, hours, ledgerTotal, makeUser, pool,
   q, record, resetDb, T0, WINDOW_START,
 } from "./helpers";
 
@@ -212,7 +212,7 @@ describe("payouts", () => {
 
     expect(await webhook(fw, transferEvent(transfer.id, payout.settlement_id, "FAILED"))).toMatchObject({ result: "failed" });
     expect(await balance("farmer_pending", b.farmer.id)).toBe(payout.amount_kobo);
-    expect(await q(`select 1 from sms_outbox where phone = $1 and body like '%check your account details%'`, [b.farmer.phone])).toHaveLength(1);
+    expect(await q(`select 1 from notifications where user_id = $1 and kind = 'payout_failed'`, [b.farmer.id])).toHaveLength(1);
 
     const [row] = await q<{ next_attempt_at: Date }>(`select next_attempt_at from money_payouts where id = $1`, [payout.id]);
     await sendPayouts({ db, flutterwave: fw, now: new Date(row.next_attempt_at.getTime() - 60_000) });
@@ -248,7 +248,7 @@ describe("payouts", () => {
     expect(fw.createCalls).toBe(0);
 
     await call("money_sweep", { p_now: hours(3, WINDOW_START).toISOString() });
-    expect(await q(`select 1 from sms_outbox where body like '%Add a bank account%'`)).toHaveLength(1);
+    expect(await q(`select 1 from notifications where kind = 'payout_needs_account'`)).toHaveLength(1);
   });
 
   it("stores a mismatched account as unmatched, and refuses one already on another farmer", async () => {
@@ -311,13 +311,15 @@ describe("reconciliation", () => {
 });
 
 describe("the job", () => {
-  it("runs the sweep, payouts and SMS together", async () => {
+  it("runs the sweep, payouts and emails together, and sends no SMS", async () => {
     const fw = new FakeFlutterwave();
-    const sms = new FakeSms();
+    const mailer = new FakeMailer();
     await settledWithPayout();
-    const result = await runMoneyJob({ db, flutterwave: fw, sms, now: hours(3, WINDOW_START) });
+    const queuedSms = await q(`select 1 from sms_outbox where status = 'queued'`);
+    const result = await runMoneyJob({ db, flutterwave: fw, mailer, emailSecret: "secret", now: hours(3, WINDOW_START) });
     expect(result.payouts.sent).toBe(1);
-    expect(sms.sent.length).toBeGreaterThan(0);
+    expect(mailer.sent.length).toBeGreaterThan(0);
+    expect(await q(`select 1 from sms_outbox where status = 'queued'`)).toHaveLength(queuedSms.length);
   });
 
   it("requeues an SMS that fails to send", async () => {

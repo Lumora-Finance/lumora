@@ -3,6 +3,7 @@
 import { type ReactNode, useEffect, useRef } from "react";
 
 import { ScrollTrigger } from "@/lib/gsap/effects";
+import { wipeAway } from "@/lib/gsap/page-wipe";
 
 /**
  * The panel the dashboard scrolls in. When its content changes height, such as after filtering,
@@ -10,6 +11,11 @@ import { ScrollTrigger } from "@/lib/gsap/effects";
  */
 export function DashboardScroll({ children }: { children: ReactNode }) {
   const panel = useRef<HTMLElement>(null);
+
+  // Finishing onboarding arrives here under a full-screen wipe. Nothing happens without one.
+  useEffect(() => {
+    wipeAway();
+  }, []);
 
   useEffect(() => {
     const root = panel.current;

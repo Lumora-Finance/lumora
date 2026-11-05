@@ -87,7 +87,9 @@ export function AuthForm({ mode }: { mode: Mode }) {
   useEffect(() => {
     if (loading || !user) return;
     reset({ email: "", password: "" });
-    router.replace(AFTER_SIGN_IN);
+    // An email link sends people here to sign in, then back to what they were doing.
+    const next = new URLSearchParams(window.location.search).get("next");
+    router.replace(next && /^\/(?![/\\])/.test(next) ? next : AFTER_SIGN_IN);
   }, [loading, user, reset, router]);
 
   async function onSubmit({ email, password }: Values) {

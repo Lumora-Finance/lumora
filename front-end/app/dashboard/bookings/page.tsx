@@ -91,6 +91,11 @@ export default function BookingsPage() {
         </div>
       </div>
 
+      {/* Real bookings, each opening its own page. Renders nothing when there are none. */}
+      <div className="mb-8">
+        <LiveBookings />
+      </div>
+
       {/* Tabs */}
       <Reveal effect="riseIn">
         <div className="mb-6 flex gap-1 rounded-xl border border-line bg-white p-1 w-fit">

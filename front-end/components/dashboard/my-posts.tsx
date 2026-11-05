@@ -1,207 +1,87 @@
 "use client";
 
-import { MoreHorizontal, Pause, Pencil, Plus } from "lucide-react";
-import { useState } from "react";
+import { Plus } from "lucide-react";
+import Link from "next/link";
 
 import { cn } from "@/lib/utils";
 
+import { Panel, PanelHeading, PanelLink } from "./panel";
+
 type Post = {
   id: string;
-  type: "DEMAND" | "LISTING";
+  type: "Demand" | "Listing";
   commodity: string;
   spec: string;
   price: string;
   unit: string;
-  remaining: string;
-  total: string;
-  status: "active" | "paused" | "full";
+  remaining: number;
+  total: number;
+  status?: "Paused" | "Full";
 };
 
 const POSTS: Post[] = [
-  {
-    id: "1",
-    type: "DEMAND",
-    commodity: "Live Broilers",
-    spec: "2.5–3.5 kg each, healthy",
-    price: "₦3,500",
-    unit: "/ kg",
-    remaining: "50",
-    total: "80",
-    status: "active",
-  },
-  {
-    id: "2",
-    type: "LISTING",
-    commodity: "Tomatoes",
-    spec: "Grade A, Plateau Roma",
-    price: "₦850",
-    unit: "/ basket",
-    remaining: "20",
-    total: "40",
-    status: "active",
-  },
-  {
-    id: "3",
-    type: "DEMAND",
-    commodity: "Eggs",
-    spec: "Crates of 30, medium",
-    price: "₦2,100",
-    unit: "/ crate",
-    remaining: "0",
-    total: "15",
-    status: "full",
-  },
-  {
-    id: "4",
-    type: "LISTING",
-    commodity: "Live Turkey",
-    spec: "5–7 kg, dressed or live",
-    price: "₦4,200",
-    unit: "/ kg",
-    remaining: "10",
-    total: "20",
-    status: "paused",
-  },
+  { id: "1", type: "Demand", commodity: "Live broilers", spec: "2.5 to 3.5 kg each", price: "₦3,500", unit: "kg", remaining: 50, total: 80 },
+  { id: "2", type: "Listing", commodity: "Tomatoes", spec: "Grade A, Plateau Roma", price: "₦850", unit: "basket", remaining: 20, total: 40 },
+  { id: "3", type: "Demand", commodity: "Eggs", spec: "Crates of 30, medium", price: "₦2,100", unit: "crate", remaining: 0, total: 15, status: "Full" },
+  { id: "4", type: "Listing", commodity: "Live turkey", spec: "5 to 7 kg each", price: "₦4,200", unit: "kg", remaining: 10, total: 20, status: "Paused" },
 ];
 
-const STATUS_STYLES: Record<Post["status"], string> = {
-  active: "bg-sage-soft text-green",
-  paused: "bg-amber-soft text-amber",
-  full: "bg-line text-ink-muted",
+const progressWords = (post: Post) => {
+  if (post.remaining === 0) return "All booked";
+  return post.type === "Demand" ? `Needs ${post.remaining} more` : `${post.remaining} left`;
 };
 
 export function MyPosts({ onPost }: { onPost?: () => void }) {
-  const [activeMenu, setActiveMenu] = useState<string | null>(null);
-
   return (
-    <div className="rounded-xl border border-line bg-white shadow-sm">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-line px-5 py-4">
-        <div>
-          <h2 className="text-heading font-medium text-ink">My Posts</h2>
-          <p className="mt-0.5 text-body-sm text-ink-muted">
-            Your active demand and listings
-          </p>
-        </div>
-        <button
-          onClick={onPost}
-          className="flex items-center gap-1.5 rounded-lg bg-green px-3.5 py-2 text-body-sm font-medium text-paper transition-colors hover:bg-green-hover"
-        >
-          <Plus strokeWidth={2} className="size-4" />
-          Post
-        </button>
-      </div>
-
-      {/* Posts */}
-      <div className="flex flex-col gap-3 p-4">
-        {POSTS.map((post, index) => {
-          const pct = post.total === "0" ? 0 : Math.round((parseInt(post.remaining) / parseInt(post.total)) * 100);
-          // Alternate 4 card shapes
-          const shapes = [
-            { clip: "polygon(0 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%)", border: "border-l-[3px] border-l-green" },
-            { clip: "polygon(14px 0, 100% 0, 100% 100%, 0 100%, 0 14px)", border: "border-r-[3px] border-r-amber" },
-            { clip: "polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%)", border: "border-b-[3px] border-b-green" },
-            { clip: "polygon(0 0, 100% 0, 100% 100%, 14px 100%, 0 calc(100% - 14px))", border: "border-t-[3px] border-t-sage" },
-          ];
-          const { clip, border } = shapes[index % 4];
-
-          return (
-            <div
-              key={post.id}
-              className={cn("group flex items-start gap-4 bg-paper px-5 py-4 transition-all hover:shadow-md hover:-translate-y-px", border)}
-              style={{ clipPath: clip }}
+    <Panel className="flex h-full flex-col">
+      <PanelHeading
+        title="My posts"
+        sub="How each one is filling up"
+        action={
+          <div className="flex items-center gap-1">
+            <PanelLink href="/dashboard/posts">All posts</PanelLink>
+            <button
+              type="button"
+              onClick={onPost}
+              aria-label="New post"
+              className="flex size-9 items-center justify-center rounded-xl bg-sage-soft text-green transition-colors duration-150 hover:bg-green hover:text-paper focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none max-lg:size-11"
             >
-              {/* Type tag */}
-              <span
-                className={cn(
-                  "mt-0.5 shrink-0 rounded-md px-2 py-0.5 font-num text-label font-medium tracking-wide",
-                  post.type === "DEMAND"
-                    ? "bg-green/10 text-green"
-                    : "bg-amber-soft text-amber",
-                )}
-              >
-                {post.type}
-              </span>
-
-              {/* Content */}
-              <div className="min-w-0 flex-1">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-medium text-ink">{post.commodity}</p>
-                    <p className="text-body-sm text-ink-muted">{post.spec}</p>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    {/* Status */}
+              <Plus aria-hidden="true" strokeWidth={2} className="size-4" />
+            </button>
+          </div>
+        }
+      />
+      <ul className="mt-2 flex-1 divide-y divide-line px-5 pb-2 sm:px-6">
+        {POSTS.map((post) => {
+          const filled = Math.round(((post.total - post.remaining) / post.total) * 100);
+          return (
+            <li key={post.id}>
+              <Link href="/dashboard/posts" className="group block py-3.5 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none">
+                <div className="flex items-baseline justify-between gap-3">
+                  <p className="min-w-0 truncate font-medium text-ink">
+                    {post.commodity}
+                    <span className="ml-2 font-num text-[11px] font-normal tracking-[0.04em] text-ink-muted uppercase">{post.type}</span>
+                  </p>
+                  <p className="shrink-0 text-body-sm text-ink-muted">
+                    <span className="font-num font-medium text-ink">{post.price}</span>/{post.unit}
+                  </p>
+                </div>
+                <div className="mt-2 flex items-center gap-3">
+                  <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-sage-soft">
                     <span
-                      className={cn(
-                        "rounded-full px-2.5 py-0.5 text-label font-medium capitalize",
-                        STATUS_STYLES[post.status],
-                      )}
-                    >
-                      {post.status}
-                    </span>
-
-                    {/* Menu */}
-                    <div className="relative">
-                      <button
-                        onClick={() => setActiveMenu(activeMenu === post.id ? null : post.id)}
-                        className="flex size-7 items-center justify-center rounded-md text-ink-muted opacity-0 transition-opacity group-hover:opacity-100 hover:bg-sage-soft hover:text-ink"
-                      >
-                        <MoreHorizontal strokeWidth={1.5} className="size-4" />
-                      </button>
-                      {activeMenu === post.id && (
-                        <>
-                          <div
-                            className="fixed inset-0 z-10"
-                            onClick={() => setActiveMenu(null)}
-                          />
-                          <div className="absolute right-0 top-8 z-20 min-w-[130px] overflow-hidden rounded-lg border border-line bg-white py-1 shadow-lg">
-                            <button className="flex w-full items-center gap-2.5 px-3.5 py-2 text-body-sm text-ink hover:bg-sage-soft">
-                              <Pencil strokeWidth={1.5} className="size-3.5" /> Edit
-                            </button>
-                            <button className="flex w-full items-center gap-2.5 px-3.5 py-2 text-body-sm text-ink hover:bg-sage-soft">
-                              <Pause strokeWidth={1.5} className="size-3.5" /> Pause
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Price + capacity bar */}
-                <div className="mt-2 flex items-center gap-4">
-                  <span className="font-num text-number font-medium text-amber">
-                    {post.price}
-                    <span className="font-sans text-body-sm text-ink-muted">{post.unit}</span>
+                      className={cn("block h-full rounded-full transition-[width] duration-500", post.status === "Paused" ? "bg-sage" : "bg-green")}
+                      style={{ width: `${filled}%` }}
+                    />
                   </span>
-
-                  <div className="flex flex-1 items-center gap-2">
-                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
-                      <div
-                        className={cn(
-                          "h-full rounded-full transition-all duration-500",
-                          post.status === "full" ? "bg-ink-muted" : "bg-green",
-                        )}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                    <span className="font-num text-label text-ink-muted">
-                      {post.remaining}/{post.total} left
-                    </span>
-                  </div>
+                  <span className="shrink-0 text-xs text-ink-muted">
+                    {post.status === "Paused" ? "Paused" : progressWords(post)}
+                  </span>
                 </div>
-              </div>
-            </div>
+              </Link>
+            </li>
           );
         })}
-      </div>
-      <div className="border-t border-line px-5 py-3">
-        <button className="text-body-sm font-medium text-green hover:underline">
-          View all posts →
-        </button>
-      </div>
-    </div>
+      </ul>
+    </Panel>
   );
 }

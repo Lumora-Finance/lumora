@@ -1,7 +1,5 @@
 import { requestUser } from "@/lib/money/auth";
-import { regenerateCode } from "@/lib/money/booking";
 import { type MoneyResult, serverMoneyDb } from "@/lib/money/db";
-import { createSmsSender } from "@/lib/money/sms-sender";
 
 type Body = {
   action?: string;
@@ -13,9 +11,16 @@ type Body = {
   declineReasons?: unknown[];
   measuredKg?: number;
   scalePhotos?: string[];
+  expectedAt?: string;
+  decision?: string;
+  deadline?: string;
+  priceKobo?: number;
+  reason?: string;
+  photoUrl?: string;
+  note?: string;
 };
 
-/** The app's version of what farmers can do by SMS, plus recording, which needs photos. */
+/** Everything either side can do from a booking page. The rules are in the database functions. */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const db = serverMoneyDb();
   const user = await requestUser(request, db);
@@ -55,7 +60,31 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       });
       break;
     case "regenerate_code":
-      result = await regenerateCode({ bookingId: id, buyerId: user.id, phone: user.phone }, { db, sms: createSmsSender() });
+      // The buyer's page reads the new code from the booking, so it isn't passed back here.
+      result = await db.rpc<MoneyResult>("money_regenerate_code", { p_booking: id, p_buyer: user.id });
+      delete result.delivery_code;
+      break;
+    case "running_late":
+      result = await db.rpc("money_running_late", { p_booking: id, p_farmer: user.id, p_expected: body.expectedAt ?? null });
+      break;
+    case "report_no_code":
+      result = await db.rpc("money_report_no_code", { p_booking: id, p_farmer: user.id });
+      break;
+    case "nocode_decline":
+      result = await db.rpc("money_nocode_decline", {
+        p_booking: id, p_buyer: user.id, p_reason: body.reason ?? "", p_photo_url: body.photoUrl ?? "", p_note: body.note ?? null,
+      });
+      break;
+    case "approval":
+      result = await db.rpc("money_answer_approval", { p_booking: id, p_buyer: user.id, p_decision: body.decision ?? "" });
+      break;
+    case "find_backup":
+      result = await db.rpc("money_request_backup", {
+        p_booking: id, p_buyer: user.id, p_deadline: body.deadline ?? null, p_price_kobo: body.priceKobo ?? null,
+      });
+      break;
+    case "keep_waiting":
+      result = await db.rpc("money_keep_waiting", { p_booking: id, p_buyer: user.id });
       break;
     default:
       result = { ok: false, code: "unknown_action" };

@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 
 import { LogoVideo } from "@/components/dashboard/logo-video";
 import { ProfileLocation } from "@/components/location/profile-location";
+import { ProfileReliability } from "@/components/location/profile-reliability";
 import { Reveal } from "@/components/motion/reveal";
 import { fx, playOnEnter, useGSAP } from "@/lib/gsap/effects";
 import { useAuthUser } from "@/components/auth/use-auth-user";
@@ -160,6 +161,7 @@ export default function ProfilePage() {
               ))}
 
               <ProfileLocation />
+              <ProfileReliability />
 
               <div>
                 <label className="mb-1.5 block text-body-sm font-medium text-ink">Bio <span className="text-ink-muted font-normal">(optional)</span></label>

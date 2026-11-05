@@ -95,18 +95,6 @@
   --color-sage-soft: #E8EFEB;
   --color-amber: #C08A2E;
   --color-amber-soft: #F5EBD7;
-  --color-market-board: #F1E8D6;
-  --color-market-grain: #E4D8C0;
-  --color-market-card: #FBF6EC;
-  --color-market-card-line: #D9CBB0;
-  --color-market-wood: #B98A55;
-  --color-market-slat: #A9794A;
-  --color-market-slot: #8E6337;
-  --color-market-maize: #F2C14E;
-  --color-market-kraft: #D9BC8C;
-  --color-market-ink: #2A2118;
-  --color-market-muted: #7A6A55;
-  --color-market-dash: #CDBFA6;
   --color-paper: #F6F3EC;
   --color-ink: #14201B;
   --color-ink-muted: #6B7B73;
@@ -248,39 +236,6 @@ html.lenis {
 
 [data-journey][data-live] .journey-kernel {
   width: min(100%, calc((var(--journey-panel-height) - 7rem) * 1.12));
-}
-
-/* The farmer's market board. Its own look, used nowhere else. */
-.market-board {
-  background-color: var(--color-market-board);
-  background-image: radial-gradient(var(--color-market-grain) 0.8px, transparent 0.8px);
-  background-size: 7px 7px;
-}
-
-.market-crate {
-  background-color: var(--color-market-wood);
-  background-image: repeating-linear-gradient(
-    to bottom,
-    transparent 0,
-    transparent 13px,
-    var(--color-market-slat) 13px,
-    var(--color-market-slat) 14px
-  );
-}
-
-.market-road {
-  background-image: repeating-linear-gradient(
-    to right,
-    var(--color-market-dash) 0,
-    var(--color-market-dash) 5px,
-    transparent 5px,
-    transparent 10px
-  );
-}
-
-/* The punched hole shows the card behind it, so it needs no cut-out. */
-.market-tag {
-  clip-path: polygon(14px 0, 100% 0, 100% 100%, 14px 100%, 0 50%);
 }
 
 /* Landing to sign-up. The photo travels into its panel while the rest makes way for it. */

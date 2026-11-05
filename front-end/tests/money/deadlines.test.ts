@@ -2,14 +2,13 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { RULES } from "../../lib/money/rules";
 import {
-  arrive, available, balance, book, call, CONFIRM_BY, CONFIRM_DEADLINE, confirmedBooking, db, fund, hold, hours,
+  arrive, available, balance, book, notices, call, CONFIRM_BY, CONFIRM_DEADLINE, confirmedBooking, db, fund, hold, hours,
   ledgerTotal, makeSlot, makeUser, pool, PRICE, q, record, resetDb, status, sweep, WINDOW_END, WINDOW_START,
 } from "./helpers";
 
 beforeEach(resetDb);
 afterAll(() => pool.end());
 
-const RESERVE = 12_250_000; // 10 x 3.5kg x ₦3,500
 
 describe("confirmation", () => {
   it("asks the farmer at confirm_by, once", async () => {
@@ -18,14 +17,12 @@ describe("confirmation", () => {
     const farmer = await makeUser("farmer");
     await book(slot.slotId, farmer.id, 10);
 
-    await sweep(hours(47));
-    expect((await q(`select 1 from sms_outbox where phone = $1`, [farmer.phone])).length).toBe(0);
+    await sweep(hours(35));
+    expect(await notices(farmer.id, "confirm_request")).toHaveLength(0);
 
     await sweep(CONFIRM_BY);
-    await sweep(hours(49));
-    const sent = await q<{ body: string }>(`select body from sms_outbox where phone = $1`, [farmer.phone]);
-    expect(sent).toHaveLength(1);
-    expect(sent[0].body).toMatch(/^Reply YES to confirm 10 /);
+    await sweep(hours(37));
+    expect(await notices(farmer.id, "confirm_request")).toHaveLength(1);
   });
 
   it("releases the full reserve and reopens capacity when there's no YES", async () => {
@@ -34,7 +31,7 @@ describe("confirmation", () => {
     const farmer = await makeUser("farmer");
     const booked = await book(slot.slotId, farmer.id, 10);
 
-    await sweep(hours(53));
+    await sweep(hours(47));
     expect(await status(booked.booking_id)).toBe("booked");
 
     await sweep(CONFIRM_DEADLINE);
@@ -57,14 +54,14 @@ describe("confirmation", () => {
     await book(slot.slotId, farmer.id, 10);
     await sweep(CONFIRM_DEADLINE);
 
-    const offers = await q<{ phone: string }>(`select phone from sms_outbox where body like '%freed up%'`);
-    expect(offers).toHaveLength(RULES.FREED_SMS_MAX_FARMERS);
-    expect(offers.map((offer) => offer.phone)).not.toContain(elsewhere.phone);
+    const offers = await q<{ user_id: string }>(`select user_id from notifications where kind = 'capacity_freed'`);
+    expect(offers).toHaveLength(RULES.FREED_NOTIFY_MAX);
+    expect(offers.map((offer) => offer.user_id)).not.toContain(elsewhere.id);
   });
 });
 
 describe("no-show", () => {
-  it("fires only after window end + grace: full release, strike, fee queued", async () => {
+  it("fires only after window end + grace: full release and a strike", async () => {
     const b = await confirmedBooking();
 
     await sweep(hours(1, WINDOW_END));
@@ -76,33 +73,9 @@ describe("no-show", () => {
 
     const strikes = await q(`select 1 from strikes where farmer_id = $1 and kind = 'no_show'`, [b.farmer.id]);
     expect(strikes).toHaveLength(1);
-    const [fee] = await q<{ amount_kobo: string }>(`select amount_kobo from money_pending_fees where farmer_id = $1`, [b.farmer.id]);
-    expect(Number(fee.amount_kobo)).toBe(RESERVE * 0.05);
-    // It's only queued. Nothing was charged upfront.
+    // A first no-show is a warning. flow.test.ts covers the fee from the second.
+    expect(await q(`select 1 from money_pending_fees where farmer_id = $1`, [b.farmer.id])).toHaveLength(0);
     expect(await balance("lumora_revenue")).toBe(0);
-  });
-
-  it("collects the fee from the next payout and credits part of it to the buyer", async () => {
-    const missed = await confirmedBooking();
-    await sweep(hours(2, WINDOW_END));
-    const fee = RESERVE * 0.05; // ₦6,125
-
-    const slot = await makeSlot();
-    await q(`update slots set cutoff_at = $1 where id = $2`, [hours(200), slot.slotId]);
-    await fund(slot.buyer.id, 50_000_000);
-    const next = await book(slot.slotId, missed.farmer.id, 10, hours(100));
-    const later = { booking: next, buyer: slot.buyer, farmer: missed.farmer };
-    await q(`update bookings set status = 'confirmed' where id = $1`, [next.booking_id]);
-    await arrive(later, hours(101));
-    await record(later, 30, hours(102));
-    await call("money_farmer_reply", { p_booking: later.booking.booking_id, p_farmer: missed.farmer.id, p_reply: "yes", p_now: hours(103).toISOString() });
-
-    const gross = 30 * PRICE;
-    expect(await balance("farmer_pending", missed.farmer.id)).toBe(gross - fee);
-    expect(await available(missed.buyer.id)).toBe(50_000_000 + fee / 2);
-    const [row] = await q<{ collected_kobo: string }>(`select collected_kobo from money_pending_fees where farmer_id = $1`, [missed.farmer.id]);
-    expect(Number(row.collected_kobo)).toBe(fee);
-    expect(await ledgerTotal()).toBe(0);
   });
 
   it("counts a farmer's cancellation after the cut-off as a no-show, and before it as free", async () => {
@@ -215,25 +188,10 @@ describe("the sweep", () => {
 });
 
 describe("strikes against buyers", () => {
-  it("pauses listings after two refused-code strikes", async () => {
-    const slot = await makeSlot();
-    await fund(slot.buyer.id, 50_000_000);
-    const admin = await makeUser("admin");
-    for (let i = 0; i < 2; i++) {
-      const farmer = await makeUser("farmer");
-      const booked = await book(slot.slotId, farmer.id, 5);
-      await call("money_confirm_booking", { p_booking: booked.booking_id, p_farmer: farmer.id, p_now: hours(1).toISOString() });
-      await call("money_report_refused_code", { p_booking: booked.booking_id, p_actor: admin.id, p_now: WINDOW_START.toISOString() });
-    }
-    const [listing] = await q<{ status: string; paused_reason: string }>(`select status, paused_reason from demand_listings where id = $1`, [slot.listingId]);
-    expect(listing).toMatchObject({ status: "paused", paused_reason: "review" });
-    expect(await available(slot.buyer.id)).toBe(50_000_000);
-  });
-
   it("charges a late-cancelling buyer a fee to the farmer, with a strike", async () => {
     const b = await confirmedBooking();
     const result = await call("money_cancel_buyer", { p_booking: b.booking.booking_id, p_buyer: b.buyer.id, p_now: hours(50).toISOString() });
-    const fee = RESERVE * 0.05;
+    const fee = 10 * 2.5 * PRICE * 0.05;
     expect(result).toMatchObject({ ok: true, late_fee_kobo: fee });
     expect(await balance("farmer_pending", b.farmer.id)).toBe(fee);
     expect(await available(b.buyer.id)).toBe(50_000_000 - fee);

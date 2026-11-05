@@ -1,19 +1,22 @@
 "use client";
 
-import { Minus, Plus } from "lucide-react";
+import { Check, Minus, Plus } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { useAuthUser } from "@/components/auth/use-auth-user";
-import { gsap, isReducedMotion, useGSAP } from "@/lib/gsap/effects";
-import type { BoardCard } from "@/lib/logistics/board";
+import { Flip, gsap, isReducedMotion, useGSAP } from "@/lib/gsap/effects";
+import type { BoardCard, Reliability } from "@/lib/logistics/board";
 import { apiFetch } from "@/lib/logistics/client";
 import {
-  countWord, DEFAULT_FLOCK, MAX_FLOCK_TOKENS, MAX_SLOTS, stepStock, unitsTaken, unitWords,
+  countWord, DEFAULT_FLOCK, MAX_SLOTS, stepStock, unitsTaken, unitWords,
 } from "@/lib/logistics/crate";
-import { cn } from "@/lib/utils";
+import { reliabilityWords } from "@/lib/money/booking-view";
+import { freeDeliveriesLeft } from "@/lib/pricing";
 
+import { BuyerRadar } from "./buyer-radar";
 import { cardTakeHome, CrateCard } from "./crate-card";
+import { Segmented } from "./segmented";
 
 const COMMODITIES = [
   { name: "Live broilers", label: "chickens", unit: "kg", one: "chicken", many: "chickens", flock: true },
@@ -33,7 +36,7 @@ const inDays = (days: number, hour: number) => {
 const example = (id: string, buyer: string, area: string, km: number, priceKobo: number, remaining: number, commodity: (typeof COMMODITIES)[number], days: number, collects = false, weights = [2.5, 3.5]): BoardCard => ({
   listingId: id, slotId: id, buyer, area, km, priceKobo, priceUnit: commodity.unit, remaining, minQty: 1,
   windowStart: inDays(days, 7), windowEnd: inDays(days, 11), collects, plainName: commodity.one, plainPlural: commodity.many, spec: null,
-  commodity: commodity.name, minWeightKg: weights[0], maxWeightKg: weights[1],
+  commodity: commodity.name, minWeightKg: weights[0], maxWeightKg: weights[1], urgent: false, pinned: false,
 });
 
 /** Shown only when the live board can't be reached, and labelled as examples. */
@@ -45,18 +48,6 @@ const exampleCards = (): BoardCard[] => [
   example("e5", "Caterer D", "Angwan Rukuba", 9, 2_800_000, 14, COMMODITIES[2], 2, false, [1, 1]),
   example("e6", "Bakery H", "Bukuru", 1, 560_000, 25, COMMODITIES[3], 1, true, [1, 1]),
 ];
-
-function EmptyCrate() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 120 70" className="mx-auto w-28">
-      <rect x="4" y="10" width="112" height="56" rx="6" className="fill-market-wood" />
-      <rect x="4" y="24" width="112" height="2" className="fill-market-slat" />
-      <rect x="4" y="38" width="112" height="2" className="fill-market-slat" />
-      <rect x="4" y="52" width="112" height="2" className="fill-market-slat" />
-      <rect x="14" y="4" width="92" height="10" rx="3" className="fill-market-slot" />
-    </svg>
-  );
-}
 
 export function MarketBoard() {
   const { user, loading } = useAuthUser();
@@ -70,7 +61,9 @@ export function MarketBoard() {
   const [sort, setSort] = useState<Sort>("money");
   const [selected, setSelected] = useState<string | null>(null);
   const [showFull, setShowFull] = useState(false);
-  const [sold, setSold] = useState(false);
+  const [sold, setSold] = useState<false | { bookingId?: string }>(false);
+  const [reliability, setReliability] = useState<Reliability | null>(null);
+  const [freeLeft, setFreeLeft] = useState(0);
   const [version, setVersion] = useState(0);
   const [followMessage, setFollowMessage] = useState<string | null>(null);
 
@@ -92,6 +85,7 @@ export function MarketBoard() {
         if (!response.ok) throw new Error("Unavailable");
         const data = (await response.json()) as {
           area: string | null; cards: BoardCard[]; stock: Record<string, number>; follows: string[];
+          reliability: Reliability; completedDeliveries: number;
         };
         if (cancelled) return;
         setIsExample(false);
@@ -99,6 +93,8 @@ export function MarketBoard() {
         setCards(data.cards);
         setStockByCommodity((current) => ({ ...data.stock, ...current }));
         setFollows(data.follows);
+        setReliability(data.reliability);
+        setFreeLeft(freeDeliveriesLeft(data.completedDeliveries));
       })
       .catch(showExamples);
     return () => {
@@ -111,66 +107,114 @@ export function MarketBoard() {
   const stock = stockByCommodity[commodity.name] ?? DEFAULT_FLOCK;
   const noun = commodity.flock ? "flock" : "stock";
 
+  // Urgent requests sent to this farmer are at the top whichever produce is showing.
+  const pinned = (cards ?? []).filter((card) => card.pinned && card.remaining > 0);
   const ordered = (cards ?? [])
-    .filter((card) => card.commodity === commodity.name)
+    .filter((card) => card.commodity === commodity.name && !pinned.includes(card))
     .sort((a, b) =>
       sort === "nearest"
-        ? (a.km ?? Infinity) - (b.km ?? Infinity) || cardTakeHome(b, stock) - cardTakeHome(a, stock)
-        : cardTakeHome(b, stock) - cardTakeHome(a, stock) || b.priceKobo - a.priceKobo,
+        ? (a.km ?? Infinity) - (b.km ?? Infinity) || cardTakeHome(b, stock, freeLeft) - cardTakeHome(a, stock, freeLeft)
+        : cardTakeHome(b, stock, freeLeft) - cardTakeHome(a, stock, freeLeft) || b.priceKobo - a.priceKobo,
     );
   const open = ordered.filter((card) => card.remaining > 0);
   const full = ordered.filter((card) => card.remaining === 0);
 
-  const chosen = open.find((card) => card.listingId === selected) ?? null;
+  const chosen = [...pinned, ...open].find((card) => card.listingId === selected) ?? null;
   const going = chosen ? unitsTaken(stock, chosen.remaining) : 0;
-  const tokens = Math.min(stock, MAX_FLOCK_TOKENS);
 
-  // Chickens leave the flock and fill the crate. Reverted on each change, so a new choice starts clean.
+  // Your flock fills their crate. Reverted on each change, so a new choice starts clean.
   useGSAP(
     () => {
       const scope = root.current;
       if (!scope || !chosen) return;
       const crate = scope.querySelector(`[data-crate="${chosen.listingId}"]`);
       if (!crate) return;
-
-      const count = unitsTaken(stock, chosen.remaining);
-      const slots = gsap.utils.toArray<HTMLElement>("[data-slot]", crate).slice(0, Math.min(count, MAX_SLOTS));
-      const birds = gsap.utils.toArray<HTMLElement>("[data-flock-token]", scope).slice(0, Math.min(count, MAX_FLOCK_TOKENS));
-      const result = crate.querySelector("[data-crate-result]");
-      const maize = "#F2C14E";
-
+      const slots = gsap.utils.toArray<HTMLElement>("[data-slot]", crate).slice(0, Math.min(unitsTaken(stock, chosen.remaining), MAX_SLOTS));
+      const filled = "#C08A2E";
       if (isReducedMotion()) {
-        gsap.set(slots, { backgroundColor: maize });
-        gsap.set(birds, { opacity: 0.18 });
+        gsap.set(slots, { backgroundColor: filled });
         return;
       }
-
-      const step = 0.04;
+      const step = Math.min(0.03, 0.6 / Math.max(slots.length, 1));
       const timeline = gsap.timeline();
       slots.forEach((slot, index) => {
         timeline
-          .set(slot, { backgroundColor: maize }, index * step)
-          .fromTo(slot, { scale: 1.08 }, { scale: 1, duration: 0.18, ease: "power1.out" }, index * step);
+          .set(slot, { backgroundColor: filled }, index * step)
+          .fromTo(slot, { scale: 0.4 }, { scale: 1, duration: 0.35, ease: "back.out(2.6)" }, index * step);
       });
-      birds.forEach((bird, index) => {
-        timeline.to(bird, { opacity: 0.18, duration: 0.15, ease: "none" }, index * step);
-      });
-      if (result) {
-        // Never makes someone wait long for the price and the button, even on a big crate.
-        timeline.fromTo(result, { opacity: 0, y: 6 }, { opacity: 1, y: 0, duration: 0.25, ease: "power2.out" }, Math.min(slots.length * step, 0.9));
-      }
     },
     { scope: root, dependencies: [chosen?.listingId, stock], revertOnUpdate: true },
   );
 
+  // Switching produce: the title rises, and the buyers sweep in from the side you're moving towards.
+  const tabDirection = useRef(1);
+  useGSAP(
+    () => {
+      const scope = root.current;
+      if (!scope || cards === null || isReducedMotion()) return;
+      const items = scope.querySelectorAll("[data-list] [data-card], section:not([aria-label])");
+      gsap.fromTo(scope.querySelector("[data-title]"), { yPercent: 110 }, { yPercent: 0, duration: 0.7, ease: "expo.out", clearProps: "transform" });
+      gsap.fromTo(items, { opacity: 0, x: 36 * tabDirection.current }, { opacity: 1, x: 0, duration: 0.65, ease: "expo.out", stagger: 0.05, clearProps: "transform,opacity" });
+    },
+    { scope: root, dependencies: [commodityName, cards === null] },
+  );
+
+  function changeCommodity(name: string) {
+    const from = COMMODITIES.findIndex((item) => item.name === commodityName);
+    const to = COMMODITIES.findIndex((item) => item.name === name);
+    tabDirection.current = to >= from ? 1 : -1;
+    setCommodityName(name);
+    setSelected(null);
+    setShowFull(false);
+    setSold(false);
+    setFollowMessage(null);
+  }
+
+  // Re-sorting: every card glides to its new place instead of jumping there.
+  const flipFrom = useRef<ReturnType<typeof Flip.getState> | null>(null);
+  function changeSort(next: Sort) {
+    if (!isReducedMotion() && root.current) {
+      flipFrom.current = Flip.getState(root.current.querySelectorAll("[data-list] [data-card]"));
+    }
+    setSort(next);
+  }
+  useLayoutEffect(() => {
+    if (!flipFrom.current) return;
+    const animation = Flip.from(flipFrom.current, { duration: 0.6, ease: "expo.inOut", stagger: 0.02 });
+    flipFrom.current = null;
+    return () => {
+      animation.progress(1).kill();
+    };
+  }, [sort]);
+
+  // The number steps up or down with the tap.
+  const lastStock = useRef(stock);
+  useGSAP(
+    () => {
+      const direction = Math.sign(stock - lastStock.current);
+      lastStock.current = stock;
+      if (!direction || isReducedMotion()) return;
+      gsap.fromTo(root.current?.querySelector("[data-stock]") ?? null, { yPercent: 45 * direction, opacity: 0 }, { yPercent: 0, opacity: 1, duration: 0.45, ease: "expo.out", clearProps: "transform,opacity", overwrite: true });
+    },
+    { scope: root, dependencies: [stock] },
+  );
+
+  // Saved so backup requests can find this farmer. A quick run of taps saves once.
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   function changeStock(direction: 1 | -1) {
-    setStockByCommodity((current) => ({ ...current, [commodity.name]: stepStock(stock, direction) }));
+    const qty = stepStock(stock, direction);
+    setStockByCommodity((current) => ({ ...current, [commodity.name]: qty }));
+    if (!user || isExample) return;
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      void apiFetch(user, "/api/board/stock", { commodity: commodity.name, qty }).catch(() => null);
+    }, 800);
   }
 
   async function follow() {
     setFollowMessage(null);
     if (!user || isExample) {
-      setFollowMessage("Sign in to follow, and we'll text you.");
+      setFollowMessage("Sign in to follow, and we'll email you.");
       return;
     }
     const response = await apiFetch(user, "/api/board/follow", { commodity: commodity.name }).catch(() => null);
@@ -181,6 +225,7 @@ export function MarketBoard() {
   const crateProps = (card: BoardCard) => ({
     card,
     stock,
+    freeLeft,
     example: isExample,
     user,
     selected: card.listingId === selected,
@@ -188,177 +233,204 @@ export function MarketBoard() {
       setSold(false);
       setSelected((current) => (current === card.listingId ? null : card.listingId));
     },
-    onSold: () => {
-      setSold(true);
+    onSold: (bookingId?: string) => {
+      setSold({ bookingId });
       setSelected(null);
       setVersion((value) => value + 1);
     },
   });
 
+  const label = commodity.label;
+  const others = COMMODITIES.filter((item) => item.name !== commodity.name)
+    .map((item) => ({ ...item, count: (cards ?? []).filter((card) => card.commodity === item.name && card.remaining > 0).length }))
+    .filter((item) => item.count > 0);
+  const goingShare = stock > 0 ? (going / stock) * 100 : 0;
+  const stockName = commodity.flock ? "My flock" : "My stock";
+  const stockWords = countWord(stock, words).replace(/^\d+ /, "");
+
   return (
-    <div ref={root} className="market-board min-h-full text-market-ink">
-      <div className="mx-auto w-full max-w-[1000px] px-4 py-6 md:px-6 md:py-8">
-        <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-          <div className="min-w-0">
-            <p className="text-body-sm text-market-muted">
-              {area} market board · {commodity.label}
-            </p>
-            <h1 className="mt-1 font-display text-[28px] leading-[1.2] font-medium">Who wants your {commodity.label} today?</h1>
-          </div>
-          <div className="flex items-center gap-1 rounded-full border border-market-card-line bg-market-card p-1 pl-4">
-            <span className="text-body-sm font-medium whitespace-nowrap">My {noun}</span>
+    <div ref={root} className="mx-auto w-full max-w-[1120px] px-4 py-5 text-ink md:px-6 lg:px-8 lg:py-7">
+      <header>
+        <p className="text-body-sm text-ink-muted">{area} market board</p>
+        <h1 className="mt-1 overflow-hidden pb-1 font-display text-[26px] leading-[1.2] font-medium sm:text-[32px]">
+          <span data-title className="block">Who wants your {label}?</span>
+        </h1>
+      </header>
+
+      <Segmented
+        label="Produce"
+        className="mt-4 max-w-[520px]"
+        value={commodity.name}
+        onChange={changeCommodity}
+        options={COMMODITIES.map((item) => {
+          const count = (cards ?? []).filter((card) => card.commodity === item.name && card.remaining > 0).length;
+          return { value: item.name, label: item.label[0].toUpperCase() + item.label.slice(1), dot: count > 0, hint: count > 0 ? `${count} buyers` : undefined };
+        })}
+      />
+
+      {sold && (
+        <p role="status" className="mt-4 rounded-2xl bg-sage-soft px-4 py-3 font-medium text-ink">
+          Done.{" "}
+          <Link href={sold.bookingId ? `/dashboard/bookings/${sold.bookingId}` : "/dashboard/bookings"} className="underline underline-offset-4">
+            See your booking
+          </Link>
+        </p>
+      )}
+
+      <div className="mt-4 grid items-start gap-4 lg:mt-5 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-5">
+        <aside aria-label={stockName} className="rounded-[20px] bg-field p-5 text-paper lg:sticky lg:top-6">
+          <p className="font-num text-[11px] leading-4 tracking-[0.08em] text-sage uppercase">{stockName}</p>
+          <div className="mt-3 flex items-center justify-between gap-2">
             <button
               type="button"
               aria-label={`Take 5 off your ${noun}`}
               disabled={stock === 0}
               onClick={() => changeStock(-1)}
-              className="ml-1 flex size-12 items-center justify-center rounded-full hover:bg-market-board disabled:opacity-40 lg:size-9"
+              className="flex size-11 shrink-0 items-center justify-center rounded-full bg-paper/10 transition-[background-color,transform] duration-150 [-webkit-tap-highlight-color:transparent] hover:bg-paper/20 focus-visible:ring-3 focus-visible:ring-sage focus-visible:outline-none active:scale-90 disabled:opacity-40 motion-reduce:active:scale-100"
             >
-              <Minus aria-hidden="true" strokeWidth={1.5} className="size-4" />
+              <Minus aria-hidden="true" strokeWidth={1.75} className="size-4" />
             </button>
-            <span aria-live="polite" className="font-num w-8 text-center font-medium">
-              {stock}
+            <span className="min-w-0 overflow-hidden text-center">
+              <span data-stock aria-live="polite" className="block font-num text-[44px] leading-[1.1] font-medium">
+                {stock}
+              </span>
             </span>
             <button
               type="button"
               aria-label={`Add 5 to your ${noun}`}
               onClick={() => changeStock(1)}
-              className="flex size-12 items-center justify-center rounded-full hover:bg-market-board lg:size-9"
+              className="flex size-11 shrink-0 items-center justify-center rounded-full bg-paper/10 transition-[background-color,transform] duration-150 [-webkit-tap-highlight-color:transparent] hover:bg-paper/20 focus-visible:ring-3 focus-visible:ring-sage focus-visible:outline-none active:scale-90 motion-reduce:active:scale-100"
             >
-              <Plus aria-hidden="true" strokeWidth={1.5} className="size-4" />
+              <Plus aria-hidden="true" strokeWidth={1.75} className="size-4" />
             </button>
           </div>
-        </header>
+          <p className="text-center text-body-sm text-paper/70">{stockWords} ready to sell</p>
 
-        <div className="mt-3 flex flex-wrap gap-x-1">
-          {COMMODITIES.map((item) => (
-            <button
-              key={item.name}
-              type="button"
-              aria-pressed={item.name === commodity.name}
-              onClick={() => {
-                setCommodityName(item.name);
-                setSelected(null);
-                setShowFull(false);
-                setSold(false);
-                setFollowMessage(null);
-              }}
-              className={cn(
-                "min-h-12 rounded-full px-3 text-body-sm capitalize lg:min-h-9",
-                item.name === commodity.name ? "bg-market-ink text-market-card" : "text-market-muted hover:text-market-ink",
-              )}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="mt-4">
-          <p className="text-body-sm text-market-muted">your {noun}</p>
-          <div aria-hidden="true" className="mt-1.5 flex flex-wrap items-center gap-1">
-            {Array.from({ length: tokens }, (_, index) => (
-              <span key={index} data-flock-token className="h-2.5 w-3 rounded-full bg-market-maize" />
-            ))}
-            {stock > MAX_FLOCK_TOKENS && <span className="font-num ml-1 text-xs">+{stock - MAX_FLOCK_TOKENS}</span>}
+          {/* How much of what you have is going to the buyer you've picked. */}
+          <div aria-hidden="true" className="mt-4 h-1.5 overflow-hidden rounded-full bg-paper/15">
+            <div
+              className="h-full origin-left rounded-full bg-amber transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none"
+              style={{ transform: `scaleX(${goingShare / 100})` }}
+            />
           </div>
-          <p aria-live="polite" className="mt-1.5 text-body-sm text-market-muted">
-            {chosen && going > 0
-              ? `${going} going, ${stock - going} left at home`
-              : `${countWord(stock, words)} ready to sell`}
+          <p aria-live="polite" className="mt-2 text-xs text-paper/70">
+            {chosen && going > 0 ? `${going} going, ${stock - going} left at home` : "Pick a buyer to see what goes"}
           </p>
-        </div>
 
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-x-4 border-t border-dashed border-market-dash pt-1">
-          <p className="py-2 text-body-sm text-market-muted">
-            Sort:{" "}
-            {([["money", "most money"], ["nearest", "nearest"]] as const).map(([value, label], index) => (
-              <span key={value}>
-                {index > 0 && " / "}
-                <button
-                  type="button"
-                  aria-pressed={sort === value}
-                  onClick={() => setSort(value)}
-                  className={cn(
-                    "inline-flex min-h-12 items-center underline-offset-4 lg:min-h-0",
-                    sort === value ? "font-medium text-market-ink underline" : "hover:text-market-ink",
-                  )}
-                >
-                  {label}
-                </button>
-              </span>
-            ))}
-          </p>
-        </div>
+          {((reliability && reliability.total > 0) || (!isExample && freeLeft > 0)) && (
+            <div className="mt-4 space-y-1 border-t border-paper/15 pt-3 text-xs text-paper/70">
+              {reliability && reliability.total > 0 && <p>Your record: {reliabilityWords(reliability)}</p>}
+              {!isExample && freeLeft > 0 && <p>No Lumora fee on your next {freeLeft === 1 ? "delivery" : `${freeLeft} deliveries`}</p>}
+            </div>
+          )}
+        </aside>
 
-        {sold && (
-          <p role="status" className="mt-2 font-medium">
-            Done. Your sale is in My Bookings.
-          </p>
-        )}
-
-        {cards === null ? (
-          <p className="mt-6 text-market-muted">Finding buyers…</p>
-        ) : open.length === 0 ? (
-          <div className="mt-8 text-center">
-            <EmptyCrate />
-            <p className="mx-auto mt-4 max-w-[26rem]">
-              No buyers want {commodity.label} near you today. We&apos;ll text you when one posts.
-            </p>
-            {follows.includes(commodity.name) ? (
-              <p role="status" className="mt-4 font-medium">
-                You&apos;re following {commodity.label}.
-              </p>
-            ) : (
-              <button
-                type="button"
-                onClick={follow}
-                className="mt-4 min-h-12 rounded-full bg-market-ink px-6 font-medium text-market-card"
-              >
-                Follow {commodity.label}
-              </button>
-            )}
-            {followMessage && (
-              <p role="status" className="mt-2 text-body-sm">
-                {followMessage}{" "}
-                {!user && (
-                  <Link href="/auth/login" className="underline underline-offset-4">
-                    Sign in
-                  </Link>
-                )}
-              </p>
-            )}
-          </div>
-        ) : (
-          <ul className="mt-4 grid gap-4 md:grid-cols-2">
-            {open.map((card) => (
-              <CrateCard key={card.listingId} {...crateProps(card)} />
-            ))}
-          </ul>
-        )}
-
-        {full.length > 0 && (
-          <div className="mt-4">
-            <button
-              type="button"
-              aria-expanded={showFull}
-              onClick={() => setShowFull((value) => !value)}
-              className="min-h-12 text-body-sm text-market-muted underline underline-offset-4 hover:text-market-ink"
-            >
-              {showFull ? "Hide full crates" : "Show full crates"}
-            </button>
-            {showFull && (
-              <ul className="mt-3 grid gap-4 md:grid-cols-2">
-                {full.map((card) => (
+        <div className="min-w-0">
+          {pinned.length > 0 && (
+            <section aria-label="Urgent" className="mb-5">
+              <h2 className="font-medium text-ink">They need this today</h2>
+              <ul className="mt-3 grid items-start gap-4 xl:grid-cols-2">
+                {pinned.map((card) => (
                   <CrateCard key={card.listingId} {...crateProps(card)} />
                 ))}
               </ul>
-            )}
-          </div>
-        )}
+            </section>
+          )}
 
-        <div className="mt-6 space-y-1 text-xs leading-5 text-market-muted">
-          {isExample && <p>These are examples, not real buyers.</p>}
-          <p>Take-home is an estimate from the average weight. You&apos;re paid on the real weight at delivery.</p>
+          {cards === null ? (
+            <p className="py-10 text-center text-ink-muted">Finding buyers…</p>
+          ) : open.length === 0 ? (
+            <section className="rounded-[20px] border border-line bg-white px-5 py-8 text-center sm:py-10">
+              <BuyerRadar area={area} />
+              <h2 className="mt-5 font-display text-[22px] leading-[1.25] font-medium text-balance">
+                No buyers want {label} near {area} yet
+              </h2>
+              <p className="mx-auto mt-1.5 max-w-[26rem] text-body-sm text-ink-muted">
+                We&apos;re watching. We&apos;ll email you the moment one posts.
+              </p>
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                {follows.includes(commodity.name) ? (
+                  <p role="status" className="inline-flex min-h-11 items-center gap-1.5 rounded-2xl bg-sage-soft px-4 text-body-sm font-medium text-green">
+                    <Check aria-hidden="true" strokeWidth={2.5} className="size-4" />
+                    Following {label}
+                  </p>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={follow}
+                    className="min-h-11 rounded-2xl bg-green px-5 font-medium text-paper transition-[background-color,transform] duration-150 hover:bg-green-hover focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:outline-none active:scale-[0.98] motion-reduce:active:scale-100"
+                  >
+                    Tell me about {label}
+                  </button>
+                )}
+                {others.slice(0, 2).map((item) => (
+                  <button
+                    key={item.name}
+                    type="button"
+                    onClick={() => changeCommodity(item.name)}
+                    className="min-h-11 rounded-2xl border border-line px-4 text-body-sm font-medium text-ink transition-colors duration-150 hover:border-sage focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                  >
+                    {item.count} {item.count === 1 ? "buyer wants" : "buyers want"} {item.label}
+                  </button>
+                ))}
+              </div>
+              {followMessage && (
+                <p role="status" className="mt-3 text-body-sm text-ink-muted">
+                  {followMessage}{" "}
+                  {!user && (
+                    <Link href="/auth/login" className="underline underline-offset-4">
+                      Sign in
+                    </Link>
+                  )}
+                </p>
+              )}
+            </section>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <h2 className="font-medium text-ink">
+                  <span className="font-num">{open.length}</span> {open.length === 1 ? "buyer" : "buyers"} near you
+                </h2>
+                <Segmented
+                  label="Sort"
+                  className="w-[220px]"
+                  value={sort}
+                  onChange={changeSort}
+                  options={[{ value: "money", label: "Most money" }, { value: "nearest", label: "Nearest" }]}
+                />
+              </div>
+              <ul data-list className="mt-3 grid items-start gap-4 xl:grid-cols-2">
+                {open.map((card) => (
+                  <CrateCard key={card.listingId} {...crateProps(card)} />
+                ))}
+              </ul>
+            </>
+          )}
+
+          {full.length > 0 && (
+            <div className="mt-4">
+              <button
+                type="button"
+                aria-expanded={showFull}
+                onClick={() => setShowFull((value) => !value)}
+                className="min-h-11 text-body-sm text-ink-muted underline underline-offset-4 hover:text-ink"
+              >
+                {showFull ? "Hide full buyers" : `Show ${full.length} full ${full.length === 1 ? "buyer" : "buyers"}`}
+              </button>
+              {showFull && (
+                <ul className="mt-3 grid items-start gap-4 xl:grid-cols-2">
+                  {full.map((card) => (
+                    <CrateCard key={card.listingId} {...crateProps(card)} />
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          <div className="mt-5 space-y-1 text-xs leading-5 text-ink-muted">
+            {isExample && <p>These are examples, not real buyers.</p>}
+            <p>Take-home is an estimate from the average weight. You&apos;re paid on the real weight at delivery.</p>
+          </div>
         </div>
       </div>
     </div>

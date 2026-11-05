@@ -12,7 +12,7 @@ const FIELD =
   "mt-1.5 h-12 w-full rounded-md border border-line bg-white px-3 text-base outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
 const LABEL = "block text-body-sm font-medium text-ink";
 
-async function uploadPhoto(user: NonNullable<ReturnType<typeof useAuthUser>["user"]>, file: File) {
+export async function uploadPhoto(user: NonNullable<ReturnType<typeof useAuthUser>["user"]>, file: File) {
   const data = new FormData();
   data.set("photo", file);
   const token = await user.getIdToken();
@@ -72,7 +72,7 @@ export function DeliveryForm({ bookingId }: { bookingId: string }) {
     const result = (await response?.json().catch(() => null)) as { ok?: boolean; code?: string } | null;
     setBusy(false);
     if (result?.ok) {
-      router.push("/dashboard/bookings");
+      router.push(`/dashboard/bookings/${bookingId}`);
       return;
     }
     setError(

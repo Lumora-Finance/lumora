@@ -1,6 +1,6 @@
 # Lumora money flow
 
-Booking, delivery and settlement rules, for engineers working on the wallet, the SMS channel or operations. All amounts are integers in kobo.
+Booking, delivery and settlement rules, for engineers working on the wallet, notifications or operations. All amounts are integers in kobo.
 
 Money only moves on proof, and every waiting state has a deadline with an automatic default outcome.
 
@@ -17,6 +17,8 @@ The wallet, merged to `main` in PR #8, is a UI with API stubs. It stores no bala
 | 5 | Route `api/wallet/withdraw` through a ledger call. `wallet_withdraw` doesn't exist yet (signature below) | The route sends real transfers without debiting anything, which would break reconciliation on the first withdrawal | Launch |
 | 6 | Fix three bugs in your Flutterwave code (below) | Each one fails in production | See below |
 | 7 | Confirm the items under [Unverified Flutterwave details](#unverified-flutterwave-details) in test mode | The docs don't settle them | Live keys |
+| 8 | If you replace the `wallet_*` functions, also map the three direct `money_post` calls that are new here: `farmer_fee:` (hold to revenue, in `money_pay_farmer`), `backup_repay:` (available back to a hold, in `money_close_backup`) and the fee split in `money_pay_farmer` | They have to share a transaction with the booking change, and the adapter has no method for them | Replacing the ledger |
+| 9 | Make `wallet_withdraw` take what a farmer owes first, or say why not | No-show fees come off the next payout. A farmer who withdraws `farmer_pending` directly would skip them, and the buyer would never get theirs | Withdrawals |
 
 **Bugs seen in the wallet code**
 
@@ -39,7 +41,7 @@ The brief assumed these exist. They don't, on any branch.
 | Assumed | Found | What this work does |
 |---|---|---|
 | Schema in `supabase/migrations` | The folder is empty | Creates the README's base tables in `*_money_00_base.sql`, with `create table if not exists`. The buyer is a user on `demand_listings.buyer_id`; the README's `organizations` layer is left out |
-| SMS webhook | None. `africastalking` is installed but unused | Creates `/api/webhooks/sms` |
+| SMS webhook | None. `africastalking` is installed but unused | Creates `/api/webhooks/sms`. Not used by this flow, see [Notifications](#notifications) |
 | Supabase auth | The app signs in with Firebase | RLS reads the Firebase uid from `auth.jwt()`. **Supabase must be set up to trust Firebase tokens (third-party auth), or RLS denies everyone** |
 | `README.md` says Paystack | The brief says Flutterwave | Follows the brief. The README still needs updating |
 
@@ -51,44 +53,66 @@ The brief left these open or had a conflict. Each is a constant or one function,
 
 | # | Gap | Decision |
 |---|---|---|
-| 1 | The farmer is asked at `confirm_by`, 24 hours before the window, and must answer "by the cut-off". With the README's `cutoff_hours: 24` those are the same moment, leaving no time to reply | New constant `CONFIRM_REPLY_HOURS = 6`. Deadline is the later of the cut-off and `confirm_by + 6h`, stored in `bookings.confirm_deadline` |
-| 2 | Capacity released at the cut-off is offered to other farmers, but the slot no longer takes bookings | Release sets `slots.reopened_until`, `REOPEN_LEAD_HOURS = 4` before the window. Booking is allowed until then |
-| 3 | A farmer who books inside the 24-hour lead would be asked to confirm what they just booked | Those bookings start as `confirmed` |
-| 4 | `DISPUTE <code>` carries no claim, so "the difference" can't be calculated | Grammar is `DISPUTE <code> [kg]`. Without a figure, the difference is everything left in the hold |
-| 5 | The 1.5% buyer fee comes from `buyer_available`, which may be empty after settlement. Balances can't go negative | Whatever is available is charged. The rest is recorded in `money_receivables` and collected from the next deposit |
-| 6 | The no-show buyer share and the late-cancel fee aren't given | `NO_SHOW_FEE_BUYER_SHARE_PCT = 50`, `LATE_CANCEL_FEE_PCT = 5` |
-| 7 | A farmer can deliver more than the maximum weight, so gross could exceed the reserve | Gross is capped at the reserve, and the cap is logged in `money_events` |
-| 8 | `arrived` isn't in the status enum | The status stays `confirmed`, with `arrived_at` set |
-| 9 | "Buyer didn't record" needs a strike, but the kinds listed don't cover it | Adds strike kind `no_record` |
-| 10 | Nothing says how a farmer reports a buyer who refuses to give the code. As written, that farmer would be marked a no-show | Ops call `money_report_refused_code`, which strikes the buyer, cancels the booking and returns the reserve. There is no SMS command or admin button yet, so **farmers need a phone number to call, and ops need a way to run it** |
-| 11 | SMS has no command for declaring stock, so requiring a declaration would block every SMS booking | The stock limit applies only when the farmer has declared stock for that date |
-| 12 | `BOOK <n>` refers to a numbered list, but no list command was requested | Adds `BUYERS <commodity>` |
-| 13 | The brief's formula assumes weight-priced goods | For baskets and crates, set `min_unit_weight_kg = max_unit_weight_kg = 1` and record units as kg. Bookings on listings without weights are refused |
-| 14 | A bank transfer can't be refused, so the ₦500,000 cap can't stop one arriving | The excess goes to bucket `buyer_over_cap`, raises an alert, and is refunded after `OVER_CAP_REFUND_HOURS = 48` |
-| 15 | Reconciliation as worded includes `farmer_paid`, money that has already left Flutterwave | Compares `buyer_available + buyer_reserved + buyer_over_cap + farmer_pending + lumora_revenue` to Flutterwave balance + in-flight payouts |
-| 17 | A custom dispute amount may go up to the reserve, but the rest of the reserve goes back to the buyer when a dispute opens | The custom amount is limited to what's still held. The page explains this if ops go over |
-| 16 | The plain delivery code has to reach the buyer once, while only the hash is stored | `book_slot` returns it to the server, which SMSes the buyer and strips it from the farmer's response. If that SMS fails, the buyer can issue a new one with `money_regenerate_code` |
+| 1 | **Notifications need an email address, and `users` had none** | `users.email` comes from the Firebase sign-in token, saved on each signed-in request. **Farmers added by an agent or by SMS have no email and no login, so they can't confirm, and their bookings are released at the cut-off.** They need a way in before they can use this flow |
+| 2 | The sign-in email isn't always verified | It's used as it is. Someone signing up with another person's address would send that person booking emails, though the links only work for the account they were sent to |
+| 3 | Backup bookings need funds while the first farmer's hold is still locked. The brief says only the extra must be funded | A backup can borrow from that hold (`backup_requests.borrowed_kobo`). If the first farmer arrives, backups are released and the borrowed amount returns. If a backup has already delivered and the buyer has spent the rest, the hold stays short: gross is capped at the hold, and alert `backup_hold_short` is raised |
+| 4 | A no-show reopens the quantity, but a backup request may already cover it | With a backup request, the quantity isn't reopened, so it can't be offered twice |
+| 5 | A booking made after the window closed would be a no-show at once | The booking gets its own `window_end`, at least `NO_SHOW_GRACE_HOURS` from booking |
+| 6 | Quantity released after the cut-off needs a bookable period | Until `REOPEN_LEAD_HOURS` (4) before the window. Once that has passed, until the delivery day ends |
+| 7 | "Buyer-fault strikes" isn't defined | Only ops' "buyer at fault" decisions count (kind `refused_code`). Late cancels and missed recordings are strikes, but don't pause listings. Constants `REFUSED_CODE_PAUSE_COUNT`, `REFUSED_CODE_WINDOW_DAYS` |
+| 8 | "On time" isn't defined | Code entered by the window's end. Every delivery and no-show counts towards the total, and a late code counts as a delivery that wasn't on time |
+| 9 | "Nearby" isn't defined | `NEARBY_KM = 50`, by road estimate. That covers every seeded area, so today it mostly sets the order, nearest first |
+| 10 | Backups need "declared stock", but nothing saved it | The board's flock stepper now saves. One value stands for the next 7 days, because it has no day of its own. **This also means a saved flock now limits bookings (`over_declared_stock`)** |
+| 11 | The brief's approval timeout could run past the delivery window | The deadline is the earlier of 2 hours and the window start |
+| 12 | Should backups go through approval or the midpoint check? | No to both. They're urgent, always start `confirmed`, and aren't checked for lateness |
+| 13 | Should a failed action spend a link? | No. A token is spent only when the action works, so a rule failure can be tried again until it expires. Two presses at once run it once |
+| 14 | The brief says the buyer can give the code or decline within 30 minutes | Both still work after it goes to ops, until ops decide |
+| 15 | The brief's decline reasons differ from the weigh-in form's | The weigh-in form keeps its existing reasons (including `overweight_or_bloated`) and photo rule (dead or sick only). Declining at the gate uses the brief's five, always with a photo |
+| 16 | The plain delivery code was deliberately never stored, but the buyer now reads it from a page | It's in `booking_codes`, which no client can read. Only `money_booking_view` returns it, only to the buyer, and only until the farmer arrives. Bookings from before this change have no stored code, so their page offers "Get a code" |
+| 17 | The farmer is asked to confirm and must answer by the cut-off | 12 hours before it, reminded at 2. Booked inside those 12 hours counts as confirmed |
+| 18 | Late-cancel and buyer-fault payments aren't deliveries | They carry no farmer or buyer fee, don't collect what the farmer owes, and don't count towards the free deliveries |
+| 19 | `DISPUTE <code>` carries no claim, so "the difference" can't be calculated | The claim in kg is optional. Without it, the difference is everything left in the hold |
+| 20 | The 1% buyer fee comes from `buyer_available`, which may be empty after settlement | Whatever is available is charged. The rest goes in `money_receivables` and comes off the next deposit |
+| 21 | A farmer can deliver more than the maximum weight, so gross could exceed the reserve | Gross is capped at the reserve, and the cap is logged in `money_events` |
+| 22 | `arrived` isn't in the status enum | The status stays `confirmed`, with `arrived_at` set |
+| 23 | "Buyer didn't record" needs a strike, but the kinds listed don't cover it | Adds strike kind `no_record` |
+| 24 | The brief's formula assumes weight-priced goods | For baskets and crates, set `min_unit_weight_kg = max_unit_weight_kg = 1` and record units as kg. Bookings on listings without weights are refused |
+| 25 | A bank transfer can't be refused, so the ₦500,000 cap can't stop one arriving | The excess goes to bucket `buyer_over_cap`, raises an alert, and is refunded after `OVER_CAP_REFUND_HOURS = 48` |
+| 26 | Reconciliation as worded includes `farmer_paid`, money that has already left Flutterwave | Compares `buyer_available + buyer_reserved + buyer_over_cap + farmer_pending + lumora_revenue` to Flutterwave balance + in-flight payouts |
+| 27 | A custom dispute amount may go up to the reserve, but the rest of the reserve goes back to the buyer when a dispute opens | The custom amount is limited to what's still held. The page explains this if ops go over |
 
 ## State diagram
 
 ```mermaid
 stateDiagram-v2
-    [*] --> booked: book_slot, reserve funds
-    [*] --> confirmed: booked inside the confirm lead
-    booked --> confirmed: farmer replies YES
-    booked --> released: no YES by confirm_deadline, full release
-    booked --> cancelled: either side cancels
-    confirmed --> cancelled: either side cancels before cut-off, free
-    confirmed --> cancelled: buyer cancels after cut-off, late fee and strike
-    confirmed --> no_show: farmer cancels after cut-off
+    [*] --> pending_approval: approval on, first delivery to this buyer
+    [*] --> booked: book_slot, funds reserved
+    [*] --> confirmed: booked within 12h of the cut-off, or a backup
+    pending_approval --> booked: buyer approves, or 2h pass
+    pending_approval --> confirmed: same, within 12h of the cut-off
+    pending_approval --> declined: buyer declines, full release
+    pending_approval --> cancelled: farmer cancels, free
+    booked --> confirmed: farmer confirms
+    booked --> released: not confirmed by the cut-off, full release
+    booked --> cancelled: either side cancels, free
+    confirmed --> cancelled: either side cancels before the cut-off, free
+    confirmed --> cancelled: buyer cancels after it, late fee and strike
+    confirmed --> no_show: farmer cancels after the cut-off
     confirmed --> no_show: no code by window end + 2h
+    confirmed --> released: backup no longer needed, no penalty
+    confirmed --> contested: "They won't give me the code"
+    contested --> confirmed: the code goes in
+    contested --> cancelled: buyer declines with reason and photo, no penalty
+    contested --> cancelled: ops, buyer at fault, late fee and strike
+    contested --> cancelled: ops, no fault, or nobody decides in 24h
+    contested --> no_show: ops, farmer at fault
     confirmed --> delivered: valid code, then buyer records
-    confirmed --> settled: valid code, no record in 2h, minimum weight
-    delivered --> settled: farmer replies YES
-    delivered --> settled: no reply in 2h, auto-confirm
+    confirmed --> settled: valid code, no record in 2h, minimum weight, strike
+    delivered --> settled: farmer confirms, or 2h pass
     delivered --> settled: dispute within 1% tolerance
-    delivered --> disputed: DISPUTE, undisputed amount paid now
+    delivered --> disputed: "Something's wrong", undisputed amount paid now
     disputed --> settled: ops decide, or recorded weight at 48h
+    declined --> [*]
     released --> [*]
     cancelled --> [*]
     no_show --> [*]
@@ -97,19 +121,42 @@ stateDiagram-v2
 
 ## Deadlines
 
-Every value is in `lib/money/rules.ts`. The same numbers are in the SQL function `money_rule`, and a test fails if they differ.
+Every value is in `lib/money/rules.ts`. The same numbers are in the SQL function `money_rule`, and a test fails if they differ. The times in brackets are the brief's example: window Thursday 7 to 11am, cut-off Wednesday 6am.
 
 | Waiting for | Deadline | Default outcome |
 |---|---|---|
-| Farmer's YES | `confirm_deadline` | `released`: full reserve returned, capacity reopened, up to 10 nearby followers told |
-| Farmer's arrival code | Window end + `NO_SHOW_GRACE_HOURS` (2) | `no_show`: full reserve returned, strike, fee of `NO_SHOW_FEE_PCT` (5%) queued against the next payout |
+| Buyer's approval | Booking + `FIRST_TIME_APPROVAL_HOURS` (2) | Approved |
+| Farmer's confirmation | Asked at cut-off − 12h (Tue 6pm), reminded at − 2h (Wed 4am), due at the cut-off | `released`: full reserve back, quantity reopened, up to 10 nearby followers told |
+| Farmer's arrival, midway | Window start + `LATE_CHECK_AT_WINDOW_FRACTION` of the window (9am) | Buyer asked: "Find backup farmers" or "Keep waiting". Skipped if the farmer said they're late |
+| Backup farmers | Default window end + 2h (1pm), editable, same day | Request closes. Whoever booked stays booked |
+| Farmer's "no code" report | Window end + `NOCODE_GRACE_HOURS` (noon) | Can't be reported after this |
+| Buyer's answer to the report | Report + `NOCODE_BUYER_RESPONSE_MINUTES` (30) | Goes to `/admin/disputes` |
+| Ops' decision on the report | Then + `NOCODE_OPS_DECISION_HOURS` (24) | No fault: full reserve back, no strikes, alert raised |
+| Farmer's arrival code | Window end + `NO_SHOW_GRACE_HOURS` (1pm) | `no_show`: full reserve back, strike, then the penalty ladder |
 | Buyer's record | Valid code + `BUYER_RECORD_HOURS` (2) | Settle booked qty × minimum weight × price, buyer strike |
 | Farmer's reply | Record + `FARMER_REPLY_HOURS` (2) | Settle with `auto_confirmed = true` |
-| Ops decision | Dispute + `DISPUTE_DECISION_HOURS` (48) | Pay the recorded weight, escalate an alert |
+| Ops' dispute decision | Dispute + `DISPUTE_DECISION_HOURS` (48) | Pay the recorded weight, alert raised |
 | Over-cap refund | Deposit + `OVER_CAP_REFUND_HOURS` (48) | Refund the excess to the sender |
-| Failed payout | Retried daily | Stays in `farmer_pending`, farmer told by SMS. **This wait has no end date, because the money belongs to the farmer and needs a working account. An alert is raised after 3 attempts** |
+| Failed payout | Retried daily | Stays in `farmer_pending`, farmer told. **This wait has no end date, because the money belongs to the farmer and needs a working account. An alert is raised after 3 attempts** |
 
-Two no-shows in 30 days stop a farmer booking for 14 days. Two `refused_code` strikes pause a buyer's listings until review. That review has no deadline, but it holds no money, because held funds stay in `buyer_available`.
+**Penalties for farmers.** The first no-show ever is a warning and a strike, with no fee. From the second, `NO_SHOW_FEE_PCT` (5%) of booked qty × minimum weight × price comes off the next payout, and all of it goes to the affected buyer. Two no-shows in 30 days stop booking for 14 days.
+
+**Penalties for buyers.** Cancelling after the cut-off, or being found at fault over the code, pays the farmer `LATE_CANCEL_FEE_PCT` (5%) of the same base, with a strike. Two at-fault decisions in 30 days pause their listings until review. That review has no deadline, but it holds no money, because held funds stay in `buyer_available`.
+
+**Settlement.** Farmer: gross, minus `FARMER_FEE_PCT` (1%, zero within their first `FREE_FARMER_DELIVERIES`), minus fees they owe. Buyer: `BUYER_FEE_PCT` (1%), and the unused reserve back.
+
+## Notifications
+
+Every notification is an in-app row, and also an email unless noted. "Running late" is in-app only, as the brief asks. SMS code is untouched but unused: nothing in this flow writes to `sms_outbox` except the SMS webhook's own commands, and the job no longer sends it. If that webhook is still pointed at by Africa's Talking, its commands still work.
+
+| Part | Where |
+|---|---|
+| Row and queue | `money_notify` writes `notifications`, `email_outbox` and one `action_tokens` row per button. It stores the kind and the facts, not words |
+| Words | `lib/email/templates/`, one file per kind, on a shared `layout.tsx`. The bell and the email read the same file, and a test fails if the database writes a kind with no template |
+| Sending | `sendEmails` in `lib/email/send.ts`. Retries at 5, 10, 20, 40 and 80 minutes, then marks it failed and raises `email_failed`. A failure can't touch a money step, which has already committed. Without `RESEND_API_KEY`, `EMAIL_FROM` and `EMAIL_ACTION_SECRET`, emails wait in the queue without using up retries |
+| The bell | `components/notifications/notification-bell.tsx`, `/api/notifications`. Checks every minute |
+
+**Email links.** A button links to `/action/<id>.<expiry>.<signature>`. The signature stops a link being forged or extended, and the `action_tokens` row makes it single-use and ties it to one account. Opening the link only reads what it's for. The change needs a POST to `/api/actions` with the signed-in user's token, from the one button on that screen, so a mail scanner fetching the link can't do anything. Each link expires at that step's deadline. Sign-in returns to the link through `/auth/login?next=`.
 
 ## Ledger
 
@@ -173,17 +220,21 @@ The docs don't settle these. Check each in test mode before using live keys.
 | Job | Runs | What it needs |
 |---|---|---|
 | `money_sweep()`, the deadline defaults | Every 5 minutes through `pg_cron`, scheduled by the migration if the extension is available | Nothing else. Deadlines fire even if the app is down |
-| `GET /api/cron/money` runs the sweep, payouts, refunds and SMS | Every 5 minutes. **Not scheduled yet** | A scheduler that sends `Authorization: Bearer $CRON_SECRET`. Vercel Hobby only allows daily crons, so this needs Vercel Pro, `pg_cron` with `pg_net`, or an external scheduler |
+| `GET /api/cron/money` runs the sweep, payouts, refunds and emails | Every 5 minutes. **Not scheduled yet** | A scheduler that sends `Authorization: Bearer $CRON_SECRET`. Vercel Hobby only allows daily crons, so this needs Vercel Pro, `pg_cron` with `pg_net`, or an external scheduler |
 | `GET /api/cron/money?task=reconcile` | Nightly. **Not scheduled yet** | The same |
 
-Until the route is scheduled, deadlines still move money inside the ledger, but no SMS or payout goes out.
+Until the route is scheduled, deadlines still move money inside the ledger, but no email or payout goes out. People would still see updates in the bell.
 
 ## Tests
 
-`pnpm test:money` from `front-end/`. It starts a throwaway Postgres, applies the real migrations on top of `tests/money/supabase-stub.sql`, and runs the real functions. Flutterwave and SMS are fakes. Set `TEST_DATABASE_URL` to use your own database. It needs a local Postgres with `pgcrypto`.
+`pnpm test:money` from `front-end/`. It starts a throwaway Postgres, applies the real migrations on top of `tests/money/supabase-stub.sql`, and runs the real functions. Flutterwave, email and SMS are fakes. Set `TEST_DATABASE_URL` to use your own database. It needs a local Postgres with `pgcrypto`.
 
-The tests ran on Postgres 18. `supabase/config.toml` says 15, and the migrations haven't been applied to real Supabase yet.
+The tests ran on Postgres 18, and `supabase/config.toml` says 15. The `flow_` migrations haven't been applied to real Supabase. They have to run after the `logistics_` ones.
+
+The real Resend API, Firebase sign-in and the API routes weren't exercised. The screens were checked in a browser at 390px and 1280px, with sign-in and API responses stubbed.
 
 ## Environment variables
 
-`FLUTTERWAVE_SECRET_KEY` and `FLUTTERWAVE_WEBHOOK_HASH` match the wallet's. New ones: `SUPABASE_SERVICE_ROLE_KEY`, `SMS_WEBHOOK_TOKEN`, `CRON_SECRET`, `AFRICASTALKING_USERNAME`, `AFRICASTALKING_API_KEY`, `AFRICASTALKING_SENDER_ID`.
+`FLUTTERWAVE_SECRET_KEY` and `FLUTTERWAVE_WEBHOOK_HASH` match the wallet's. New ones: `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM` (a domain verified in Resend), `EMAIL_ACTION_SECRET` (any long random string). Only for the unused SMS channel: `SMS_WEBHOOK_TOKEN`, `AFRICASTALKING_USERNAME`, `AFRICASTALKING_API_KEY`, `AFRICASTALKING_SENDER_ID`.
+
+`NEXT_PUBLIC_SITE_URL` has to be the real address, because email links and the logo are built from it.

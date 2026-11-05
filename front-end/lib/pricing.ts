@@ -1,9 +1,10 @@
-/**
- * What a farmer takes home. Settlement charges farmers no fee today, only the buyer's 1.5%, so this
- * is 0. If a farmer fee is introduced, change it here and in settlement together, or this page would
- * promise a different amount from what gets paid.
- */
-export const FARMER_FEE_PCT = 0;
+import { RULES } from "./money/rules";
+
+/** What a farmer takes home. The same fee as settlement, and free for their first deliveries. */
+export const FARMER_FEE_PCT = RULES.FARMER_FEE_PCT;
+
+/** How many more deliveries this farmer pays no fee on. */
+export const freeDeliveriesLeft = (completed: number) => Math.max(RULES.FREE_FARMER_DELIVERIES - completed, 0);
 
 const toGrams = (kg: number) => Math.round(kg * 1000);
 

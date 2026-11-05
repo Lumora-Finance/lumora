@@ -1,5 +1,5 @@
 /** How a commodity's unit appears on the market board. */
-export const MAX_SLOTS = 60;
+export const MAX_SLOTS = 30;
 export const MAX_FLOCK_TOKENS = 60;
 export const FLOCK_STEP = 5;
 export const DEFAULT_FLOCK = 30;

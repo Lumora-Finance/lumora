@@ -45,6 +45,20 @@ describe("row-level security", () => {
     expect((await asUser(buyerUid, `select booking_id from deliveries`)).map((row) => row.booking_id)).toEqual([mine.booking.booking_id]);
   });
 
+  it("keeps plain codes, tokens, notifications and the email queue away from clients", async () => {
+    const { farmerUid, buyerUid } = await twoBookings();
+    for (const table of ["booking_codes", "action_tokens", "notifications", "email_outbox", "code_reports", "backup_requests"]) {
+      await expect(asUser(farmerUid, `select * from ${table}`)).rejects.toThrow(/permission denied/);
+      await expect(asUser(buyerUid, `select * from ${table}`)).rejects.toThrow(/permission denied/);
+    }
+  });
+
+  it("never lets a client call the new money functions", async () => {
+    const { farmerUid } = await twoBookings();
+    await expect(asUser(farmerUid, `select money_action_perform(gen_random_uuid(), gen_random_uuid())`)).rejects.toThrow(/permission denied/);
+    await expect(asUser(farmerUid, `select money_resolve_code_report(gen_random_uuid(), 'no_fault', null)`)).rejects.toThrow(/permission denied/);
+  });
+
   it("never lets a client read the delivery code hash", async () => {
     const { farmerUid } = await twoBookings();
     await expect(asUser(farmerUid, `select delivery_code_hash from bookings`)).rejects.toThrow(/permission denied/);

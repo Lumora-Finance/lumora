@@ -1,12 +1,16 @@
 "use client";
 
-import { Bell, Menu, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { useAuthUser } from "@/components/auth/use-auth-user";
-import { cn } from "@/lib/utils";
+import { NotificationBell } from "@/components/notifications/notification-bell";
+import { useDrawer } from "@/lib/gsap/use-drawer";
+import { useToday } from "@/lib/use-today";
 import { Sidebar } from "./sidebar";
 
 export function DashboardHeader() {
@@ -22,11 +26,19 @@ export function DashboardHeader() {
     .join("")
     .toUpperCase();
 
-  const [greeting, setGreeting] = useState("Good morning");
-  useEffect(() => {
-    const h = new Date().getHours();
-    setGreeting(h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening");
-  }, []);
+  const hour = useToday()?.getHours() ?? 9;
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+
+  // Tapping a link in the menu means they're done with it.
+  const pathname = usePathname();
+  const [menuPath, setMenuPath] = useState(pathname);
+  if (pathname !== menuPath) {
+    setMenuPath(pathname);
+    setMobileOpen(false);
+  }
+  const backdrop = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  const drawer = useDrawer({ open: mobileOpen, onClose: () => setMobileOpen(false), items: "a, button", backdrop, panel });
 
   return (
     <>
@@ -46,17 +58,12 @@ export function DashboardHeader() {
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            aria-label="Notifications"
-            className="relative flex size-9 items-center justify-center rounded-full text-ink-muted hover:bg-sage-soft hover:text-ink"
-          >
-            <Bell strokeWidth={1.5} className="size-5" />
-            <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-amber" />
-          </button>
+          <NotificationBell />
 
           <button
             onClick={() => setMobileOpen(true)}
             aria-label="Open menu"
+            aria-expanded={mobileOpen}
             className="flex size-9 items-center justify-center rounded-full text-ink-muted hover:bg-sage-soft hover:text-ink"
           >
             <Menu strokeWidth={1.5} className="size-5" />
@@ -72,19 +79,13 @@ export function DashboardHeader() {
             <span className="text-green">{displayName.split(" ")[0]}</span>
           </p>
           <p className="text-body-sm text-ink-muted">
-            Here's what's happening on your account today.
+            Here&apos;s what&apos;s happening on your account today.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           {/* Notifications */}
-          <button
-            aria-label="Notifications"
-            className="relative flex size-9 items-center justify-center rounded-full border border-line bg-paper text-ink-muted hover:bg-sage-soft hover:text-ink"
-          >
-            <Bell strokeWidth={1.5} className="size-5" />
-            <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-amber" />
-          </button>
+          <NotificationBell className="border border-line bg-paper" />
 
           {/* Avatar */}
           <Link
@@ -109,30 +110,37 @@ export function DashboardHeader() {
         </div>
       </div>
 
-      {/* Mobile drawer overlay */}
-      {mobileOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <div
-            className="absolute inset-0 bg-field/60 backdrop-blur-sm"
-            onClick={() => setMobileOpen(false)}
-          />
-          <div
-            className={cn(
-              "absolute left-0 top-0 flex h-full w-64 flex-col bg-paper shadow-xl",
-              "transition-transform duration-300",
-            )}
-          >
-            <button
+      {/* On the body, so nothing on the page can sit over it or scroll behind it. */}
+      {drawer.shown &&
+        createPortal(
+          <div className="fixed inset-0 z-50 overflow-hidden lg:hidden">
+            <div
+              ref={backdrop}
+              aria-hidden="true"
+              className="absolute inset-0 bg-field/60 backdrop-blur-[2px]"
               onClick={() => setMobileOpen(false)}
-              aria-label="Close menu"
-              className="absolute right-3 top-3 flex size-8 items-center justify-center rounded-full text-ink-muted hover:bg-sage-soft hover:text-ink"
+            />
+            <div
+              ref={panel}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Menu"
+              tabIndex={-1}
+              {...drawer.swipe}
+              className="absolute top-0 left-0 flex h-full w-[min(18rem,84vw)] touch-pan-y flex-col overflow-hidden rounded-r-[24px] bg-field outline-none will-change-transform [&>*]:w-full"
             >
-              <X strokeWidth={1.5} className="size-5" />
-            </button>
-            <Sidebar />
-          </div>
-        </div>
-      )}
+              <button
+                onClick={() => setMobileOpen(false)}
+                aria-label="Close menu"
+                className="absolute top-3 right-3 z-10 flex size-11 items-center justify-center rounded-full text-paper/70 transition-colors duration-150 hover:bg-paper/10 hover:text-paper focus-visible:ring-3 focus-visible:ring-sage focus-visible:outline-none [&&]:w-11"
+              >
+                <X aria-hidden="true" strokeWidth={1.5} className="size-5" />
+              </button>
+              <Sidebar />
+            </div>
+          </div>,
+          document.body,
+        )}
     </>
   );
 }
