@@ -14,6 +14,10 @@ export async function GET(request: Request) {
   const user = await requestUser(request, db);
   if (!user) return new Response("Unauthorized", { status: 401 });
 
-  const rows = await db.rpc("logistics_my_listings", { p_user: user.id });
-  return Response.json(rows ?? []);
+  try {
+    const rows = await db.rpc("logistics_my_listings", { p_user: user.id });
+    return Response.json(rows ?? []);
+  } catch {
+    return Response.json([]);
+  }
 }
