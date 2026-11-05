@@ -97,19 +97,56 @@ export default function WalletPage() {
   }, []);
 
   // Paystack redirects back with ?reference=LUMORA-FUND-xxx
-  // Reload wallet after 3s to allow webhook to process
+  // Verify immediately and credit wallet, then reload balance
   useEffect(() => {
     const ref = searchParams.get("reference") ?? searchParams.get("trxref") ?? "";
     if (!ref.startsWith("LUMORA-FUND-")) return;
+
+    // Clean URL immediately
     router.replace("/dashboard/wallet", { scroll: false });
-    setSuccess("Payment received — updating your balance…");
-    reloadRef.current = setTimeout(async () => {
+    setSuccess("Verifying payment…");
+
+    (async () => {
       try {
         const token = await getToken();
-        const res = await fetch("/api/wallet", { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-        if (res.ok) { setWallet(await res.json()); setSuccess("Wallet updated!"); }
-      } catch { /* */ }
-    }, 3500);
+        const headers: HeadersInit = {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        };
+
+        // Step 1: verify + credit wallet immediately (idempotent)
+        const verifyRes = await fetch("/api/wallet/verify-payment", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ reference: ref }),
+        });
+        const verifyData = (await verifyRes.json()) as { ok: boolean; amountKobo?: number; message?: string; duplicate?: boolean };
+
+        // Step 2: reload wallet balance and history
+        const walletRes = await fetch("/api/wallet", {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (walletRes.ok) setWallet(await walletRes.json());
+
+        if (verifyData.ok) {
+          const naira = verifyData.amountKobo ? `₦${(verifyData.amountKobo / 100).toLocaleString("en-NG")}` : "";
+          setSuccess(verifyData.duplicate ? "Payment already credited." : `${naira} added to your wallet!`);
+        } else {
+          setSuccess("Payment received. Balance may take a moment to update.");
+        }
+      } catch {
+        setSuccess("Payment received. Refreshing your balance…");
+        // Fallback: try reloading balance after 3s
+        reloadRef.current = setTimeout(async () => {
+          try {
+            const token = await getToken();
+            const res = await fetch("/api/wallet", { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+            if (res.ok) setWallet(await res.json());
+          } catch { /* */ }
+        }, 3000);
+      }
+    })();
+
     return () => { if (reloadRef.current) clearTimeout(reloadRef.current); };
   }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
