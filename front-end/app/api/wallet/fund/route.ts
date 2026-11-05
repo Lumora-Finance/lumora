@@ -4,7 +4,6 @@ import { requestUser } from "@/lib/money/auth";
 import { serverMoneyDb } from "@/lib/money/db";
 import { createPaystackClient } from "@/lib/money/paystack";
 
-export const runtime = "nodejs";
 
 /**
  * Initialises a Paystack payment to fund the wallet.

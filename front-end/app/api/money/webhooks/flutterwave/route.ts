@@ -2,7 +2,6 @@ import { serverMoneyDb } from "@/lib/money/db";
 import { createPaystackClient, verifyWebhookSignature } from "@/lib/money/paystack";
 import { handlePaystackWebhook } from "@/lib/money/webhooks";
 
-export const runtime = "nodejs";
 
 /**
  * Paystack webhook handler.

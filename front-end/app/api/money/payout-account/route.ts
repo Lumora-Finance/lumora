@@ -3,7 +3,6 @@ import { addPayoutAccount } from "@/lib/money/booking";
 import { serverMoneyDb } from "@/lib/money/db";
 import { createPaystackClient, PaystackRejected } from "@/lib/money/paystack";
 
-export const runtime = "nodejs";
 
 /**
  * Adds or verifies a farmer's bank account for payouts.

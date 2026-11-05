@@ -58,12 +58,25 @@ export function OnboardingFlow() {
 
   async function saveDetails(details: { role: OnboardingRole; name: string; phone: string }) {
     if (!user) return "Please sign in again.";
+
+    // Save to users table (phone, name, role)
     const response = await apiFetch(user, "/api/me", details).catch(() => null);
-    if (response?.ok) return null;
-    const result = (await response?.json().catch(() => null)) as { code?: string } | null;
-    if (result?.code === "phone_in_use") return "That phone number already has an account.";
-    if (result?.code === "invalid_details") return "Please check your name and phone number.";
-    return "That didn't save. Please try again.";
+    if (!response?.ok) {
+      const result = (await response?.json().catch(() => null)) as { code?: string } | null;
+      if (result?.code === "phone_in_use") return "That phone number already has an account.";
+      if (result?.code === "invalid_details") return "Please check your name and phone number.";
+      return "That didn't save. Please try again.";
+    }
+
+    // Also sync Firebase user data to the profiles table (display_name, photo_url, email).
+    // Fire-and-forget — a failed sync here shouldn't block onboarding.
+    apiFetch(user, "/api/profile/sync", {
+      email: user.email ?? "",
+      display_name: user.displayName ?? details.name,
+      photo_url: user.photoURL ?? "",
+    }).catch(() => null);
+
+    return null;
   }
 
   async function saveLocation(location: PickedLocation) {

@@ -1,8 +1,8 @@
 "use client";
 
-import { type PointerEvent as ReactPointerEvent, useRef, useState } from "react";
+import { type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
 
-import { DEFAULT_PRODUCE, DEMAND, type Produce } from "@/lib/demo/demand";
+import { DEFAULT_PRODUCE, type Produce } from "@/lib/demo/demand";
 import { formatNaira } from "@/lib/format";
 import { fx, gsap, isReducedMotion, playOnEnter, useGSAP } from "@/lib/gsap/effects";
 
@@ -36,17 +36,13 @@ function curve(ys: number[]) {
 }
 
 function percentChange({ prices }: Produce) {
+  if (prices.length < 2 || prices[0] === 0) return "—";
   const change = ((prices[prices.length - 1] - prices[0]) / prices[0]) * 100;
   const size = Math.abs(change).toFixed(1);
   return `${change >= 0 ? "+" : "−"}${size}%`;
 }
 
 const lastPrice = ({ prices }: Produce) => prices[prices.length - 1];
-
-const findProduce = (key: string) => DEMAND.find((item) => item.key === key) ?? DEMAND[0];
-
-const INITIAL = findProduce(DEFAULT_PRODUCE);
-const INITIAL_YS = normalise(INITIAL.prices);
 
 const dotPosition = (index: number, y: number) => ({
   left: `${(xAt(index) / WIDTH) * 100}%`,
@@ -65,25 +61,105 @@ export function DemandExplorer() {
   const average = useRef<HTMLParagraphElement>(null);
   const verdict = useRef<HTMLParagraphElement>(null);
 
+  const [demand, setDemand] = useState<Produce[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(DEFAULT_PRODUCE);
+
+  // Fetch real demand data from the API.
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await fetch("/api/demand");
+        if (!res.ok) return;
+        const data = (await res.json()) as Produce[];
+        if (!cancelled && Array.isArray(data) && data.length > 0) {
+          setDemand(data);
+          // Select the first commodity or the default.
+          const match = data.find((p) => p.key === DEFAULT_PRODUCE);
+          setSelected(match ? match.key : data[0].key);
+        }
+      } catch {
+        // Silent fail — the UI shows an empty state.
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, []);
+
+  const findProduce = (key: string) => demand.find((item) => item.key === key) ?? demand[0];
+  const produce = findProduce(selected);
+
   // The chart and rolling numbers are drawn every frame, so they live outside React's renders.
   const live = useRef({
-    produce: INITIAL,
-    ys: INITIAL_YS,
-    number: INITIAL.weeklyDemand,
-    average: lastPrice(INITIAL),
+    produce: null as Produce | null,
+    ys: [] as number[],
+    number: 0,
+    average: 0,
     scrub: null as number | null,
     intro: null as gsap.core.Animation | null,
     motion: [] as gsap.core.Animation[],
   });
 
-  const [selected, setSelected] = useState(DEFAULT_PRODUCE);
-  const produce = findProduce(selected);
+  // Initialise live refs when demand data arrives or selection changes.
+  useEffect(() => {
+    if (!produce) return;
+    const ys = normalise(produce.prices);
+    live.current = {
+      ...live.current,
+      produce,
+      ys,
+      number: produce.weeklyDemand,
+      average: lastPrice(produce),
+    };
+    drawLine(ys);
+  }, [selected, demand]);
+
+  // Loading / empty state.
+  if (loading) {
+    return (
+      <section id="prices" data-bg="white" aria-labelledby="demand-title" className="scroll-mt-4 pt-10 pb-10 lg:pt-40 lg:pb-16">
+        <div className={CONTAINER}>
+          <div className="rounded-[20px] bg-paper p-[22px] text-ink md:p-9">
+            <p className={`${EYEBROW} text-ink-muted`}>Before you start a farm</p>
+            <h2 id="demand-title" className="mt-1 font-display text-2xl leading-[1.2] font-medium md:text-[30px]">
+              Thinking of starting a farm? Ask the market first.
+            </h2>
+            <p className="mt-5 text-body-sm text-ink-muted">Loading demand data…</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (demand.length === 0 || !produce) {
+    return (
+      <section id="prices" data-bg="white" aria-labelledby="demand-title" className="scroll-mt-4 pt-10 pb-10 lg:pt-40 lg:pb-16">
+        <div className={CONTAINER}>
+          <div className="rounded-[20px] bg-paper p-[22px] text-ink md:p-9">
+            <p className={`${EYEBROW} text-ink-muted`}>Before you start a farm</p>
+            <h2 id="demand-title" className="mt-1 font-display text-2xl leading-[1.2] font-medium md:text-[30px]">
+              Thinking of starting a farm? Ask the market first.
+            </h2>
+            <p className="mt-5 text-body-sm text-ink-muted">
+              No demand data available yet. Check back once buyers start posting.
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  const INITIAL = produce;
+  const INITIAL_YS = normalise(INITIAL.prices);
 
   const drawScrub = () => {
     const { scrub, produce: current, ys } = live.current;
     const box = chart.current;
     const label = scrubLabel.current;
-    if (scrub === null || !box || !label) return;
+    if (scrub === null || !box || !label || !current) return;
 
     const left = (xAt(scrub) / WIDTH) * 100;
     if (scrubLine.current) scrubLine.current.style.left = `${left}%`;
@@ -116,16 +192,12 @@ export function DemandExplorer() {
   useGSAP(
     () => {
       const state = live.current;
-      // Animations started by a chip click run outside this scope, so they're stopped here.
       const stopMotion = () => state.motion.forEach((animation) => animation.kill());
 
       const root = scope.current;
       const path = line.current;
-      if (!root || !path || isReducedMotion()) return stopMotion;
+      if (!root || !path || isReducedMotion() || !state.produce) return stopMotion;
 
-      // A stroke that ignores the chart's stretching measures its dashes in screen pixels,
-      // so the drawn length has to be worked out on screen too. The panel may still be scaled
-      // by its entrance when this runs, so the length is padded to cover it at full size.
       const box = path.getBoundingClientRect();
       const scaleX = box.width / path.getBBox().width;
       const scaleY = box.height / Math.max(1, path.getBBox().height);
@@ -168,7 +240,6 @@ export function DemandExplorer() {
       }
 
       live.current.intro = intro;
-      // The wrapper, because the panel itself is being scaled by its entrance.
       const panel = root.querySelector("[data-demand-panel]");
       playOnEnter(intro, panel?.parentElement ?? root, "60% bottom");
       return () => {
@@ -180,15 +251,15 @@ export function DemandExplorer() {
   );
 
   function choose(key: string) {
-    if (key === live.current.produce.key) return;
+    if (key === live.current.produce?.key) return;
 
     const next = findProduce(key);
+    if (!next) return;
     const state = live.current;
     const target = normalise(next.prices);
     state.produce = next;
     setSelected(key);
 
-    // A choice made mid-way through the first reveal finishes the reveal, so nothing is left hidden.
     state.intro?.progress(1);
     state.motion.forEach((animation) => animation.kill());
     state.motion = [];
@@ -271,7 +342,7 @@ export function DemandExplorer() {
           <div className="mt-5 text-[17px] leading-[2.6]">
             If I raise{" "}
             <span role="group" aria-label="Produce" className="inline">
-              {DEMAND.map((item) => {
+              {demand.map((item) => {
                 const isSelected = item.key === produce.key;
                 return (
                   <button
@@ -299,12 +370,12 @@ export function DemandExplorer() {
               ref={bigNumber}
               className="font-num text-[52px] leading-none tracking-[-0.03em] md:text-[72px]"
             >
-              {INITIAL.weeklyDemand}
+              {produce.weeklyDemand}
             </span>
             <span className="text-xl">{produce.demandUnit}</span>
           </p>
           <p ref={verdict} className="mt-3 max-w-[560px] text-base">
-            {INITIAL.verdict}
+            {produce.verdict}
           </p>
           {/* The visual answer rolls and fades, so screen readers get the settled version here. */}
           <p aria-live="polite" className="sr-only">
@@ -320,7 +391,7 @@ export function DemandExplorer() {
             <div
               ref={chart}
               role="img"
-              aria-label={`Line chart of example ${produce.chip} prices over ${WEEKS} weeks, from ${formatNaira(produce.prices[0], produce.priceUnit)} to ${formatNaira(lastPrice(produce), produce.priceUnit)}.`}
+              aria-label={`Line chart of ${produce.chip} prices over ${WEEKS} weeks, from ${formatNaira(produce.prices[0], produce.priceUnit)} to ${formatNaira(lastPrice(produce), produce.priceUnit)}.`}
               onPointerDown={scrubFrom}
               onPointerMove={scrubFrom}
               onPointerLeave={endScrub}
@@ -378,7 +449,7 @@ export function DemandExplorer() {
             <div data-stat className="rounded-xl border border-[#E2DDD2] bg-white px-4 py-3.5">
               <p className="text-label font-medium text-ink-muted">Average price</p>
               <p ref={average} className="font-num mt-1 text-xl font-medium text-[#9A6A1A]">
-                {formatNaira(lastPrice(INITIAL), INITIAL.priceUnit)}
+                {formatNaira(lastPrice(produce), produce.priceUnit)}
               </p>
             </div>
             <div data-stat className="rounded-xl border border-[#E2DDD2] bg-white px-4 py-3.5">
@@ -396,7 +467,7 @@ export function DemandExplorer() {
               No internet? Text <span className="font-num text-ink">{produce.command}</span> from
               any phone.
             </p>
-            <p className="text-xs text-[#9AA59F]">Example data</p>
+            <p className="text-xs text-[#9AA59F]">Live data from the board</p>
           </div>
         </div>
       </div>

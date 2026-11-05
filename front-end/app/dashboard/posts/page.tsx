@@ -1,9 +1,10 @@
 "use client";
 
-import Image from "next/image";
-import { useRef, useState } from "react";
-import { Plus, Pause, Pencil, MoreHorizontal, Sparkles } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Plus, Pause, Pencil, MoreHorizontal, Sparkles, Loader2 } from "lucide-react";
+import { getAuth } from "firebase/auth";
 
+import app from "@/lib/firebase/config";
 import { LogoVideo } from "@/components/dashboard/logo-video";
 import { PostModal } from "@/components/dashboard/post-button";
 import { Reveal } from "@/components/motion/reveal";
@@ -12,74 +13,53 @@ import { cn } from "@/lib/utils";
 
 type Post = {
   id: string;
-  type: "DEMAND" | "LISTING";
-  commodity: string;
-  spec: string;
-  price: string;
-  unit: string;
-  remaining: number;
-  total: number;
-  status: "active" | "paused" | "full";
-  bookings: number;
+  spec: string | null;
+  unit_price_kobo: number;
+  capacity_per_day: number;
+  status: "active" | "paused" | "closed";
+  commodity: { id: string; name: string; unit: string } | null;
 };
 
-const POSTS: Post[] = [
-  { id: "1", type: "DEMAND", commodity: "Live Broilers", spec: "2.5–3.5 kg each, healthy", price: "₦3,500", unit: "/kg", remaining: 50, total: 80, status: "active", bookings: 4 },
-  { id: "2", type: "LISTING", commodity: "Tomatoes", spec: "Grade A, Plateau Roma", price: "₦850", unit: "/basket", remaining: 20, total: 40, status: "active", bookings: 2 },
-  { id: "3", type: "DEMAND", commodity: "Eggs", spec: "Crates of 30, medium", price: "₦2,100", unit: "/crate", remaining: 0, total: 15, status: "full", bookings: 15 },
-  { id: "4", type: "LISTING", commodity: "Live Turkey", spec: "5–7 kg, dressed or live", price: "₦4,200", unit: "/kg", remaining: 10, total: 20, status: "paused", bookings: 1 },
-];
-
-const CROPS = [
-  { src: "/images/step-farmer.jpg", pos: "object-[28%_10%]", cls: "absolute top-4 right-8 size-14 hidden sm:block" },
-  { src: "/images/hero-farm.jpg", pos: "object-[52%_25%]", cls: "absolute bottom-4 right-4 size-12" },
-];
-
-const STATUS_STYLES: Record<"active" | "paused" | "full", string> = {
+const STATUS_STYLES: Record<string, string> = {
   active: "bg-sage-soft text-green",
   paused: "bg-amber-soft text-amber",
-  full: "bg-line text-ink-muted",
+  closed: "bg-line text-ink-muted",
 };
+
+const ACCENT: Record<string, string> = {
+  active: "border-l-green",
+  paused: "border-l-amber",
+  closed: "border-l-ink-muted",
+};
+
+function formatKobo(kobo: number) {
+  return `₦${(kobo / 100).toLocaleString("en-NG")}`;
+}
 
 function PostCard({ post, onPost }: { post: Post; onPost?: () => void }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const pct = post.total === 0 ? 0 : Math.round((post.remaining / post.total) * 100);
-  const isDemand = post.type === "DEMAND";
+  const unit = post.commodity?.unit ?? "unit";
+  const name = post.commodity?.name ?? "Produce";
 
   return (
-    <div
-      className={cn(
-        "group relative overflow-hidden rounded-xl border bg-white p-5 shadow-sm transition-all duration-300 hover:shadow-md",
-        isDemand
-          ? "border-l-[3px] border-l-green border-line"
-          : "border-l-[3px] border-l-amber border-line",
-      )}
-    >
+    <div className={cn(
+      "group relative overflow-hidden rounded-xl border border-line border-l-[3px] bg-white p-5 shadow-sm transition-all duration-300 hover:shadow-md",
+      ACCENT[post.status] ?? "border-l-ink-muted",
+    )}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <span
-              className={cn(
-                "rounded-md px-2 py-0.5 font-num text-label font-medium",
-                isDemand ? "bg-green/10 text-green" : "bg-amber-soft text-amber",
-              )}
-            >
-              {post.type}
+            <span className="rounded-md bg-green/10 px-2 py-0.5 font-num text-label font-medium text-green">
+              DEMAND
             </span>
-            <span
-              className={cn(
-                "rounded-full px-2.5 py-0.5 text-label font-medium capitalize",
-                STATUS_STYLES[post.status],
-              )}
-            >
+            <span className={cn("rounded-full px-2.5 py-0.5 text-label font-medium capitalize", STATUS_STYLES[post.status] ?? "bg-line text-ink-muted")}>
               {post.status}
             </span>
           </div>
-          <p className="mt-2 font-medium text-ink">{post.commodity}</p>
-          <p className="text-body-sm text-ink-muted">{post.spec}</p>
+          <p className="mt-2 font-medium text-ink">{name}</p>
+          {post.spec && <p className="text-body-sm text-ink-muted">{post.spec}</p>}
         </div>
 
-        {/* Menu */}
         <div className="relative shrink-0">
           <button
             onClick={() => setMenuOpen((o) => !o)}
@@ -104,36 +84,14 @@ function PostCard({ post, onPost }: { post: Post; onPost?: () => void }) {
         </div>
       </div>
 
-      {/* Price + capacity */}
       <div className="mt-4 flex items-center gap-4">
         <span className="font-num text-number font-medium text-amber">
-          {post.price}
-          <span className="font-sans text-body-sm text-ink-muted">{post.unit}</span>
+          {formatKobo(post.unit_price_kobo)}
+          <span className="font-sans text-body-sm text-ink-muted">/{unit}</span>
         </span>
-        <div className="flex flex-1 items-center gap-2">
-          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
-            <div
-              className={cn(
-                "h-full rounded-full transition-all",
-                post.status === "full" ? "bg-ink-muted" : "bg-green",
-              )}
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-          <span className="shrink-0 font-num text-label text-ink-muted">
-            {post.remaining}/{post.total}
-          </span>
-        </div>
-      </div>
-
-      <div className="mt-3 flex items-center justify-between border-t border-line pt-3">
-        <span className="text-body-sm text-ink-muted">
-          <span className="font-num font-medium text-ink">{post.bookings}</span>{" "}
-          booking{post.bookings !== 1 ? "s" : ""}
+        <span className="font-num text-label text-ink-muted">
+          {post.capacity_per_day} {unit}/day
         </span>
-        <button className="text-body-sm font-medium text-green hover:underline">
-          View bookings →
-        </button>
       </div>
     </div>
   );
@@ -142,9 +100,32 @@ function PostCard({ post, onPost }: { post: Post; onPost?: () => void }) {
 export default function PostsPage() {
   const heroRef = useRef<HTMLDivElement>(null);
   const [postOpen, setPostOpen] = useState(false);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const demand = POSTS.filter((p) => p.type === "DEMAND");
-  const listings = POSTS.filter((p) => p.type === "LISTING");
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const token = await getAuth(app).currentUser?.getIdToken();
+        const res = await fetch("/api/dashboard/posts", {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!res.ok) throw new Error(`${res.status}`);
+        const data = (await res.json()) as Post[];
+        if (!cancelled) setPosts(Array.isArray(data) ? data : []);
+      } catch {
+        if (!cancelled) setError("Couldn't load posts. Please refresh.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, []);
 
   useGSAP(
     () => {
@@ -155,6 +136,9 @@ export default function PostsPage() {
     },
     { scope: heroRef },
   );
+
+  const active = posts.filter((p) => p.status === "active");
+  const paused = posts.filter((p) => p.status === "paused");
 
   return (
     <>
@@ -167,56 +151,28 @@ export default function PostsPage() {
           className="relative isolate mb-8 overflow-hidden rounded-2xl bg-field px-6 py-10 text-paper lg:px-10 lg:py-12"
         >
           <LogoVideo />
-          {CROPS.map((c, i) => (
-            <div
-              key={i}
-              data-crop
-              aria-hidden
-              className={cn("overflow-hidden rounded-full", c.cls)}
-            >
-              <Image
-                src={c.src}
-                alt=""
-                width={140}
-                height={140}
-                className={cn("size-full object-cover", c.pos)}
-              />
-            </div>
-          ))}
 
           <p className="text-label font-medium text-sage/70">Your Market Presence</p>
           <h1 className="mt-2 font-display text-display-lg-sm font-medium text-paper md:text-[2rem]">
             My Posts
           </h1>
 
-          <div className="mt-6 flex flex-wrap gap-3">
-            {[
-              {
-                label: "Active",
-                value: POSTS.filter((p) => p.status === "active").length.toString(),
-                style: "bg-sage/20 text-paper",
-              },
-              {
-                label: "Paused",
-                value: POSTS.filter((p) => p.status === "paused").length.toString(),
-                style: "bg-field-soft/70 text-paper/80",
-              },
-              {
-                label: "Total bookings",
-                value: POSTS.reduce((a, p) => a + p.bookings, 0).toString(),
-                style: "bg-amber/20 text-amber",
-              },
-            ].map((s) => (
-              <div
-                key={s.label}
-                data-chip
-                className={cn("flex flex-col rounded-xl px-4 py-3", s.style)}
-              >
-                <span className="text-label opacity-70">{s.label}</span>
-                <span className="font-num text-number-lg font-medium">{s.value}</span>
+          {!loading && (
+            <div className="mt-6 flex flex-wrap gap-3">
+              <div data-chip className="flex flex-col rounded-xl bg-sage/20 px-4 py-3">
+                <span className="text-label text-sage/70">Active</span>
+                <span className="font-num text-number-lg font-medium text-paper">{active.length}</span>
               </div>
-            ))}
-          </div>
+              <div data-chip className="flex flex-col rounded-xl bg-field-soft/70 px-4 py-3">
+                <span className="text-label text-paper/50">Paused</span>
+                <span className="font-num text-number-lg font-medium text-paper/80">{paused.length}</span>
+              </div>
+              <div data-chip className="flex flex-col rounded-xl bg-amber/20 px-4 py-3">
+                <span className="text-label text-amber/70">Total</span>
+                <span className="font-num text-number-lg font-medium text-amber">{posts.length}</span>
+              </div>
+            </div>
+          )}
 
           <button
             onClick={() => setPostOpen(true)}
@@ -227,54 +183,35 @@ export default function PostsPage() {
           </button>
         </div>
 
-        {/* Grid */}
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-
-          {/* Demand */}
-          <div>
-            <Reveal effect="riseIn">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="font-display text-title font-medium text-ink">Demand Posts</h2>
-                <button
-                  onClick={() => setPostOpen(true)}
-                  className="flex items-center gap-1.5 rounded-lg bg-sage-soft px-3 py-1.5 text-body-sm font-medium text-green hover:bg-sage-soft/70"
-                >
-                  <Plus strokeWidth={2} className="size-4" /> Add
-                </button>
-              </div>
-            </Reveal>
-            <div className="flex flex-col gap-4">
-              {demand.map((post) => (
-                <Reveal key={post.id} effect="riseIn" config={{ stagger: 0 }}>
-                  <PostCard post={post} onPost={() => setPostOpen(true)} />
-                </Reveal>
-              ))}
-            </div>
+        {/* Content */}
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="size-6 animate-spin text-ink-muted" />
           </div>
-
-          {/* Listings */}
-          <div>
-            <Reveal effect="riseIn">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="font-display text-title font-medium text-ink">Listings</h2>
-                <button
-                  onClick={() => setPostOpen(true)}
-                  className="flex items-center gap-1.5 rounded-lg bg-amber-soft px-3 py-1.5 text-body-sm font-medium text-amber hover:bg-amber-soft/70"
-                >
-                  <Plus strokeWidth={2} className="size-4" /> Add
-                </button>
-              </div>
-            </Reveal>
-            <div className="flex flex-col gap-4">
-              {listings.map((post) => (
-                <Reveal key={post.id} effect="riseIn" config={{ stagger: 0 }}>
-                  <PostCard post={post} onPost={() => setPostOpen(true)} />
-                </Reveal>
-              ))}
+        ) : error ? (
+          <div className="rounded-xl border border-danger/30 bg-danger/5 p-6 text-center text-danger">{error}</div>
+        ) : posts.length === 0 ? (
+          <Reveal effect="riseIn">
+            <div className="flex flex-col items-center gap-4 rounded-2xl bg-field px-8 py-16 text-center text-paper">
+              <p className="font-display text-title font-medium">No posts yet</p>
+              <p className="text-body text-paper/60">Post your first demand or listing to start receiving bookings.</p>
+              <button
+                onClick={() => setPostOpen(true)}
+                className="mt-2 rounded-full bg-paper px-5 py-2.5 text-body-sm font-medium text-field hover:bg-sage-soft"
+              >
+                Create your first post →
+              </button>
             </div>
+          </Reveal>
+        ) : (
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            {posts.map((post) => (
+              <Reveal key={post.id} effect="riseIn" config={{ stagger: 0 }}>
+                <PostCard post={post} onPost={() => setPostOpen(true)} />
+              </Reveal>
+            ))}
           </div>
-
-        </div>
+        )}
       </div>
 
       <PostModal open={postOpen} onClose={() => setPostOpen(false)} />
