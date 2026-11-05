@@ -6,6 +6,7 @@ import { join, resolve } from "node:path";
 import { Client } from "pg";
 
 const PORT = 54329;
+const BASELINE = resolve(__dirname, "baseline");
 const MIGRATIONS = resolve(__dirname, "../../../supabase/migrations");
 
 function pgBin(name: string) {
@@ -49,9 +50,10 @@ export default async function setup() {
   const client = new Client({ connectionString: url });
   await client.connect();
   await client.query(readFileSync(resolve(__dirname, "supabase-stub.sql"), "utf8"));
-  for (const file of readdirSync(MIGRATIONS).filter((name) => name.endsWith(".sql")).sort()) {
+  const sqlFiles = (dir: string) => readdirSync(dir).filter((name) => name.endsWith(".sql")).sort().map((name) => join(dir, name));
+  for (const file of [...sqlFiles(BASELINE), ...sqlFiles(MIGRATIONS)]) {
     try {
-      await client.query(readFileSync(join(MIGRATIONS, file), "utf8"));
+      await client.query(readFileSync(file, "utf8"));
     } catch (error) {
       await client.end();
       await stop();

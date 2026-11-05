@@ -287,7 +287,9 @@ end $$;
 create or replace function logistics_my_profile(p_user uuid) returns jsonb language sql stable as $$
   select jsonb_build_object('id', u.id, 'name', u.name, 'role', u.role, 'phone', u.phone, 'area', a.name,
     'address', l.address, 'location_source', l.location_source,
-    'approve_first_time_farmers', u.approve_first_time_farmers, 'reliability', money_farmer_reliability(u.id))
+    'approve_first_time_farmers', u.approve_first_time_farmers, 'reliability', money_farmer_reliability(u.id),
+    -- The admin panel and profile sync read these.
+    'is_admin', u.is_admin, 'verified', u.verified, 'photo_url', u.photo_url, 'display_name', u.display_name, 'email', u.email)
   from users u left join user_locations l on l.user_id = u.id left join areas a on a.id = l.area_id
   where u.id = p_user;
 $$;

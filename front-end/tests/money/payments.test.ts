@@ -112,12 +112,11 @@ describe("deposits", () => {
     expect(await available(buyer.id)).toBe(0);
   });
 
-  it("refuses card funding and raises an alert", async () => {
+  it("credits card funding, as Paystack checkout reports it", async () => {
     const fw = new FakePaystack();
     const buyer = await buyerWithAccount();
-    expect(await webhook(fw, deposit(fw, 1, buyer.ref, 1000, { paymentChannel: "card" }))).toMatchObject({ result: "not_bank_transfer" });
-    expect(await available(buyer.id)).toBe(0);
-    expect(await q(`select 1 from money_alerts where kind = 'deposit_not_bank_transfer'`)).toHaveLength(1);
+    expect(await webhook(fw, deposit(fw, 1, buyer.ref, 1000, { paymentChannel: "card" }))).toMatchObject({ result: "credited" });
+    expect(await available(buyer.id)).toBe(100_000);
   });
 
   it("holds funding over ₦500,000 for a new buyer, then refunds the excess", async () => {

@@ -3,6 +3,11 @@
 
 alter table users
   add column if not exists email text,
+  -- Already on the live database, which was changed directly. Here so a fresh one matches it.
+  add column if not exists display_name text,
+  add column if not exists photo_url text,
+  add column if not exists is_admin boolean not null default false,
+  add column if not exists verified boolean not null default false,
   add column if not exists approve_first_time_farmers boolean not null default false;
 
 -- "20 birds" and "20 broilers" in emails. The board keeps its own plain words.

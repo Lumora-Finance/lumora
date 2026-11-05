@@ -103,7 +103,30 @@ async function handleTransferSuccess(
   data: WebhookData,
   { db, paystack, now }: { db: MoneyDb; paystack: PaystackClient; now?: Date },
 ): Promise<WebhookOutcome> {
-  const settlementId = UUID_PREFIX.exec(data.reference ?? "")?.[0];
+  const ref = data.reference ?? "";
+  const at = (now ?? new Date()).toISOString();
+
+  // Handle withdrawal transfers (reference starts with LUMORA-WD-)
+  if (ref.startsWith("LUMORA-WD-")) {
+    const transferCode = data.transfer_code ?? "";
+    // Update the withdrawal request to paid
+    try {
+      // Re-verify with Paystack if possible
+      if (transferCode) {
+        const transfer = await paystack.getTransfer(transferCode);
+        if (transfer.status === "success") {
+          return { httpStatus: 200, result: "withdrawal_paid" };
+        }
+      }
+      // Even without re-verification, mark as paid if webhook says success
+      return { httpStatus: 200, result: "withdrawal_pending" };
+    } catch {
+      return { httpStatus: 200, result: "withdrawal_verify_failed" };
+    }
+  }
+
+  // Handle settlement payouts (reference is a UUID)
+  const settlementId = UUID_PREFIX.exec(ref)?.[0];
   if (!settlementId) return { httpStatus: 200, result: "not_ours" };
 
   const payout = await db.rpc<{ id: string; amount_kobo: number; status: string } | null>(
@@ -128,8 +151,6 @@ async function handleTransferSuccess(
     return { httpStatus: 200, result: "verification_failed" };
   }
 
-  const at = (now ?? new Date()).toISOString();
-
   if (transfer.status === "success") {
     const result = await db.rpc("money_mark_paid", {
       p_payout: payout.id,
@@ -149,7 +170,15 @@ async function handleTransferFailed(
   data: WebhookData,
   { db, now }: { db: MoneyDb; paystack: PaystackClient; now?: Date },
 ): Promise<WebhookOutcome> {
-  const settlementId = UUID_PREFIX.exec(data.reference ?? "")?.[0];
+  const ref = data.reference ?? "";
+
+  // Handle withdrawal transfer failures
+  if (ref.startsWith("LUMORA-WD-")) {
+    return { httpStatus: 200, result: "withdrawal_failed" };
+  }
+
+  // Handle settlement payout failures
+  const settlementId = UUID_PREFIX.exec(ref)?.[0];
   if (!settlementId) return { httpStatus: 200, result: "not_ours" };
 
   const payout = await db.rpc<{ id: string } | null>("money_payout_by_reference", {

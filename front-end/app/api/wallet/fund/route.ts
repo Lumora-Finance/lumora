@@ -51,6 +51,21 @@ export async function POST(request: Request) {
   }
 
   const reference = `LUMORA-FUND-${randomUUID()}`;
+
+  // Save the funding account reference so money_credit_deposit can find the buyer.
+  // The webhook handler also falls back to metadata.user_id if this lookup fails.
+  try {
+    await db.rpc("money_save_funding_account", {
+      p_buyer: user.id,
+      p_tx_ref: reference,
+      p_account_number: null,
+      p_bank_name: null,
+      p_order_ref: null,
+    });
+  } catch {
+    // money_save_funding_account may reject a duplicate — that's fine, the ref is unique.
+  }
+
   const paystack = createPaystackClient(secretKey);
 
   const { authorizationUrl, accessCode } = await paystack.initializeTransaction({

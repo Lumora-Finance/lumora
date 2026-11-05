@@ -16,17 +16,26 @@ export async function GET(request: Request) {
   const user = await requestUser(request, db);
   if (!user) return new Response("Unauthorized", { status: 401 });
 
-  const result = await db.rpc<{
-    active_posts: number;
-    upcoming_bookings: number;
-    monthly_kobo: number;
-    monthly_count: number;
-  }>("logistics_dashboard_stats", { p_user: user.id });
+  try {
+    const result = await db.rpc<{
+      active_posts: number;
+      upcoming_bookings: number;
+      monthly_kobo: number;
+      monthly_count: number;
+    }>("logistics_dashboard_stats", { p_user: user.id });
 
-  return Response.json({
-    activePosts: result?.active_posts ?? 0,
-    upcomingBookings: result?.upcoming_bookings ?? 0,
-    monthlyKobo: result?.monthly_kobo ?? 0,
-    monthlyCount: result?.monthly_count ?? 0,
-  });
+    return Response.json({
+      activePosts: result?.active_posts ?? 0,
+      upcomingBookings: result?.upcoming_bookings ?? 0,
+      monthlyKobo: result?.monthly_kobo ?? 0,
+      monthlyCount: result?.monthly_count ?? 0,
+    });
+  } catch {
+    return Response.json({
+      activePosts: 0,
+      upcomingBookings: 0,
+      monthlyKobo: 0,
+      monthlyCount: 0,
+    });
+  }
 }

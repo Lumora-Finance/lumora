@@ -2,6 +2,8 @@
 
 Booking, delivery and settlement rules, for engineers working on the wallet, notifications or operations. All amounts are integers in kobo.
 
+**How the database is managed has changed.** The original migrations were removed and the live database edited directly, so `supabase/migrations` holds only the `flow_` files, which go on top of what's live. Apply them in order through the SQL Editor. `tests/money/baseline` keeps the earlier schema so tests can still build a database.
+
 **The provider has since moved to Paystack** (`lib/money/paystack.ts`, `/api/webhooks/paystack`). The Flutterwave sections below describe the earlier design, and need rewriting along with `tests/money/flutterwave.test.ts`, which still targets it.
 
 Money only moves on proof, and every waiting state has a deadline with an automatic default outcome.
@@ -47,7 +49,6 @@ The brief assumed these exist. They don't, on any branch.
 | Supabase auth | The app signs in with Firebase | RLS reads the Firebase uid from `auth.jwt()`. **Supabase must be set up to trust Firebase tokens (third-party auth), or RLS denies everyone** |
 | `README.md` says Paystack | The brief says Flutterwave | Follows the brief. The README still needs updating |
 
-Migrations are named `<timestamp>_money_*.sql`, because the Supabase CLI only applies files that start with a timestamp.
 
 ## Decisions to check
 

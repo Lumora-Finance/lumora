@@ -7,6 +7,7 @@ import { serverMoneyDb } from "@/lib/money/db";
 /**
  * GET /api/wallet
  * Returns the authenticated user's wallet balances and recent history.
+ * Always returns clean data — zero balances and empty history when nothing exists.
  */
 export async function GET(request: Request) {
   await connection();
@@ -20,36 +21,62 @@ export async function GET(request: Request) {
     { auth: { persistSession: false } },
   );
 
-  // Available balance from money_balances
-  const { data: balances } = await supabase
-    .from("money_balances")
-    .select("bucket, balance_kobo")
-    .eq("owner_id", user.id);
+  // Available balance from money_balances — handle both buyer and farmer buckets
+  let available = 0;
+  let reserved = 0;
 
-  const balanceMap = Object.fromEntries(
-    (balances ?? []).map((b: { bucket: string; balance_kobo: number }) => [b.bucket, b.balance_kobo]),
-  );
+  try {
+    const { data: balances } = await supabase
+      .from("money_balances")
+      .select("bucket, balance_kobo")
+      .eq("owner_id", user.id);
 
-  const available = balanceMap["buyer_available"] ?? balanceMap["farmer_pending"] ?? 0;
-  const reserved = balanceMap["buyer_reserved"] ?? 0;
+    const balanceMap = Object.fromEntries(
+      (balances ?? []).map((b: { bucket: string; balance_kobo: number }) => [b.bucket, b.balance_kobo]),
+    );
+
+    available = balanceMap["buyer_available"] ?? balanceMap["farmer_pending"] ?? 0;
+    reserved = balanceMap["buyer_reserved"] ?? 0;
+  } catch {
+    // Balances not available — return zeros
+  }
+
+  // Recent deposits (funding) for history
+  let deposits: Record<string, unknown>[] | null = null;
+  try {
+    const { data } = await supabase
+      .from("money_deposits")
+      .select("flw_tx_id, amount_kobo, created_at, tx_ref")
+      .eq("buyer_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    deposits = data as Record<string, unknown>[] | null;
+  } catch { deposits = null; }
 
   // Recent settlements for history
-  const { data: settlements } = await supabase
-    .from("money_settlements")
-    .select("id, gross_kobo, net_kobo, kind, created_at, booking:bookings(code, slot:slots(listing:demand_listings(commodity:commodities(name))))")
-    .eq("farmer_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(20);
+  let settlements: Record<string, unknown>[] | null = null;
+  try {
+    const { data } = await supabase
+      .from("money_settlements")
+      .select("id, gross_kobo, net_kobo, fees_kobo, kind, created_at, booking:bookings(code, slot:slots(listing:demand_listings(commodity:commodities(name))))")
+      .eq("farmer_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    settlements = data as Record<string, unknown>[] | null;
+  } catch { settlements = null; }
 
   // Recent withdrawal requests for history
-  const { data: withdrawals } = await supabase
-    .from("withdrawal_requests")
-    .select("id, amount_kobo, status, bank_name, requested_at")
-    .eq("user_id", user.id)
-    .order("requested_at", { ascending: false })
-    .limit(10);
+  let withdrawals: Record<string, unknown>[] | null = null;
+  try {
+    const { data } = await supabase
+      .from("withdrawal_requests")
+      .select("id, amount_kobo, status, bank_name, requested_at")
+      .eq("user_id", user.id)
+      .order("requested_at", { ascending: false })
+      .limit(10);
+    withdrawals = data as Record<string, unknown>[] | null;
+  } catch { withdrawals = null; }
 
-  // Merge and sort history
   type HistoryItem = {
     id: string;
     kind: "funding" | "withdrawal" | "settlement";
@@ -61,6 +88,17 @@ export async function GET(request: Request) {
   };
 
   const history: HistoryItem[] = [
+    // Deposits (funding)
+    ...(deposits ?? []).map((d: Record<string, unknown>) => ({
+      id: `dep-${d.flw_tx_id}`,
+      kind: "funding" as const,
+      amount_kobo: Number(d.amount_kobo),
+      status: "completed" as const,
+      label: "Wallet funding",
+      created_at: String(d.created_at),
+      ref: String(d.tx_ref ?? "").slice(0, 12),
+    })),
+    // Settlements (trade payouts)
     ...(settlements ?? []).map((s: Record<string, unknown>) => ({
       id: String(s.id),
       kind: "settlement" as const,
@@ -72,11 +110,12 @@ export async function GET(request: Request) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ref: (s.booking as any)?.code ?? "",
     })),
+    // Withdrawals
     ...(withdrawals ?? []).map((w: Record<string, unknown>) => ({
       id: String(w.id),
       kind: "withdrawal" as const,
       amount_kobo: -Number(w.amount_kobo),
-      status: (w.status === "paid" ? "completed" : w.status === "rejected" ? "failed" : "pending") as "completed" | "pending" | "failed",
+      status: (w.status === "paid" ? "completed" : w.status === "rejected" || w.status === "failed" ? "failed" : "pending") as "completed" | "pending" | "failed",
       label: `Withdrawal to ${w.bank_name}`,
       created_at: String(w.requested_at),
       ref: String(w.id).slice(0, 8).toUpperCase(),

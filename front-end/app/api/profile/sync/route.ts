@@ -1,13 +1,13 @@
 import { connection } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 
 import { firebaseUid } from "@/lib/money/auth";
+import { serverMoneyDb } from "@/lib/money/db";
 
 /**
  * POST /api/profile/sync
  * Body: { email, display_name, photo_url }
  *
- * Upserts a row in the `profiles` table keyed on firebase_uid.
+ * Syncs Firebase auth data into the users table.
  * Called from onboarding and whenever the user's Firebase profile changes.
  */
 export async function POST(request: Request) {
@@ -22,19 +22,36 @@ export async function POST(request: Request) {
     photo_url?: string;
   } | null;
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } },
-  );
+  // Use logistics_save_profile to update the users table via the existing RPC.
+  // The firebase_uid is the key — it upserts name and phone.
+  // For display_name and photo_url, we update directly.
+  const db = serverMoneyDb();
 
-  const { data, error } = await supabase.rpc("upsert_profile", {
-    p_firebase_uid: uid,
-    p_email: body?.email ?? "",
-    p_display_name: body?.display_name ?? "",
-    p_photo_url: body?.photo_url ?? "",
-  });
+  // First ensure the user row exists (logistics_save_profile handles upsert by firebase_uid)
+  // Then update display_name and photo_url
+  try {
+    // Update display_name and photo_url on the users table directly
+    // The user must already exist (created via onboarding or /api/me POST)
+    const supabaseModule = await import("@supabase/supabase-js");
+    const supabase = supabaseModule.createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { persistSession: false } },
+    );
 
-  if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
-  return Response.json({ ok: true, profile: data });
+    const { error } = await supabase
+      .from("users")
+      .update({
+        display_name: body?.display_name ?? null,
+        photo_url: body?.photo_url ?? null,
+        email: body?.email ?? null,
+      })
+      .eq("firebase_uid", uid);
+
+    if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
+    return Response.json({ ok: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Sync failed";
+    return Response.json({ ok: false, error: message }, { status: 500 });
+  }
 }
