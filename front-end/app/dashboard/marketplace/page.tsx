@@ -9,9 +9,9 @@ import { LogoVideo } from "@/components/dashboard/logo-video";
 import { FilterPanel, type FilterState } from "@/components/marketplace/filter-panel";
 import { PostModal } from "@/components/dashboard/post-button";
 import { Reveal } from "@/components/motion/reveal";
-import { fx, playOnEnter, useGSAP } from "@/lib/gsap/effects";
 import { cn } from "@/lib/utils";
 import { CardsSkeleton } from "@/components/loader/skeletons";
+import { HillsCard } from "@/components/profile/hills-card";
 import { trackTask } from "@/lib/loading/progress";
 
 type BoardRow = {
@@ -164,7 +164,6 @@ function SupplyCard({ row }: { row: SupplyRow }) {
 }
 
 export default function MarketplacePage() {
-  const heroRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<Tab>("demand");
   const [filterOpen, setFilterOpen] = useState(false);
   const [postOpen, setPostOpen] = useState(false);
@@ -219,11 +218,6 @@ export default function MarketplacePage() {
     return () => { cancelled = true; };
   }, []);
 
-  useGSAP(() => {
-    const root = heroRef.current;
-    if (!root) return;
-    playOnEnter(fx("riseIn", root.querySelectorAll("[data-rise]"), { stagger: 0.1 }), root, "top 85%");
-  }, { scope: heroRef });
 
   // Map board cards to display shape (board returns BoardCard from buildBoard)
   const demandItems = rows.map((r) => {
@@ -268,39 +262,47 @@ export default function MarketplacePage() {
       <div className="mx-auto w-full max-w-[1120px] px-4 py-6 md:px-6 lg:px-8">
 
         {/* Hero */}
-        <div ref={heroRef} data-rhythm="field"
-          className="relative isolate mb-8 overflow-hidden rounded-2xl bg-field px-6 py-10 text-paper lg:px-10 lg:py-12">
-          <LogoVideo />
-          <p data-rise className="text-label font-medium text-sage/70">Lumora · Marketplace</p>
-          <h1 data-rise className="mt-2 font-display text-display-lg-sm font-medium text-paper md:text-display-lg">
-            See who&apos;s buying<br /><span className="text-sage">before you sell.</span>
-          </h1>
-          <p data-rise className="mt-3 max-w-[32rem] text-body leading-relaxed text-paper/70">
-            Active buyers near Jos. Real bids, live capacity.
-          </p>
+        <HillsCard className="mb-8">
+          <div className="px-5 pt-24 pb-6 sm:px-10 sm:pt-28 sm:pb-9 lg:px-14 lg:pt-32 lg:pb-11">
+            <p data-card="rise" className="text-body-sm font-medium text-ink/70">Lumora · Marketplace</p>
+            <h1 data-card="rise" className="mt-1 text-[28px] leading-[1.15] font-medium tracking-tight text-ink sm:text-[38px]">
+              See who&apos;s buying<br /><span className="text-green">before you sell.</span>
+            </h1>
+            <p data-card="rise" className="mt-2 max-w-[32rem] text-body text-ink/80">
+              Active buyers near Jos. Real bids, live capacity.
+            </p>
 
-          <div data-rise className="mt-5 flex flex-wrap gap-2">
-            <button
-              onClick={() => setPostOpen(true)}
-              className="flex items-center gap-2 rounded-full bg-amber px-5 py-2.5 text-body-sm font-medium text-ink transition-all hover:bg-amber/90 hover:shadow-md">
-              <Plus strokeWidth={2} className="size-4" /> Post demand or supply
-            </button>
-          </div>
-
-          <div data-rise className="mt-4 flex items-center gap-2">
-            <div className="flex flex-1 items-center gap-2 rounded-xl bg-field-soft/60 px-4 py-3">
-              <Search strokeWidth={1.5} className="size-4 text-sage/50" />
-              <input value={search} onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search commodity, buyer, or area…"
-                className="flex-1 bg-transparent text-body text-paper placeholder-sage/40 outline-none" />
+            <div data-card="rise" className="mt-5 flex flex-wrap gap-2">
+              <button
+                onClick={() => setPostOpen(true)}
+                className="flex items-center gap-2 rounded-full bg-amber px-5 py-2.5 text-body-sm font-medium text-ink transition-all hover:bg-amber/90 hover:shadow-md">
+                <Plus strokeWidth={2} className="size-4" /> Post demand or supply
+              </button>
             </div>
-            <button onClick={() => setFilterOpen(true)}
-              className="flex items-center gap-2 rounded-xl bg-paper px-4 py-3 text-body-sm font-medium text-field transition-colors hover:bg-sage-soft">
-              <SlidersHorizontal strokeWidth={1.5} className="size-4" />
-              Filters
-            </button>
+
+            <div data-card="rise" className="mt-6 flex items-center gap-2 sm:mt-8 sm:gap-3">
+              <div className="flex min-h-14 min-w-0 flex-1 items-center gap-2.5 rounded-full border border-line bg-white px-5 transition-[border-color,box-shadow] duration-150 focus-within:border-green focus-within:ring-3 focus-within:ring-green/20">
+                <Search aria-hidden="true" strokeWidth={1.5} className="size-[18px] shrink-0 text-ink-muted" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search commodity, buyer, or area…"
+                  aria-label="Search the marketplace"
+                  className="min-w-0 flex-1 bg-transparent text-[16px] text-ink outline-none placeholder:text-ink-muted"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setFilterOpen(true)}
+                aria-label="Filters"
+                className="inline-flex size-14 shrink-0 items-center justify-center gap-2 rounded-full bg-ink text-[17px] font-medium text-paper transition-[background-color,transform] duration-200 ease-out hover:-translate-y-0.5 hover:bg-field focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none active:translate-y-0 active:scale-[0.98] motion-reduce:transition-none motion-reduce:hover:translate-y-0 sm:w-auto sm:px-8"
+              >
+                <SlidersHorizontal aria-hidden="true" strokeWidth={1.5} className="size-[18px]" />
+                <span className="hidden sm:inline">Filters</span>
+              </button>
+            </div>
           </div>
-        </div>
+        </HillsCard>
 
         {/* Tabs */}
         <div className="mb-6 flex gap-1 rounded-xl border border-line bg-white p-1 w-fit">
