@@ -2,9 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, CheckCircle2, ChevronDown, ChevronUp, Wallet } from "lucide-react";
-import { getAuth } from "firebase/auth";
 
-import app from "@/lib/firebase/config";
+import { getToken } from "@/lib/firebase/auth";
 import { LogoVideo } from "@/components/dashboard/logo-video";
 import { Reveal } from "@/components/motion/reveal";
 import { fx, playOnEnter, useGSAP } from "@/lib/gsap/effects";
@@ -82,7 +81,7 @@ export default function TransactionsPage() {
       const finished = trackTask("transactions-page");
       setError(null);
       try {
-        const token = await getAuth(app).currentUser?.getIdToken();
+        const token = await getToken();
         const res = await fetch("/api/dashboard/transactions", {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });

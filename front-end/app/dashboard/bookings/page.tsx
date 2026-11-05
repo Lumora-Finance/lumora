@@ -3,9 +3,8 @@
 import { useEffect, useState } from "react";
 import { Calendar, Check, Loader2, MapPin, Phone, Truck, X, KeyRound } from "lucide-react";
 import Link from "next/link";
-import { getAuth } from "firebase/auth";
+import { getToken } from "@/lib/firebase/auth";
 
-import app from "@/lib/firebase/config";
 import { LogoVideo } from "@/components/dashboard/logo-video";
 import { Reveal } from "@/components/motion/reveal";
 import { TransactionPinModal } from "@/components/dashboard/transaction-pin-modal";
@@ -64,7 +63,7 @@ function tabOf(b: Booking): Tab {
 }
 
 async function postBookingAction(bookingId: string, endpoint: string, body: object = {}) {
-  const token = await getAuth(app).currentUser?.getIdToken();
+  const token = await getToken();
   const res = await fetch(`/api/bookings/${bookingId}/${endpoint}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -289,10 +288,7 @@ export default function BookingsPage() {
     const finished = trackTask("bookings");
     setError(null);
     try {
-      const auth = getAuth(app);
-      // On a fresh load the saved session isn't back yet, and asking now would look signed out.
-      await auth.authStateReady();
-      const token = await auth.currentUser?.getIdToken();
+      const token = await getToken();
       const res = await fetch("/api/bookings", {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });

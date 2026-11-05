@@ -44,3 +44,15 @@ export function isPopupDismissed(error: unknown) {
   const code = (error as { code?: string })?.code;
   return code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request";
 }
+
+/**
+ * Returns the current user's ID token, waiting for Firebase to restore the
+ * session first. Always use this instead of `currentUser?.getIdToken()` so
+ * pages that mount before the session is back don't send unauthenticated requests.
+ */
+export async function getToken(): Promise<string | null> {
+  const a = getFirebaseAuth();
+  if (!a) return null;
+  await a.authStateReady();
+  return a.currentUser?.getIdToken() ?? null;
+}

@@ -7,9 +7,8 @@ import {
   Calendar, Package, BarChart3, Loader2, User, Send, Star,
 } from "lucide-react";
 import Link from "next/link";
-import { getAuth } from "firebase/auth";
+import { getToken } from "@/lib/firebase/auth";
 
-import app from "@/lib/firebase/config";
 import { LogoVideo } from "@/components/dashboard/logo-video";
 import { Reveal } from "@/components/motion/reveal";
 import { TransactionPinModal } from "@/components/dashboard/transaction-pin-modal";
@@ -75,7 +74,7 @@ export default function SupplyListingDetailPage() {
       setLoading(true);
       setError(null);
       try {
-        const token = await getAuth(app).currentUser?.getIdToken();
+        const token = await getToken();
         const res = await fetch(`/api/supply-listings/${id}`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
@@ -102,7 +101,7 @@ export default function SupplyListingDetailPage() {
     if (!listing) return;
     setOffersLoading(true);
     try {
-      const token = await getAuth(app).currentUser?.getIdToken();
+      const token = await getToken();
       const res = await fetch(`/api/supply-listings/${id}/offers`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
@@ -117,7 +116,7 @@ export default function SupplyListingDetailPage() {
   async function submitOffer() {
     setOfferSubmitting(true);
     try {
-      const token = await getAuth(app).currentUser?.getIdToken();
+      const token = await getToken();
       const res = await fetch("/api/buyer-offers", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -130,7 +129,7 @@ export default function SupplyListingDetailPage() {
   }
 
   async function acceptOffer(offerId: string) {
-    const token = await getAuth(app).currentUser?.getIdToken();
+    const token = await getToken();
     const res = await fetch(`/api/buyer-offers/${offerId}/accept`, {
       method: "POST",
       headers: token ? { Authorization: `Bearer ${token}` } : {},

@@ -5,9 +5,7 @@ import {
   ArrowDownLeft, ArrowUpRight, Wallet as WalletIcon, Plus, ChevronUp,
   CheckCircle2, History, X,
 } from "lucide-react";
-import { getAuth } from "firebase/auth";
-
-import app from "@/lib/firebase/config";
+import { getToken } from "@/lib/firebase/auth";
 import { LogoVideo } from "@/components/dashboard/logo-video";
 import { Reveal } from "@/components/motion/reveal";
 import { useAuthUser } from "@/components/auth/use-auth-user";
@@ -51,10 +49,6 @@ function relDate(iso: string) {
   if (diff < 86_400_000) return "Today";
   if (diff < 172_800_000) return "Yesterday";
   return d.toLocaleDateString("en-NG", { weekday: "short", day: "numeric", month: "short" });
-}
-
-async function getToken() {
-  return getAuth(app).currentUser?.getIdToken() ?? null;
 }
 
 export default function WalletPage() {

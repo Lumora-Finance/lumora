@@ -2,10 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Play, Pause, Pencil, MoreHorizontal, Sparkles, Trash2, X, Check } from "lucide-react";
-import { getAuth } from "firebase/auth";
 import Link from "next/link";
 
-import app from "@/lib/firebase/config";
+import { getToken } from "@/lib/firebase/auth";
 import { LogoVideo } from "@/components/dashboard/logo-video";
 import { PostModal } from "@/components/dashboard/post-button";
 import { Reveal } from "@/components/motion/reveal";
@@ -40,10 +39,6 @@ const ACCENT: Record<string, string> = {
 
 function formatKobo(kobo: number) {
   return `₦${(kobo / 100).toLocaleString("en-NG")}`;
-}
-
-async function getToken() {
-  return getAuth(app).currentUser?.getIdToken() ?? null;
 }
 
 async function patchListing(id: string, body: object) {

@@ -6,11 +6,9 @@ import {
   LayoutDashboard,
   LogOut,
   MapPin,
-  MessageSquare,
   ShieldCheck,
   ShoppingBag,
   Store,
-  Tag,
   User,
   Wallet,
 } from "lucide-react";
@@ -26,10 +24,8 @@ import { useProfile } from "@/components/auth/use-profile";
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/dashboard/marketplace", label: "Marketplace", icon: Store },
-  { href: "/dashboard/sell", label: "Sell Produce", icon: Tag },
   { href: "/dashboard/board", label: "Buyers near you", icon: MapPin },
   { href: "/dashboard/bookings", label: "My Bookings", icon: BookOpen },
-  { href: "/dashboard/messages", label: "Messages", icon: MessageSquare },
   { href: "/dashboard/wallet", label: "Wallet", icon: Wallet },
   { href: "/dashboard/transactions", label: "Transactions", icon: BarChart3 },
   { href: "/dashboard/posts", label: "My Posts", icon: ShoppingBag },
@@ -155,11 +151,6 @@ export function Sidebar() {
                     )}
                   />
                   {label}
-                  {label === "Messages" && (
-                    <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-amber px-1.5 font-num text-label font-medium text-ink">
-                      2
-                    </span>
-                  )}
                 </Link>
               </li>
             );

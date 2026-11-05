@@ -7,9 +7,8 @@ import {
   Calendar, Package, BarChart3, Loader2, User, Send, Star,
 } from "lucide-react";
 import Link from "next/link";
-import { getAuth } from "firebase/auth";
+import { getToken } from "@/lib/firebase/auth";
 
-import app from "@/lib/firebase/config";
 import { LogoVideo } from "@/components/dashboard/logo-video";
 import { Reveal } from "@/components/motion/reveal";
 import { TransactionPinModal } from "@/components/dashboard/transaction-pin-modal";
@@ -91,7 +90,7 @@ export default function ListingDetailPage() {
       const finished = trackTask("marketplace-post");
       setError(null);
       try {
-        const token = await getAuth(app).currentUser?.getIdToken();
+        const token = await getToken();
         const res = await fetch(`/api/listings/${id}`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
@@ -119,7 +118,7 @@ export default function ListingDetailPage() {
     if (!listing) return;
     setOffersLoading(true);
     try {
-      const token = await getAuth(app).currentUser?.getIdToken();
+      const token = await getToken();
       const res = await fetch(`/api/listings/${id}/offers`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
@@ -134,7 +133,7 @@ export default function ListingDetailPage() {
   async function submitOffer() {
     setOfferSubmitting(true);
     try {
-      const token = await getAuth(app).currentUser?.getIdToken();
+      const token = await getToken();
       const res = await fetch("/api/offers", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -147,7 +146,7 @@ export default function ListingDetailPage() {
   }
 
   async function acceptOffer(offerId: string) {
-    const token = await getAuth(app).currentUser?.getIdToken();
+    const token = await getToken();
     const res = await fetch(`/api/offers/${offerId}`, {
       method: "POST",
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -165,7 +164,7 @@ export default function ListingDetailPage() {
     if (booking) return;
     setBooking(true);
     try {
-      const token = await getAuth(app).currentUser?.getIdToken();
+      const token = await getToken();
       const res = await fetch(`/api/bookings`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },

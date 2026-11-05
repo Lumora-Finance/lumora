@@ -4,10 +4,9 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { MapPin, ShieldCheck, MessageSquare, Store } from "lucide-react";
 import Link from "next/link";
-import { getAuth } from "firebase/auth";
+import { getToken } from "@/lib/firebase/auth";
 
 import { DetailSkeleton } from "@/components/loader/skeletons";
-import app from "@/lib/firebase/config";
 import { trackTask } from "@/lib/loading/progress";
 import { cn } from "@/lib/utils";
 
@@ -56,7 +55,7 @@ export default function PublicProfilePage() {
       const finished = trackTask("public-profile");
       setError(null);
       try {
-        const token = await getAuth(app).currentUser?.getIdToken();
+        const token = await getToken();
         const res = await fetch(`/api/users/${userId}`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });

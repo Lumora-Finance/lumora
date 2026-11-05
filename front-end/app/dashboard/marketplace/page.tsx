@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Sparkles, SlidersHorizontal, Loader2, Search, MapPin, Users, Package } from "lucide-react";
-import { getAuth } from "firebase/auth";
+import { Sparkles, SlidersHorizontal, Loader2, Search, MapPin, Package, Plus } from "lucide-react";
 import Link from "next/link";
 
-import app from "@/lib/firebase/config";
+import { getToken } from "@/lib/firebase/auth";
 import { LogoVideo } from "@/components/dashboard/logo-video";
 import { FilterPanel, type FilterState } from "@/components/marketplace/filter-panel";
+import { PostModal } from "@/components/dashboard/post-button";
 import { Reveal } from "@/components/motion/reveal";
 import { fx, playOnEnter, useGSAP } from "@/lib/gsap/effects";
 import { cn } from "@/lib/utils";
@@ -33,16 +33,6 @@ type BoardRow = {
   commodity: string;
 };
 
-type Seller = {
-  id: string;
-  name: string;
-  role: string;
-  area: string | null;
-  bio: string | null;
-  photo_url: string | null;
-  verified: boolean;
-};
-
 type SupplyRow = {
   id: string;
   title: string;
@@ -57,7 +47,7 @@ type SupplyRow = {
   farmer: { id: string; name: string; verified: boolean; photo_url: string | null };
 };
 
-type Tab = "demand" | "supply" | "sellers";
+type Tab = "demand" | "supply";
 
 function formatKobo(kobo: number, unit: string) {
   return `₦${(kobo / 100).toLocaleString("en-NG")}/${unit}`;
@@ -173,47 +163,16 @@ function SupplyCard({ row }: { row: SupplyRow }) {
   );
 }
 
-function SellerCard({ seller }: { seller: Seller }) {
-  const initials = seller.name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
-  return (
-    <Link
-      href={`/dashboard/profile/${seller.id}`}
-      className="flex items-center gap-4 rounded-xl border border-line bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
-    >
-      <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-sage-soft font-num text-heading font-medium text-green">
-        {seller.photo_url ? (
-          <img src={seller.photo_url} alt={seller.name} className="size-full object-cover" referrerPolicy="no-referrer" />
-        ) : initials}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <p className="font-medium text-ink">{seller.name}</p>
-          {seller.verified && (
-            <span className="rounded-full bg-sage-soft px-2 py-0.5 text-label font-medium text-green">✓ Verified</span>
-          )}
-        </div>
-        <p className="text-body-sm text-ink-muted capitalize">{seller.role}</p>
-        {seller.area && (
-          <p className="flex items-center gap-1 text-body-sm text-ink-muted">
-            <MapPin strokeWidth={1.5} className="size-3.5" /> {seller.area}
-          </p>
-        )}
-        {seller.bio && <p className="mt-1 line-clamp-1 text-body-sm text-ink-muted">{seller.bio}</p>}
-      </div>
-    </Link>
-  );
-}
-
 export default function MarketplacePage() {
   const heroRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<Tab>("demand");
   const [filterOpen, setFilterOpen] = useState(false);
+  const [postOpen, setPostOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [areaFilter, setAreaFilter] = useState("All areas");
 
   const [rows, setRows] = useState<BoardRow[]>([]);
   const [supplyRows, setSupplyRows] = useState<SupplyRow[]>([]);
-  const [sellers, setSellers] = useState<Seller[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -224,9 +183,6 @@ export default function MarketplacePage() {
     sort: "newest",
   });
 
-  async function getToken() {
-    return getAuth(app).currentUser?.getIdToken() ?? null;
-  }
 
   useEffect(() => {
     let cancelled = false;
@@ -238,9 +194,8 @@ export default function MarketplacePage() {
         const token = await getToken();
         const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
 
-        const [boardRes, sellersRes, supplyRes] = await Promise.all([
+        const [boardRes, supplyRes] = await Promise.all([
           fetch("/api/board", { headers }),
-          fetch("/api/sellers", { headers }),
           fetch("/api/supply-listings", { headers }),
         ]);
 
@@ -249,13 +204,10 @@ export default function MarketplacePage() {
         const boardData = (await boardRes.json()) as { cards?: BoardRow[] } | BoardRow[];
         const cards = Array.isArray(boardData) ? boardData : (boardData as { cards?: BoardRow[] }).cards ?? [];
 
-        let sellerList: Seller[] = [];
-        if (sellersRes.ok) sellerList = (await sellersRes.json()) as Seller[];
-
         let supplyList: SupplyRow[] = [];
         if (supplyRes.ok) supplyList = (await supplyRes.json()) as SupplyRow[];
 
-        if (!cancelled) { setRows(cards); setSellers(sellerList); setSupplyRows(supplyList); }
+        if (!cancelled) { setRows(cards); setSupplyRows(supplyList); }
       } catch {
         if (!cancelled) setError("Couldn't load the marketplace. Please refresh.");
       } finally {
@@ -309,16 +261,7 @@ export default function MarketplacePage() {
   if (filters.sort === "price-high") filteredDemand = [...filteredDemand].sort((a, b) => b.price_kobo - a.price_kobo);
   if (filters.sort === "price-low") filteredDemand = [...filteredDemand].sort((a, b) => a.price_kobo - b.price_kobo);
 
-  const filteredSellers = sellers.filter((s) => {
-    if (areaFilter !== "All areas" && s.area !== areaFilter) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      if (!s.name.toLowerCase().includes(q) && !(s.area ?? "").toLowerCase().includes(q)) return false;
-    }
-    return true;
-  });
-
-  const AREAS = ["All areas", ...Array.from(new Set([...demandItems.map((r) => r.area), ...sellers.map((s) => s.area ?? "")].filter(Boolean)))];
+  const AREAS = ["All areas", ...Array.from(new Set(demandItems.map((r) => r.area).filter(Boolean)))];
 
   return (
     <>
@@ -336,7 +279,15 @@ export default function MarketplacePage() {
             Active buyers near Jos. Real bids, live capacity.
           </p>
 
-          <div data-rise className="mt-6 flex items-center gap-2">
+          <div data-rise className="mt-5 flex flex-wrap gap-2">
+            <button
+              onClick={() => setPostOpen(true)}
+              className="flex items-center gap-2 rounded-full bg-amber px-5 py-2.5 text-body-sm font-medium text-ink transition-all hover:bg-amber/90 hover:shadow-md">
+              <Plus strokeWidth={2} className="size-4" /> Post demand or supply
+            </button>
+          </div>
+
+          <div data-rise className="mt-4 flex items-center gap-2">
             <div className="flex flex-1 items-center gap-2 rounded-xl bg-field-soft/60 px-4 py-3">
               <Search strokeWidth={1.5} className="size-4 text-sage/50" />
               <input value={search} onChange={(e) => setSearch(e.target.value)}
@@ -365,29 +316,10 @@ export default function MarketplacePage() {
             <Package strokeWidth={1.5} className="size-4" /> Supply
             {supplyRows.length > 0 && <span className="rounded-full bg-green/20 px-2 py-0.5 font-num text-label text-green">{supplyRows.length}</span>}
           </button>
-          <button onClick={() => setTab("sellers")}
-            className={cn("flex items-center gap-2 rounded-lg px-5 py-2 text-body-sm font-medium transition-all",
-              tab === "sellers" ? "bg-sage-soft text-green shadow-sm" : "text-ink-muted hover:text-ink")}>
-            <Users strokeWidth={1.5} className="size-4" /> Sellers
-            {sellers.length > 0 && <span className="rounded-full bg-green/20 px-2 py-0.5 font-num text-label text-green">{sellers.length}</span>}
-          </button>
         </div>
 
         {/* Supply area filter */}
         {tab === "supply" && (
-          <div className="mb-5 flex flex-wrap gap-2">
-            {AREAS.map((a) => (
-              <button key={a} onClick={() => setAreaFilter(a)}
-                className={cn("rounded-full border px-4 py-1.5 text-body-sm font-medium transition-colors",
-                  areaFilter === a ? "border-green bg-sage-soft text-green" : "border-line text-ink-muted hover:border-green hover:text-green")}>
-                {a}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Sellers area filter */}
-        {tab === "sellers" && (
           <div className="mb-5 flex flex-wrap gap-2">
             {AREAS.map((a) => (
               <button key={a} onClick={() => setAreaFilter(a)}
@@ -429,9 +361,9 @@ export default function MarketplacePage() {
               <Package strokeWidth={1} className="size-10 text-sage/40" />
               <p className="font-display text-title font-medium">No supply listings yet</p>
               <p className="text-body text-paper/60">Farmers will appear here when they list produce for sale.</p>
-              <Link href="/dashboard/sell" className="mt-2 rounded-full bg-paper px-5 py-2.5 text-body-sm font-medium text-field hover:bg-sage-soft">
+              <button onClick={() => setPostOpen(true)} className="mt-2 rounded-full bg-paper px-5 py-2.5 text-body-sm font-medium text-field hover:bg-sage-soft">
                 List your produce →
-              </Link>
+              </button>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -444,25 +376,11 @@ export default function MarketplacePage() {
               ))}
             </div>
           )
-        ) : (
-          filteredSellers.length === 0 ? (
-            <div className="flex flex-col items-center gap-4 rounded-2xl bg-field px-8 py-16 text-center text-paper">
-              <p className="font-display text-title font-medium">No sellers found</p>
-              <p className="text-body text-paper/60">Farmers and agents who register will appear here.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {filteredSellers.map((seller) => (
-                <Reveal key={seller.id} effect="riseIn" config={{ stagger: 0 }}>
-                  <SellerCard seller={seller} />
-                </Reveal>
-              ))}
-            </div>
-          )
-        )}
+        ) : null}
       </div>
 
       <FilterPanel open={filterOpen} onClose={() => setFilterOpen(false)} filters={filters} onApply={setFilters} />
+      <PostModal open={postOpen} onClose={() => setPostOpen(false)} />
     </>
   );
 }
