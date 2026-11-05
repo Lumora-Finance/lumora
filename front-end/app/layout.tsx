@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { DM_Sans, Fraunces, Geist_Mono } from "next/font/google";
 
+import { MomentHost } from "@/components/loader/moment-host";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, SITE_URL } from "@/lib/site";
 import "./globals.css";
 
@@ -72,11 +73,21 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
+      suppressHydrationWarning
       lang="en-NG"
       className={`${sans.variable} ${display.variable} ${mono.variable} h-full antialiased`}
     >
+      <head>
+        {/* Runs before paint, so a tab that has already had the first-load sequence never flashes it. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{if(sessionStorage.getItem("lumora.loader.seen")==="1")document.documentElement.dataset.lumoraSeen="1"}catch(e){}`,
+          }}
+        />
+      </head>
       <body suppressHydrationWarning className="flex min-h-full flex-col bg-paper font-sans text-body text-ink">
         {children}
+        <MomentHost />
       </body>
     </html>
   );

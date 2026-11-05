@@ -3,6 +3,7 @@ import { Suspense } from "react";
 
 import { DashboardScroll } from "@/components/dashboard/dashboard-scroll";
 import { DashboardHeader } from "@/components/dashboard/header";
+import { FirstLoad } from "@/components/loader/first-load";
 import { Sidebar } from "@/components/dashboard/sidebar";
 
 export const instant = false;
@@ -10,6 +11,7 @@ export const instant = false;
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-svh overflow-hidden bg-paper">
+      <FirstLoad />
       {/* Desktop sidebar */}
       <div className="hidden lg:flex lg:shrink-0">
         <Suspense>

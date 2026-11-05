@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { trackTask } from "@/lib/loading/progress";
+
 import { useAuthUser } from "./use-auth-user";
 
 /**
@@ -37,6 +39,7 @@ export function useProfile() {
 
     let cancelled = false;
     async function loadProfile() {
+      const finished = trackTask("profile");
       try {
         const token = await user!.getIdToken();
         const res = await fetch("/api/me", {
@@ -55,6 +58,7 @@ export function useProfile() {
       } catch {
         // Silent fail — isAdmin defaults to false
       } finally {
+        finished();
         if (!cancelled) setProfileLoading(false);
       }
     }

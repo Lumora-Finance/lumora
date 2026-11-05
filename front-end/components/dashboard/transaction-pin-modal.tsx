@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { X, Loader2, CheckCircle2, ShieldCheck } from "lucide-react";
+import { X, CheckCircle2, ShieldCheck } from "lucide-react";
+
+import { BusyBar } from "@/components/loader/busy-bar";
 import { getAuth } from "firebase/auth";
 
 import app from "@/lib/firebase/config";
@@ -230,21 +232,20 @@ export function TransactionPinModal({ mode: initialMode, onSuccess, onClose }: P
               onClick={handleSubmit}
               disabled={!isComplete || busy}
               className={cn(
-                "mt-7 flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-body font-medium text-paper transition-all duration-200",
+                "relative mt-7 flex w-full items-center overflow-hidden justify-center gap-2 rounded-xl py-3.5 text-body font-medium text-paper transition-all duration-200",
                 isComplete && !busy
                   ? "bg-green hover:bg-green-hover"
                   : "bg-green/40 cursor-not-allowed",
               )}
             >
-              {busy ? (
-                <><Loader2 className="size-4 animate-spin" /> Processing…</>
-              ) : mode === "set" && stage === "entry" ? (
+              {mode === "set" && stage === "entry" ? (
                 "Continue"
               ) : mode === "set" ? (
                 "Save PIN"
               ) : (
                 "Confirm"
               )}
+              <BusyBar active={busy} />
             </button>
           )}
         </div>

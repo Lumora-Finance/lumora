@@ -6,6 +6,7 @@ import { useAuthUser } from "@/components/auth/use-auth-user";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatKobo } from "@/lib/money/rules";
+import { RowsSkeleton } from "@/components/loader/skeletons";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -277,10 +278,7 @@ export default function WithdrawalsPage() {
 
   if (authLoading || (user && requests === null && !denied && !fetchError)) {
     body = (
-      <div className="flex items-center gap-3 text-ink-muted">
-        <div className="size-5 animate-spin rounded-full border-2 border-line border-t-green" />
-        <span className="text-body-sm">Loading…</span>
-      </div>
+      <RowsSkeleton rows={5} label="Loading withdrawals" />
     );
   } else if (!user || denied) {
     body = (

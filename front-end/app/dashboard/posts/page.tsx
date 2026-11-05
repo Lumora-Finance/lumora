@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Play, Pause, Pencil, MoreHorizontal, Sparkles, Loader2, Trash2, X, Check } from "lucide-react";
+import { Play, Pause, Pencil, MoreHorizontal, Sparkles, Trash2, X, Check } from "lucide-react";
 import { getAuth } from "firebase/auth";
 import Link from "next/link";
 
@@ -11,6 +11,9 @@ import { PostModal } from "@/components/dashboard/post-button";
 import { Reveal } from "@/components/motion/reveal";
 import { fx, playOnEnter, useGSAP } from "@/lib/gsap/effects";
 import { cn } from "@/lib/utils";
+import { BusyBar } from "@/components/loader/busy-bar";
+import { RowsSkeleton } from "@/components/loader/skeletons";
+import { trackTask } from "@/lib/loading/progress";
 
 type Post = {
   id: string;
@@ -114,7 +117,7 @@ function PostCard({
         <div className="flex flex-wrap items-center gap-2">
           <span className="rounded-md bg-green/10 px-2 py-0.5 font-num text-label font-medium text-green">DEMAND</span>
           <span className={cn("rounded-full px-2.5 py-0.5 text-label font-medium capitalize", STATUS_STYLES[post.status] ?? "bg-line text-ink-muted")}>
-            {saving ? <Loader2 className="inline size-3 animate-spin" /> : post.status}
+            {saving ? "Saving" : post.status}
           </span>
         </div>
 
@@ -193,8 +196,10 @@ function PostCard({
           </div>
           <div className="flex gap-2">
             <button onClick={handleEdit} disabled={saving}
-              className="flex items-center gap-1.5 rounded-lg bg-green px-4 py-2 text-body-sm font-medium text-paper hover:bg-green-hover disabled:opacity-50">
-              {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Check strokeWidth={2} className="size-3.5" />} Save
+              aria-busy={saving}
+              className="relative flex items-center gap-1.5 overflow-hidden rounded-lg bg-green px-4 py-2 text-body-sm font-medium text-paper hover:bg-green-hover disabled:opacity-50">
+              <Check strokeWidth={2} className="size-3.5" /> Save
+              <BusyBar active={saving} />
             </button>
             <button onClick={() => setEditing(false)}
               className="flex items-center gap-1.5 rounded-lg border border-line px-4 py-2 text-body-sm font-medium text-ink-muted hover:text-ink">
@@ -216,6 +221,7 @@ export default function PostsPage() {
 
   async function loadPosts() {
     setLoading(true);
+    const finished = trackTask("posts-page");
     setError(null);
     try {
       const token = await getToken();
@@ -228,6 +234,7 @@ export default function PostsPage() {
     } catch {
       setError("Couldn't load posts. Please refresh.");
     } finally {
+      finished();
       setLoading(false);
     }
   }
@@ -281,7 +288,7 @@ export default function PostsPage() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-16"><Loader2 className="size-6 animate-spin text-ink-muted" /></div>
+          <RowsSkeleton label="Loading your posts" />
         ) : error ? (
           <div className="rounded-xl border border-danger/30 bg-danger/5 p-6 text-center text-danger">{error}</div>
         ) : posts.length === 0 ? (

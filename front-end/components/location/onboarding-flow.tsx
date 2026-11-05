@@ -1,15 +1,31 @@
 "use client";
 
+import type { User } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { useAuthUser } from "@/components/auth/use-auth-user";
 import { OnboardingView, type OnboardingRole, type OnboardingStep } from "@/components/onboarding/onboarding-view";
+import { LoaderScreen } from "@/components/loader/LumoraLoader";
+import { loadingMessage } from "@/lib/loading-messages";
+import { type MomentFinal, playMoment } from "@/lib/loading/moment";
 import { apiFetch } from "@/lib/logistics/client";
 
 import { locationBody, type PickedLocation } from "./location-picker";
 
 type Profile = { role: string; name: string; area: string | null } | null;
+
+/** What finishing onboarding says: for a farmer, how many buyers are really near them right now. */
+async function onboardingFinal(user: User, { role, area }: { role: OnboardingRole; area: string | null }): Promise<MomentFinal> {
+  const place = area ?? "you";
+  if (role === "buyer") return { top: "All set", line: "Your board is ready", fraction: 1, text: "Ready" };
+  const response = await apiFetch(user, "/api/board").catch(() => null);
+  const data = response?.ok ? ((await response.json().catch(() => null)) as { cards?: { remaining: number }[] } | null) : null;
+  if (!data?.cards) return { top: "All set", line: "Your board is ready", fraction: 1, text: "Ready" };
+  const buyers = data.cards.filter((card) => card.remaining > 0).length;
+  if (buyers === 0) return { top: "All set", line: `No buyers near ${place} yet`, fraction: 0, number: 0 };
+  return { top: `${buyers} ${buyers === 1 ? "buyer" : "buyers"} right now`, line: `${buyers === 1 ? "Buyer" : "Buyers"} near ${place} ready`, fraction: 1, number: buyers };
+}
 
 /** Sign-in and saving for the onboarding screens. Nothing here can stop someone reaching the dashboard. */
 export function OnboardingFlow() {
@@ -50,9 +66,7 @@ export function OnboardingFlow() {
 
   if (!start || !user) {
     return (
-      <main className="flex min-h-svh items-center justify-center bg-paper">
-        <p className="text-ink-muted">One moment…</p>
-      </main>
+      <LoaderScreen label={loadingMessage("/onboarding")} />
     );
   }
 
@@ -92,7 +106,17 @@ export function OnboardingFlow() {
       initialName={start.name}
       onSaveDetails={saveDetails}
       onSaveLocation={saveLocation}
-      onFinish={() => router.replace("/dashboard")}
+      onFinish={(details) => {
+        if (!details) {
+          router.replace("/dashboard");
+          return;
+        }
+        playMoment({
+          label: loadingMessage("/onboarding/finish"),
+          work: onboardingFinal(user, details),
+          whenCovered: () => router.replace("/dashboard"),
+        });
+      }}
     />
   );
 }

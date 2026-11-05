@@ -1,38 +1,23 @@
 "use client";
 
-import { Loader2, MoreHorizontal, Pause, Pencil, Play, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
-import Link from "next/link";
+import { MoreHorizontal, Pause, Pencil, Play, Plus, Trash2 } from "lucide-react";
 import { getAuth } from "firebase/auth";
+import Link from "next/link";
+import { useState } from "react";
 
+import { RowsSkeleton } from "@/components/loader/skeletons";
+import type { DashboardPost } from "@/lib/dashboard-data";
 import app from "@/lib/firebase/config";
-import { cn } from "@/lib/utils";
 import { useDashboardData } from "@/lib/hooks/use-dashboard-data";
+import { formatKobo } from "@/lib/money/rules";
+import { cn } from "@/lib/utils";
 
-type Post = {
-  id: string;
-  spec: string | null;
-  unit_price_kobo: number;
-  capacity_per_day: number;
-  status: "active" | "paused" | "closed";
-  commodity: { id: string; name: string; unit: string } | null;
-};
+import { Panel, PanelHeading, PanelLink } from "./panel";
 
-const STATUS_STYLES: Record<string, string> = {
-  active: "bg-sage-soft text-green",
-  paused: "bg-amber-soft text-amber",
-  closed: "bg-line text-ink-muted",
-};
-
-const ACCENT: Record<string, string> = {
-  active: "border-l-green",
-  paused: "border-l-amber",
-  closed: "border-l-ink-muted",
-};
-
-function formatKobo(kobo: number) {
-  return `₦${(kobo / 100).toLocaleString("en-NG")}`;
-}
+const MOST_SHOWN = 4;
+const ACTION =
+  "flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-line text-body-sm font-medium transition-colors duration-150 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none";
+const ACTION_PLAIN = `${ACTION} text-ink hover:border-green hover:text-green`;
 
 async function patchListing(id: string, body: object) {
   const token = await getAuth(app).currentUser?.getIdToken();
@@ -47,137 +32,112 @@ async function patchListing(id: string, body: object) {
 export function MyPosts({ onPost }: { onPost?: () => void }) {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
-  const { data, loading, refetch } = useDashboardData<Post[]>("posts");
-  const posts = data ?? [];
+  const { data, loading, refetch } = useDashboardData<DashboardPost[]>("posts");
+  const posts = (Array.isArray(data) ? data : []).slice(0, MOST_SHOWN);
 
-  async function handlePause(post: Post) {
+  async function act(id: string, action: "pause" | "delete") {
     setActiveMenu(null);
-    setSaving(post.id);
-    await patchListing(post.id, { action: "pause" });
+    setSaving(id);
+    await patchListing(id, { action });
     setSaving(null);
-    refetch?.();
-  }
-
-  async function handleDelete(post: Post) {
-    if (!confirm("Close this listing?")) return;
-    setActiveMenu(null);
-    setSaving(post.id);
-    await patchListing(post.id, { action: "delete" });
-    setSaving(null);
-    refetch?.();
+    refetch();
   }
 
   return (
-    <div className="rounded-xl border border-line bg-white shadow-sm">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-line px-5 py-4">
-        <div>
-          <h2 className="text-heading font-medium text-ink">My Posts</h2>
-          <p className="mt-0.5 text-body-sm text-ink-muted">Your active demand and listings</p>
-        </div>
-        <button
-          onClick={onPost}
-          className="flex items-center gap-1.5 rounded-lg bg-green px-3.5 py-2 text-body-sm font-medium text-paper transition-colors hover:bg-green-hover"
-        >
-          <Plus strokeWidth={2} className="size-4" /> Post
-        </button>
-      </div>
-
-      {/* Posts */}
-      <div className="flex flex-col gap-3 p-4">
-        {loading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="size-5 animate-spin text-ink-muted" />
-          </div>
-        ) : posts.length === 0 ? (
-          <div className="py-6 text-center">
-            <p className="text-body-sm text-ink-muted">No posts yet.</p>
-            <button onClick={onPost} className="mt-2 text-body-sm font-medium text-green hover:underline">
-              Create your first post →
+    <Panel className="flex h-full flex-col">
+      <PanelHeading
+        title="My posts"
+        sub="What you've asked for"
+        action={
+          <div className="flex items-center gap-1">
+            <PanelLink href="/dashboard/posts">All posts</PanelLink>
+            <button
+              type="button"
+              onClick={onPost}
+              aria-label="New post"
+              className="flex size-9 items-center justify-center rounded-xl bg-sage-soft text-green transition-colors duration-150 hover:bg-green hover:text-paper focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none max-lg:size-11"
+            >
+              <Plus aria-hidden="true" strokeWidth={2} className="size-4" />
             </button>
           </div>
-        ) : (
-          posts.map((post) => {
+        }
+      />
+      {loading ? (
+        <RowsSkeleton rows={3} label="Loading your posts" className="mt-2 flex-1 px-5 sm:px-6" />
+      ) : posts.length === 0 ? (
+        <div className="flex-1 px-5 py-8 text-center sm:px-6">
+          <p className="text-body-sm text-ink-muted">No posts yet.</p>
+          <button type="button" onClick={onPost} className="mt-1 min-h-11 font-medium text-green underline-offset-4 hover:underline">
+            Create your first post
+          </button>
+        </div>
+      ) : (
+        <ul className="mt-2 flex-1 divide-y divide-line px-5 pb-2 sm:px-6">
+          {posts.map((post) => {
             const unit = post.commodity?.unit ?? "unit";
-            const name = post.commodity?.name ?? "Produce";
-            const isSaving = saving === post.id;
-
+            const status = saving === post.id ? "Saving" : post.status !== "active" ? post.status : null;
             return (
-              <div
-                key={post.id}
-                className={cn(
-                  "flex items-start gap-4 rounded-lg border border-line border-l-[3px] bg-paper px-5 py-4 transition-all hover:shadow-md",
-                  ACCENT[post.status] ?? "border-l-ink-muted",
-                )}
-              >
-                <span className="mt-0.5 shrink-0 rounded-md bg-green/10 px-2 py-0.5 font-num text-label font-medium text-green">
-                  DEMAND
-                </span>
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-medium text-ink">{name}</p>
-                      {post.spec && <p className="text-body-sm text-ink-muted">{post.spec}</p>}
+              <li key={post.id}>
+                <div className="flex items-center gap-1">
+                  <Link href="/dashboard/posts" className="block min-w-0 flex-1 py-3.5 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <p className="min-w-0 truncate font-medium text-ink">{post.commodity?.name ?? "Produce"}</p>
+                      <p className="shrink-0 text-body-sm text-ink-muted">
+                        <span className="font-num font-medium text-ink">{formatKobo(post.unit_price_kobo)}</span>/{unit}
+                      </p>
                     </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className={cn("rounded-full px-2.5 py-0.5 text-label font-medium capitalize", STATUS_STYLES[post.status] ?? "bg-line text-ink-muted")}>
-                        {isSaving ? <Loader2 className="inline size-3 animate-spin" /> : post.status}
-                      </span>
-
-                      {/* Always-visible 3-dot menu */}
-                      <div className="relative">
-                        <button
-                          onClick={() => setActiveMenu(activeMenu === post.id ? null : post.id)}
-                          aria-label="Post options"
-                          className="flex size-7 items-center justify-center rounded-md border border-line bg-white text-ink-muted transition-colors hover:bg-sage-soft hover:text-ink"
-                        >
-                          <MoreHorizontal strokeWidth={1.5} className="size-4" />
-                        </button>
-                        {activeMenu === post.id && (
-                          <>
-                            <div className="fixed inset-0 z-10" onClick={() => setActiveMenu(null)} />
-                            <div className="absolute right-0 top-8 z-20 min-w-[150px] overflow-hidden rounded-lg border border-line bg-white py-1 shadow-xl">
-                              <Link href={`/dashboard/marketplace/${post.id}`}
-                                className="flex w-full items-center gap-2.5 px-3.5 py-2 text-body-sm text-ink hover:bg-sage-soft"
-                                onClick={() => setActiveMenu(null)}>
-                                <Pencil strokeWidth={1.5} className="size-3.5" /> View / Edit
-                              </Link>
-                              <button onClick={() => handlePause(post)}
-                                className="flex w-full items-center gap-2.5 px-3.5 py-2 text-body-sm text-ink hover:bg-sage-soft">
-                                {post.status === "active"
-                                  ? <><Pause strokeWidth={1.5} className="size-3.5" /> Pause</>
-                                  : <><Play strokeWidth={1.5} className="size-3.5" /> Activate</>}
-                              </button>
-                              <button onClick={() => handleDelete(post)}
-                                className="flex w-full items-center gap-2.5 px-3.5 py-2 text-body-sm text-danger hover:bg-danger/10">
-                                <Trash2 strokeWidth={1.5} className="size-3.5" /> Close
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </div>
+                    <div className="mt-0.5 flex items-baseline justify-between gap-3 text-body-sm text-ink-muted">
+                      <p className="min-w-0 truncate">{post.spec || `${post.capacity_per_day} a day`}</p>
+                      {status && <p className="shrink-0 text-xs font-medium text-ink capitalize">{status}</p>}
                     </div>
-                  </div>
-
-                  <div className="mt-2 flex items-center gap-4">
-                    <span className="font-num text-number font-medium text-amber">
-                      {formatKobo(post.unit_price_kobo)}
-                      <span className="font-sans text-body-sm text-ink-muted">/{unit}</span>
-                    </span>
-                    <span className="font-num text-label text-ink-muted">{post.capacity_per_day} {unit}/day</span>
-                  </div>
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => setActiveMenu(activeMenu === post.id ? null : post.id)}
+                    aria-label="Post options"
+                    aria-expanded={activeMenu === post.id}
+                    className={cn(
+                      "-mr-2 flex size-11 shrink-0 items-center justify-center rounded-xl transition-colors duration-150 hover:bg-sage-soft hover:text-ink focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+                      activeMenu === post.id ? "bg-sage-soft text-ink" : "text-ink-muted",
+                    )}
+                  >
+                    <MoreHorizontal aria-hidden="true" strokeWidth={1.5} className="size-4" />
+                  </button>
                 </div>
-              </div>
-            );
-          })
-        )}
-      </div>
 
-      <div className="border-t border-line px-5 py-3">
-        <a href="/dashboard/posts" className="text-body-sm font-medium text-green hover:underline">View all posts →</a>
-      </div>
-    </div>
+                {/* In the row, not floating over it, because the panel below would cover a floating menu. */}
+                {activeMenu === post.id && (
+                  <div className="grid grid-cols-3 gap-2 pb-3.5">
+                    <Link
+                      href={`/dashboard/marketplace/${post.id}`}
+                      onClick={() => setActiveMenu(null)}
+                      className={ACTION_PLAIN}
+                    >
+                      <Pencil aria-hidden="true" strokeWidth={1.5} className="size-3.5 shrink-0" /> Edit
+                    </Link>
+                    <button type="button" onClick={() => act(post.id, "pause")} className={ACTION_PLAIN}>
+                      {post.status === "active" ? (
+                        <><Pause aria-hidden="true" strokeWidth={1.5} className="size-3.5 shrink-0" /> Pause</>
+                      ) : (
+                        <><Play aria-hidden="true" strokeWidth={1.5} className="size-3.5 shrink-0" /> Activate</>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (confirm("Close this listing?")) act(post.id, "delete");
+                      }}
+                      className={`${ACTION} text-danger hover:border-danger/40`}
+                    >
+                      <Trash2 aria-hidden="true" strokeWidth={1.5} className="size-3.5 shrink-0" /> Close
+                    </button>
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Panel>
   );
 }

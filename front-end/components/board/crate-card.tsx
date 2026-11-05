@@ -4,7 +4,9 @@ import { Clock } from "lucide-react";
 import { useState } from "react";
 import type { User } from "firebase/auth";
 
+import { BusyBar } from "@/components/loader/busy-bar";
 import { clock, pricePer } from "@/lib/email/format";
+import { playMoment } from "@/lib/loading/moment";
 import type { BoardCard } from "@/lib/logistics/board";
 import { whenLabel } from "@/lib/logistics/board-copy";
 import { apiFetch } from "@/lib/logistics/client";
@@ -94,6 +96,16 @@ export function CrateCard({
     setSaving(false);
     if (result?.ok) {
       setSelling(false);
+      const sold = Number(qty);
+      playMoment({
+        label: "Booking your sale",
+        work: Promise.resolve({
+          top: `Booking ${result.code}`,
+          line: `Booked: ${sold} ${sold === 1 ? words.one : words.many} for ${card.buyer}`,
+          fraction: 1,
+          number: sold,
+        }),
+      });
       onSold(result.booking_id);
       return;
     }
@@ -202,9 +214,11 @@ export function CrateCard({
                   <button
                     type="submit"
                     disabled={saving}
-                    className="h-[52px] rounded-2xl bg-green px-5 font-medium text-paper transition-[background-color,transform] duration-150 hover:bg-green-hover focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:outline-none active:scale-[0.98] disabled:opacity-60 motion-reduce:active:scale-100"
+                    aria-busy={saving}
+                    className="relative h-[52px] overflow-hidden rounded-2xl bg-green px-5 font-medium text-paper transition-[background-color,transform] duration-150 hover:bg-green-hover focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:outline-none active:scale-[0.98] disabled:opacity-60 motion-reduce:active:scale-100"
                   >
-                    {saving ? "Booking…" : "Confirm"}
+                    Confirm
+                    <BusyBar active={saving} />
                   </button>
                 </div>
               </form>

@@ -1,8 +1,9 @@
 "use client";
 
-import { LoaderCircle, LocateFixed, Search } from "lucide-react";
+import { LocateFixed, Search } from "lucide-react";
 import { useState } from "react";
 
+import { BusyBar } from "@/components/loader/busy-bar";
 import { Button } from "@/components/ui/button";
 import { AREAS, nearestArea, TOP_AREAS } from "@/lib/logistics/areas";
 import { captureLocation, CAPTURE_MESSAGES } from "@/lib/logistics/capture-location";
@@ -78,13 +79,10 @@ export function LocationPicker({
 
   return (
     <div>
-      <Button size="lg" className="h-14 w-full rounded-full text-base" disabled={locating || disabled} onClick={useMyLocation}>
-        {locating ? (
-          <LoaderCircle aria-hidden="true" strokeWidth={1.5} className="size-5 animate-spin motion-reduce:animate-none" />
-        ) : (
-          <LocateFixed aria-hidden="true" strokeWidth={1.5} className="size-5" />
-        )}
-        {locating ? "Finding you…" : "Use my location"}
+      <Button size="lg" className="relative h-14 w-full overflow-hidden rounded-full text-base" disabled={locating || disabled} onClick={useMyLocation}>
+        <LocateFixed aria-hidden="true" strokeWidth={1.5} className="size-5" />
+        Use my location
+        <BusyBar active={locating} />
       </Button>
       {message && (
         <p role="status" className="mt-3 text-ink">

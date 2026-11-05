@@ -11,6 +11,8 @@ import { FilterPanel, type FilterState } from "@/components/marketplace/filter-p
 import { Reveal } from "@/components/motion/reveal";
 import { fx, playOnEnter, useGSAP } from "@/lib/gsap/effects";
 import { cn } from "@/lib/utils";
+import { CardsSkeleton } from "@/components/loader/skeletons";
+import { trackTask } from "@/lib/loading/progress";
 
 type BoardRow = {
   listing_id: string;
@@ -230,6 +232,7 @@ export default function MarketplacePage() {
     let cancelled = false;
     async function load() {
       setLoading(true);
+      const finished = trackTask("marketplace");
       setError(null);
       try {
         const token = await getToken();
@@ -256,6 +259,7 @@ export default function MarketplacePage() {
       } catch {
         if (!cancelled) setError("Couldn't load the marketplace. Please refresh.");
       } finally {
+        finished();
         if (!cancelled) setLoading(false);
       }
     }
@@ -397,9 +401,7 @@ export default function MarketplacePage() {
 
         {/* Content */}
         {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="size-6 animate-spin text-ink-muted" />
-          </div>
+          <CardsSkeleton cards={6} columns label="Finding demand" />
         ) : error ? (
           <div className="rounded-xl border border-danger/30 bg-danger/5 p-6 text-center text-danger">{error}</div>
         ) : tab === "demand" ? (

@@ -1,5 +1,6 @@
 "use client";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import type { DashboardStats } from "@/lib/dashboard-data";
 import { useDashboardData } from "@/lib/hooks/use-dashboard-data";
 import { formatKobo } from "@/lib/money/rules";

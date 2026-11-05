@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowDownLeft, ArrowUpRight, Wallet as WalletIcon, Plus, ChevronUp,
-  CreditCard, Banknote, AlertCircle, CheckCircle2, Loader2, History, X,
+  CheckCircle2, History, X,
 } from "lucide-react";
 import { getAuth } from "firebase/auth";
 
@@ -12,6 +12,10 @@ import { LogoVideo } from "@/components/dashboard/logo-video";
 import { Reveal } from "@/components/motion/reveal";
 import { useAuthUser } from "@/components/auth/use-auth-user";
 import { cn } from "@/lib/utils";
+import { RowsSkeleton } from "@/components/loader/skeletons";
+import { Skeleton } from "@/components/ui/skeleton";
+import { trackTask } from "@/lib/loading/progress";
+import { FundModal, WithdrawModal } from "@/components/wallet/wallet-modals";
 
 type WalletData = {
   available_kobo: number;
@@ -38,7 +42,7 @@ const STATUS_STYLE: Record<string, string> = {
 };
 
 function formatKobo(kobo: number) {
-  return `₦${(kobo / 100).toLocaleString("en-NG")}`;
+  return `₦${(kobo / 100).toLocaleString("en-NG", { minimumFractionDigits: kobo % 100 ? 2 : 0 })}`;
 }
 
 function relDate(iso: string) {
@@ -60,19 +64,8 @@ export default function WalletPage() {
   const [wallet, setWallet] = useState<WalletData | null>(null);
   const [walletLoading, setWalletLoading] = useState(true);
 
-  const [fundOpen, setFundOpen] = useState(false);
-  const [withdrawOpen, setWithdrawOpen] = useState(false);
-  const [funding, setFunding] = useState(false);
-  const [withdrawing, setWithdrawing] = useState(false);
+  const [modal, setModal] = useState<"fund" | "withdraw" | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const [fundAmount, setFundAmount] = useState("");
-  const [fundMethod, setFundMethod] = useState<"card" | "bank">("card");
-  const [withdrawAmount, setWithdrawAmount] = useState("");
-  const [bankName, setBankName] = useState("");
-  const [accountNumber, setAccountNumber] = useState("");
-  const [accountName, setAccountName] = useState("");
 
   const displayName = user?.displayName ?? user?.email?.split("@")[0] ?? "there";
   const firstName = displayName.split(" ")[0];
@@ -82,6 +75,7 @@ export default function WalletPage() {
     let cancelled = false;
     async function load() {
       setWalletLoading(true);
+      const finished = trackTask("wallet");
       try {
         const token = await getToken();
         const res = await fetch("/api/wallet", {
@@ -94,6 +88,7 @@ export default function WalletPage() {
       } catch {
         // Wallet data fails silently — show zero balances
       } finally {
+        finished();
         if (!cancelled) setWalletLoading(false);
       }
     }
@@ -107,52 +102,9 @@ export default function WalletPage() {
   const pending = wallet?.pending_kobo ?? 0;
   const history = wallet?.history ?? [];
 
-  async function handleFund() {
-    const amount = parseFloat(fundAmount);
-    if (!amount || amount < 100) { setError("Minimum funding amount is ₦100"); return; }
-    setFunding(true); setError(null);
-    try {
-      const token = await getToken();
-      const res = await fetch("/api/wallet/fund", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ amountKobo: Math.round(amount * 100), email: user?.email ?? "" }),
-      });
-      const data = await res.json() as { ok?: boolean; authorizationUrl?: string; demo?: boolean; message?: string; error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Funding failed");
-      if (data.authorizationUrl) { window.location.href = data.authorizationUrl; return; }
-      setSuccess(data.message ?? `₦${amount.toLocaleString()} added to your wallet`);
-      setFundAmount(""); setFundOpen(false);
-      setTimeout(() => setSuccess(null), 4000);
-    } catch (err) { setError(err instanceof Error ? err.message : "Funding failed"); }
-    finally { setFunding(false); }
-  }
-
-  async function handleWithdraw() {
-    const amount = parseFloat(withdrawAmount);
-    if (!amount || amount < 500) { setError("Minimum withdrawal is ₦500"); return; }
-    if (!bankName || !accountNumber || !accountName) { setError("Fill in all bank details"); return; }
-    setWithdrawing(true); setError(null);
-    try {
-      const token = await getToken();
-      const res = await fetch("/api/wallet/withdraw", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ amountKobo: Math.round(amount * 100), bankName, accountNumber, accountName }),
-      });
-      const data = await res.json() as { ok?: boolean; message?: string; error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Withdrawal failed");
-      setSuccess(data.message ?? `Withdrawal of ₦${amount.toLocaleString()} submitted. Admin will process within 24 hours.`);
-      setWithdrawAmount(""); setBankName(""); setAccountNumber(""); setAccountName(""); setWithdrawOpen(false);
-      setTimeout(() => setSuccess(null), 5000);
-    } catch (err) { setError(err instanceof Error ? err.message : "Withdrawal failed"); }
-    finally { setWithdrawing(false); }
+  function announce(message: string) {
+    setSuccess(message);
+    window.setTimeout(() => setSuccess(null), 5000);
   }
 
   return (
@@ -182,10 +134,7 @@ export default function WalletPage() {
         <div className="mt-8 overflow-hidden rounded-[24px_8px_24px_8px] border border-sage/15 bg-gradient-to-br from-sage/10 via-field-soft/40 to-field-soft/10 p-6 md:p-8">
           <p className="text-body-sm font-medium text-sage/50">Available balance</p>
           {walletLoading ? (
-            <div className="mt-3 flex items-center gap-2">
-              <Loader2 className="size-5 animate-spin text-sage/50" />
-              <span className="text-sage/50">Loading…</span>
-            </div>
+            <Skeleton aria-label="Checking your balance" className="mt-3 h-11 w-52" />
           ) : (
             <p className="mt-3 font-num text-[2.4rem] font-medium leading-none tracking-tight text-paper md:text-[3rem]">
               {formatKobo(available)}
@@ -211,13 +160,15 @@ export default function WalletPage() {
 
           <div className="mt-7 flex flex-col gap-3 sm:flex-row">
             <button
-              onClick={() => { setFundOpen(true); setWithdrawOpen(false); setError(null); }}
+              type="button"
+              onClick={() => setModal("fund")}
               className="flex items-center justify-center gap-2 rounded-xl bg-amber px-6 py-3 text-body font-medium text-ink transition-all duration-200 hover:bg-amber/90 hover:shadow-lg hover:shadow-amber/20"
             >
               <Plus strokeWidth={2} className="size-4" /> Add funds
             </button>
             <button
-              onClick={() => { setWithdrawOpen(true); setFundOpen(false); setError(null); }}
+              type="button"
+              onClick={() => setModal("withdraw")}
               className="flex items-center justify-center gap-2 rounded-xl border border-sage/25 bg-field-soft/40 px-6 py-3 text-body font-medium text-paper transition-all duration-200 hover:bg-field-soft hover:border-sage/40"
             >
               <ChevronUp strokeWidth={2} className="size-4" /> Withdraw
@@ -232,112 +183,6 @@ export default function WalletPage() {
           <CheckCircle2 strokeWidth={1.5} className="size-5 shrink-0 text-success" />
           <p className="flex-1 text-body-sm text-ink">{success}</p>
           <button onClick={() => setSuccess(null)} className="text-ink-muted hover:text-ink"><X className="size-4" /></button>
-        </div>
-      )}
-      {error && (
-        <div className="mb-5 flex items-center gap-3 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3.5">
-          <AlertCircle strokeWidth={1.5} className="size-5 shrink-0 text-danger" />
-          <p className="flex-1 text-body-sm text-ink">{error}</p>
-          <button onClick={() => setError(null)} className="text-ink-muted hover:text-ink"><X className="size-4" /></button>
-        </div>
-      )}
-
-      {/* Fund form */}
-      {fundOpen && (
-        <div className="mb-6 overflow-hidden rounded-xl border border-line bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-line px-5 py-4">
-            <div>
-              <h2 className="text-heading font-medium text-ink">Add funds</h2>
-              <p className="mt-0.5 text-body-sm text-ink-muted">Available immediately after payment</p>
-            </div>
-            <button onClick={() => setFundOpen(false)} className="flex size-8 items-center justify-center rounded-full text-ink-muted hover:bg-sage-soft hover:text-ink"><X className="size-4" /></button>
-          </div>
-          <div className="flex flex-col gap-5 p-5">
-            <div>
-              <label className="mb-2 block text-body-sm font-medium text-ink">Amount (₦)</label>
-              <input
-                type="number" value={fundAmount} onChange={(e) => setFundAmount(e.target.value)} placeholder="e.g. 5000"
-                className="w-full rounded-xl border border-line bg-paper px-4 py-3 font-num text-[1.1rem] text-ink placeholder-ink-muted outline-none transition-all focus:border-green focus:ring-3 focus:ring-green/20"
-              />
-              <div className="mt-3 flex flex-wrap gap-2">
-                {[1000, 5000, 10000, 50000].map((amt) => (
-                  <button key={amt} onClick={() => setFundAmount(amt.toString())} className="rounded-full border border-line px-3.5 py-1.5 text-label font-medium text-ink-muted hover:border-green hover:text-green">
-                    ₦{amt.toLocaleString()}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="mb-2.5 block text-body-sm font-medium text-ink">Payment method</label>
-              <div className="grid grid-cols-2 gap-3">
-                <button onClick={() => setFundMethod("card")} className={cn("flex items-center gap-3 rounded-xl border p-4 transition-all", fundMethod === "card" ? "border-green bg-sage-soft shadow-sm" : "border-line hover:border-green hover:bg-sage-soft/30")}>
-                  <CreditCard strokeWidth={1.5} className={cn("size-5", fundMethod === "card" ? "text-green" : "text-ink-muted")} />
-                  <div className="text-left"><p className="text-body-sm font-medium text-ink">Card</p><p className="text-label text-ink-muted">Visa, Mastercard</p></div>
-                </button>
-                <button onClick={() => setFundMethod("bank")} className={cn("flex items-center gap-3 rounded-xl border p-4 transition-all", fundMethod === "bank" ? "border-green bg-sage-soft shadow-sm" : "border-line hover:border-green hover:bg-sage-soft/30")}>
-                  <Banknote strokeWidth={1.5} className={cn("size-5", fundMethod === "bank" ? "text-green" : "text-ink-muted")} />
-                  <div className="text-left"><p className="text-body-sm font-medium text-ink">Bank transfer</p><p className="text-label text-ink-muted">Direct deposit</p></div>
-                </button>
-              </div>
-            </div>
-          </div>
-          <div className="flex gap-3 border-t border-line px-5 py-4">
-            <button onClick={() => setFundOpen(false)} className="rounded-xl border border-line px-5 py-3 text-body-sm font-medium text-ink-muted hover:text-ink">Cancel</button>
-            <button onClick={handleFund} disabled={funding} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-green py-3 text-body-sm font-medium text-paper hover:bg-green-hover disabled:opacity-50">
-              {funding ? <><Loader2 className="size-4 animate-spin" /> Processing…</> : <><Plus strokeWidth={2} className="size-4" /> Fund wallet</>}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Withdraw form */}
-      {withdrawOpen && (
-        <div className="mb-6 overflow-hidden rounded-xl border border-line bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-line px-5 py-4">
-            <div>
-              <h2 className="text-heading font-medium text-ink">Withdraw to bank</h2>
-              <p className="mt-0.5 text-body-sm text-ink-muted">Admin processes within 24 hours</p>
-            </div>
-            <button onClick={() => setWithdrawOpen(false)} className="flex size-8 items-center justify-center rounded-full text-ink-muted hover:bg-sage-soft hover:text-ink"><X className="size-4" /></button>
-          </div>
-          <div className="flex flex-col gap-5 p-5">
-            <div>
-              <label className="mb-2 block text-body-sm font-medium text-ink">Amount (₦)</label>
-              <input type="number" value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} placeholder="e.g. 20000"
-                className="w-full rounded-xl border border-line bg-paper px-4 py-3 font-num text-[1.1rem] text-ink placeholder-ink-muted outline-none transition-all focus:border-green focus:ring-3 focus:ring-green/20" />
-              <div className="mt-2 flex items-center gap-2">
-                <span className="text-label text-ink-muted">Available:</span>
-                <span className="font-num text-body-sm font-medium text-green">{formatKobo(available)}</span>
-                <button onClick={() => setWithdrawAmount(String(available / 100))} className="rounded-full border border-line px-2.5 py-0.5 text-label font-medium text-ink-muted hover:border-green hover:text-green">Max</button>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-2 block text-body-sm font-medium text-ink">Bank name</label>
-                <select value={bankName} onChange={(e) => setBankName(e.target.value)}
-                  className="w-full rounded-xl border border-line bg-paper px-4 py-3 text-body text-ink outline-none focus:border-green focus:ring-3 focus:ring-green/20">
-                  <option value="">Select bank</option>
-                  {["GTBank","Access Bank","UBA","Zenith Bank","First Bank","Stanbic IBTC","Opay","Kuda Bank","Wema Bank","Fidelity Bank"].map((b) => <option key={b}>{b}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="mb-2 block text-body-sm font-medium text-ink">Account number</label>
-                <input type="text" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value.replace(/\D/g, ""))} placeholder="10-digit number" maxLength={10}
-                  className="w-full rounded-xl border border-line bg-paper px-4 py-3 font-num text-body text-ink placeholder-ink-muted outline-none focus:border-green focus:ring-3 focus:ring-green/20" />
-              </div>
-            </div>
-            <div>
-              <label className="mb-2 block text-body-sm font-medium text-ink">Account name</label>
-              <input type="text" value={accountName} onChange={(e) => setAccountName(e.target.value)} placeholder="Name on the account"
-                className="w-full rounded-xl border border-line bg-paper px-4 py-3 text-body text-ink placeholder-ink-muted outline-none focus:border-green focus:ring-3 focus:ring-green/20" />
-            </div>
-          </div>
-          <div className="flex gap-3 border-t border-line px-5 py-4">
-            <button onClick={() => setWithdrawOpen(false)} className="rounded-xl border border-line px-5 py-3 text-body-sm font-medium text-ink-muted hover:text-ink">Cancel</button>
-            <button onClick={handleWithdraw} disabled={withdrawing} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-green py-3 text-body-sm font-medium text-paper hover:bg-green-hover disabled:opacity-50">
-              {withdrawing ? <><Loader2 className="size-4 animate-spin" /> Processing…</> : <><ChevronUp strokeWidth={2} className="size-4" /> Withdraw funds</>}
-            </button>
-          </div>
         </div>
       )}
 
@@ -366,9 +211,7 @@ export default function WalletPage() {
 
           <div className="flex flex-col gap-2 p-3">
             {walletLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="size-5 animate-spin text-ink-muted" />
-              </div>
+              <RowsSkeleton rows={3} label="Loading your history" className="px-5" />
             ) : history.length === 0 ? (
               <p className="py-8 text-center text-body-sm text-ink-muted">No wallet activity yet.</p>
             ) : (
@@ -399,6 +242,14 @@ export default function WalletPage() {
           </div>
         </div>
       </Reveal>
+
+      <FundModal open={modal === "fund"} onClose={() => setModal(null)} email={user?.email ?? ""} onDone={announce} />
+      <WithdrawModal
+        open={modal === "withdraw"}
+        onClose={() => setModal(null)}
+        availableKobo={wallet ? wallet.available_kobo : null}
+        onDone={announce}
+      />
     </div>
   );
 }

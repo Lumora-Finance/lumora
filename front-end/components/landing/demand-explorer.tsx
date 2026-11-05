@@ -1,12 +1,13 @@
 "use client";
 
-import { type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
+import { type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useRef, useState } from "react";
 
 import { DEFAULT_PRODUCE, type Produce } from "@/lib/demo/demand";
 import { formatNaira } from "@/lib/format";
 import { fx, gsap, isReducedMotion, playOnEnter, useGSAP } from "@/lib/gsap/effects";
 
 import { CONTAINER, EYEBROW } from "./shared";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const WIDTH = 680;
 const HEIGHT = 200;
@@ -21,6 +22,8 @@ const xAt = (index: number) => SIDE_MARGIN + index * STEP;
 function normalise(prices: number[]) {
   const min = Math.min(...prices);
   const max = Math.max(...prices);
+  // A price that never moved has no range to scale by, so it's a flat line through the middle.
+  if (max === min) return prices.map(() => HEIGHT / 2);
   const padding = (max - min) * 0.25;
   const low = min - padding;
   const high = max + padding;
@@ -49,7 +52,69 @@ const dotPosition = (index: number, y: number) => ({
   top: `${(y / HEIGHT) * 100}%`,
 });
 
+function DemandShell({ children }: { children: ReactNode }) {
+  return (
+    <section id="prices" data-bg="white" aria-labelledby="demand-title" className="scroll-mt-4 pt-10 pb-10 lg:pt-40 lg:pb-16">
+      <div className={CONTAINER}>
+        <div className="rounded-[20px] bg-paper p-[22px] text-ink md:p-9">
+          <p className={`${EYEBROW} text-ink-muted`}>Before you start a farm</p>
+          <h2 id="demand-title" className="mt-1 font-display text-2xl leading-[1.2] font-medium md:text-[30px]">
+            Thinking of starting a farm? Ask the market first.
+          </h2>
+          {children}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Fetches real demand, then hands it to the explorer. Kept separate so the explorer's hooks only ever
+ * run with data: returning early from one component while it waits would change its hook count.
+ */
 export function DemandExplorer() {
+  const [demand, setDemand] = useState<Produce[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await fetch("/api/demand");
+        if (!res.ok) return;
+        const data = (await res.json()) as Produce[];
+        if (!cancelled && Array.isArray(data) && data.length > 0) setDemand(data);
+      } catch {
+        // Silent fail — the UI shows an empty state.
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (loading) {
+    return (
+      <DemandShell>
+        <div role="status" aria-label="Loading demand" className="mt-5 space-y-3">
+          <Skeleton className="h-8 w-40" />
+          <Skeleton className="h-40 w-full rounded-2xl" />
+        </div>
+      </DemandShell>
+    );
+  }
+  if (demand.length === 0) {
+    return (
+      <DemandShell>
+        <p className="mt-5 text-body-sm text-ink-muted">No demand data available yet. Check back once buyers start posting.</p>
+      </DemandShell>
+    );
+  }
+  return <LoadedExplorer demand={demand} />;
+}
+
+function LoadedExplorer({ demand }: { demand: Produce[] }) {
   const scope = useRef<HTMLElement>(null);
   const line = useRef<SVGPathElement>(null);
   const endDot = useRef<HTMLSpanElement>(null);
@@ -61,99 +126,24 @@ export function DemandExplorer() {
   const average = useRef<HTMLParagraphElement>(null);
   const verdict = useRef<HTMLParagraphElement>(null);
 
-  const [demand, setDemand] = useState<Produce[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState(DEFAULT_PRODUCE);
-
-  // Fetch real demand data from the API.
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const res = await fetch("/api/demand");
-        if (!res.ok) return;
-        const data = (await res.json()) as Produce[];
-        if (!cancelled && Array.isArray(data) && data.length > 0) {
-          setDemand(data);
-          // Select the first commodity or the default.
-          const match = data.find((p) => p.key === DEFAULT_PRODUCE);
-          setSelected(match ? match.key : data[0].key);
-        }
-      } catch {
-        // Silent fail — the UI shows an empty state.
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    load();
-    return () => { cancelled = true; };
-  }, []);
-
   const findProduce = (key: string) => demand.find((item) => item.key === key) ?? demand[0];
+  const [selected, setSelected] = useState(() => findProduce(DEFAULT_PRODUCE).key);
   const produce = findProduce(selected);
+
+  // What the first render draws. After that, changes are drawn directly, below.
+  const [INITIAL] = useState(produce);
+  const [INITIAL_YS] = useState(() => normalise(INITIAL.prices));
 
   // The chart and rolling numbers are drawn every frame, so they live outside React's renders.
   const live = useRef({
-    produce: null as Produce | null,
-    ys: [] as number[],
-    number: 0,
-    average: 0,
+    produce: INITIAL as Produce | null,
+    ys: INITIAL_YS,
+    number: INITIAL.weeklyDemand,
+    average: lastPrice(INITIAL),
     scrub: null as number | null,
     intro: null as gsap.core.Animation | null,
     motion: [] as gsap.core.Animation[],
   });
-
-  // Initialise live refs when demand data arrives or selection changes.
-  useEffect(() => {
-    if (!produce) return;
-    const ys = normalise(produce.prices);
-    live.current = {
-      ...live.current,
-      produce,
-      ys,
-      number: produce.weeklyDemand,
-      average: lastPrice(produce),
-    };
-    drawLine(ys);
-  }, [selected, demand]);
-
-  // Loading / empty state.
-  if (loading) {
-    return (
-      <section id="prices" data-bg="white" aria-labelledby="demand-title" className="scroll-mt-4 pt-10 pb-10 lg:pt-40 lg:pb-16">
-        <div className={CONTAINER}>
-          <div className="rounded-[20px] bg-paper p-[22px] text-ink md:p-9">
-            <p className={`${EYEBROW} text-ink-muted`}>Before you start a farm</p>
-            <h2 id="demand-title" className="mt-1 font-display text-2xl leading-[1.2] font-medium md:text-[30px]">
-              Thinking of starting a farm? Ask the market first.
-            </h2>
-            <p className="mt-5 text-body-sm text-ink-muted">Loading demand data…</p>
-          </div>
-        </div>
-      </section>
-    );
-  }
-
-  if (demand.length === 0 || !produce) {
-    return (
-      <section id="prices" data-bg="white" aria-labelledby="demand-title" className="scroll-mt-4 pt-10 pb-10 lg:pt-40 lg:pb-16">
-        <div className={CONTAINER}>
-          <div className="rounded-[20px] bg-paper p-[22px] text-ink md:p-9">
-            <p className={`${EYEBROW} text-ink-muted`}>Before you start a farm</p>
-            <h2 id="demand-title" className="mt-1 font-display text-2xl leading-[1.2] font-medium md:text-[30px]">
-              Thinking of starting a farm? Ask the market first.
-            </h2>
-            <p className="mt-5 text-body-sm text-ink-muted">
-              No demand data available yet. Check back once buyers start posting.
-            </p>
-          </div>
-        </div>
-      </section>
-    );
-  }
-
-  const INITIAL = produce;
-  const INITIAL_YS = normalise(INITIAL.prices);
 
   const drawScrub = () => {
     const { scrub, produce: current, ys } = live.current;

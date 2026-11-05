@@ -2,11 +2,13 @@
 
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { MapPin, ShieldCheck, Loader2, MessageSquare, Store } from "lucide-react";
+import { MapPin, ShieldCheck, MessageSquare, Store } from "lucide-react";
 import Link from "next/link";
 import { getAuth } from "firebase/auth";
 
+import { DetailSkeleton } from "@/components/loader/skeletons";
 import app from "@/lib/firebase/config";
+import { trackTask } from "@/lib/loading/progress";
 import { cn } from "@/lib/utils";
 
 type Profile = {
@@ -51,6 +53,7 @@ export default function PublicProfilePage() {
     let cancelled = false;
     async function load() {
       setLoading(true);
+      const finished = trackTask("public-profile");
       setError(null);
       try {
         const token = await getAuth(app).currentUser?.getIdToken();
@@ -63,6 +66,7 @@ export default function PublicProfilePage() {
       } catch {
         if (!cancelled) setError("Couldn't load this profile.");
       } finally {
+        finished();
         if (!cancelled) setLoading(false);
       }
     }
@@ -71,11 +75,7 @@ export default function PublicProfilePage() {
   }, [userId]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="size-6 animate-spin text-ink-muted" />
-      </div>
-    );
+    return <DetailSkeleton label="Opening this profile" />;
   }
 
   if (error || !profile) {

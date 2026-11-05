@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 
+import { RowsSkeleton } from "@/components/loader/skeletons";
 import { pricePer } from "@/lib/email/format";
 import { useDashboardData } from "@/lib/hooks/use-dashboard-data";
 import type { BoardCard } from "@/lib/logistics/board";
@@ -19,7 +20,7 @@ export function BoardPreview() {
     <Panel className="flex h-full flex-col">
       <PanelHeading title="Near you" sub="The best matches right now" action={<PanelLink href="/dashboard/board">See the board</PanelLink>} />
       {loading ? (
-        <p className="flex-1 px-5 py-8 text-center text-ink-muted sm:px-6">Finding buyers…</p>
+        <RowsSkeleton rows={3} label="Finding buyers" className="mt-2 flex-1 px-5 sm:px-6" />
       ) : cards.length === 0 ? (
         <p className="flex-1 px-5 py-8 text-center text-body-sm text-ink-muted sm:px-6">No buyers near you right now. We&apos;ll show them here as they post.</p>
       ) : (

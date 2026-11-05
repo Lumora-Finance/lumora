@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { useAuthUser } from "@/components/auth/use-auth-user";
+import { BusyBar } from "@/components/loader/busy-bar";
+import { RowsSkeleton } from "@/components/loader/skeletons";
 import { Button } from "@/components/ui/button";
 import { ACTION_SCREENS } from "@/lib/email/actions";
 import { pricePer, windowText } from "@/lib/email/format";
@@ -88,7 +90,7 @@ export function ActionScreen({ token }: { token: string }) {
 
   let body;
   if (loading || (user && !preview)) {
-    body = <p className="text-ink-muted">One moment…</p>;
+    body = <RowsSkeleton rows={2} label="Opening your booking" />;
   } else if (!user) {
     body = (
       <>
@@ -134,7 +136,10 @@ export function ActionScreen({ token }: { token: string }) {
             />
           </label>
         )}
-        <Button className="mt-5 h-12 w-full text-base" disabled={busy} onClick={press}>{screen.button}</Button>
+        <Button className="relative mt-5 h-12 w-full overflow-hidden text-base" disabled={busy} onClick={press}>
+          {screen.button}
+          <BusyBar active={busy} />
+        </Button>
         {backToBooking}
       </>
     );

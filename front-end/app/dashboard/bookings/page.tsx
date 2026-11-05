@@ -10,6 +10,8 @@ import { LogoVideo } from "@/components/dashboard/logo-video";
 import { Reveal } from "@/components/motion/reveal";
 import { TransactionPinModal } from "@/components/dashboard/transaction-pin-modal";
 import { cn } from "@/lib/utils";
+import { CardsSkeleton } from "@/components/loader/skeletons";
+import { trackTask } from "@/lib/loading/progress";
 
 type Tab = "upcoming" | "past" | "cancelled";
 
@@ -284,9 +286,11 @@ export default function BookingsPage() {
 
   async function load() {
     setLoading(true);
+    const finished = trackTask("bookings");
     setError(null);
     try {
       const auth = getAuth(app);
+      // On a fresh load the saved session isn't back yet, and asking now would look signed out.
       await auth.authStateReady();
       const token = await auth.currentUser?.getIdToken();
       const res = await fetch("/api/bookings", {
@@ -298,11 +302,12 @@ export default function BookingsPage() {
     } catch {
       setError("Couldn't load bookings. Please refresh.");
     } finally {
+      finished();
       setLoading(false);
     }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const items = bookings.filter((b) => tabOf(b) === tab);
   const upcoming = bookings.filter((b) => tabOf(b) === "upcoming");
@@ -349,7 +354,7 @@ export default function BookingsPage() {
       </Reveal>
 
       {loading ? (
-        <div className="flex items-center justify-center py-16"><Loader2 className="size-6 animate-spin text-ink-muted" /></div>
+        <CardsSkeleton label="Loading your bookings" />
       ) : error ? (
         <div className="rounded-xl border border-danger/30 bg-danger/5 p-6 text-center text-danger">{error}</div>
       ) : items.length === 0 ? (

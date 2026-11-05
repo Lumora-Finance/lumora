@@ -440,3 +440,97 @@ html.lenis {
     opacity: 0;
   }
 }
+
+/* The branded loader. See components/loader. */
+.lumora-stage {
+  background-color: var(--color-paper);
+  background-image:
+    linear-gradient(to bottom, transparent 55%, rgb(20 32 27 / 0.05)),
+    linear-gradient(to right, rgb(20 32 27 / 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(20 32 27 / 0.05) 1px, transparent 1px);
+  background-size: 100% 100%, 120px 120px, 120px 120px;
+}
+
+/* A tab that has already had the first-load sequence. Set before paint, so it never flashes. */
+html[data-lumora-seen] .lumora-first-cover {
+  display: none;
+}
+
+.lumora-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  will-change: transform;
+}
+
+.lumora-blob-a {
+  top: -20%;
+  left: -10%;
+  width: 70vmax;
+  height: 70vmax;
+  background: radial-gradient(circle, rgb(143 184 164 / 0.12), transparent 70%);
+  animation: lumora-drift-a 24s ease-in-out infinite alternate;
+}
+
+.lumora-blob-b {
+  right: -20%;
+  bottom: -30%;
+  width: 80vmax;
+  height: 80vmax;
+  background: radial-gradient(circle, rgb(31 92 69 / 0.3), transparent 70%);
+  animation: lumora-drift-b 30s ease-in-out infinite alternate;
+}
+
+.lumora-blob-c {
+  top: 30%;
+  left: 40%;
+  width: 40vmax;
+  height: 40vmax;
+  background: radial-gradient(circle, rgb(242 193 78 / 0.06), transparent 70%);
+  animation: lumora-drift-c 20s ease-in-out infinite alternate;
+}
+
+.lumora-grain {
+  opacity: 0.04;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+@keyframes lumora-drift-a {
+  to { transform: translate(18vw, 12vh) scale(1.1); }
+}
+@keyframes lumora-drift-b {
+  to { transform: translate(-16vw, -14vh) scale(0.92); }
+}
+@keyframes lumora-drift-c {
+  to { transform: translate(-22vw, 10vh) scale(1.15); }
+}
+
+.lumora-busy {
+  transform: scaleX(0);
+  animation: lumora-busy-fill 6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes lumora-busy-fill {
+  to { transform: scaleX(0.85); }
+}
+
+.lumora-shimmer {
+  background-color: rgb(143 184 164 / 0.2);
+  background-image: linear-gradient(100deg, transparent 30%, rgb(143 184 164 / 0.28) 50%, transparent 70%);
+  background-size: 220% 100%;
+  animation: lumora-shimmer 1.6s ease-in-out infinite;
+}
+@keyframes lumora-shimmer {
+  from { background-position: 120% 0; }
+  to { background-position: -120% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lumora-blob,
+  .lumora-shimmer {
+    animation: none;
+  }
+  .lumora-busy {
+    animation: none;
+    transform: scaleX(0.85);
+  }
+}

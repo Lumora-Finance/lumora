@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { useAuthUser } from "@/components/auth/use-auth-user";
+import { RowsSkeleton } from "@/components/loader/skeletons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatKobo, nairaToKobo } from "@/lib/money/rules";
@@ -181,7 +182,7 @@ export function DisputeQueue() {
 
   let body;
   if (loading || (user && !disputes && !denied)) {
-    body = <p className="text-ink-muted">Loading disputes…</p>;
+    body = <RowsSkeleton rows={3} label="Loading disputes" />;
   } else if (!user || denied) {
     body = <p>You need an admin account to see this page.</p>;
   } else if (disputes?.length === 0) {

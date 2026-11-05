@@ -15,6 +15,8 @@ import { Reveal } from "@/components/motion/reveal";
 import { TransactionPinModal } from "@/components/dashboard/transaction-pin-modal";
 import { fx, playOnEnter, useGSAP } from "@/lib/gsap/effects";
 import { cn } from "@/lib/utils";
+import { DetailSkeleton } from "@/components/loader/skeletons";
+import { trackTask } from "@/lib/loading/progress";
 
 const TABS = [
   { key: "overview", label: "Overview", icon: Package },
@@ -86,6 +88,7 @@ export default function ListingDetailPage() {
     let cancelled = false;
     async function load() {
       setLoading(true);
+      const finished = trackTask("marketplace-post");
       setError(null);
       try {
         const token = await getAuth(app).currentUser?.getIdToken();
@@ -98,6 +101,7 @@ export default function ListingDetailPage() {
       } catch {
         if (!cancelled) setError("Couldn't load this listing. Please refresh.");
       } finally {
+        finished();
         if (!cancelled) setLoading(false);
       }
     }
@@ -179,9 +183,7 @@ export default function ListingDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="size-6 animate-spin text-ink-muted" />
-      </div>
+      <DetailSkeleton label="Opening this post" />
     );
   }
 

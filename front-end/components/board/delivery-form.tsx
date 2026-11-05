@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { useAuthUser } from "@/components/auth/use-auth-user";
+import { BusyBar } from "@/components/loader/busy-bar";
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/logistics/client";
 import { DECLINE_REASONS, declineProblem, type DeclinedUnit } from "@/lib/logistics/decline";
@@ -174,7 +175,8 @@ export function DeliveryForm({ bookingId }: { bookingId: string }) {
           {error}
         </p>
       )}
-      <Button type="submit" size="lg" className="h-12 w-full text-base" disabled={busy}>
+      <Button type="submit" size="lg" aria-busy={busy} className="relative h-12 w-full overflow-hidden text-base" disabled={busy}>
+        <BusyBar active={busy} />
         Save delivery
       </Button>
     </form>

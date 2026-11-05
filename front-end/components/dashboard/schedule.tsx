@@ -4,6 +4,7 @@ import { Bird, Egg, type LucideIcon, ShoppingBasket, Sprout } from "lucide-react
 import Link from "next/link";
 import { useState } from "react";
 
+import { RowsSkeleton } from "@/components/loader/skeletons";
 import { type DashboardBooking, otherParty, upcoming } from "@/lib/dashboard-data";
 import { clock } from "@/lib/email/format";
 import { useDashboardData } from "@/lib/hooks/use-dashboard-data";
@@ -96,7 +97,7 @@ export function Schedule() {
 
       <div className="flex-1 px-5 pt-3 pb-5 sm:px-6 sm:pb-6">
         {loading ? (
-          <p className="py-6 text-center text-ink-muted">Loading your week…</p>
+          <RowsSkeleton rows={3} label="Loading your week" />
         ) : shown.length === 0 ? (
           <p className="py-6 text-center text-body-sm text-ink-muted">
             {picked === null ? "No bookings coming up. New ones will show here." : "Nothing booked on this day."}

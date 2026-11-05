@@ -2,6 +2,7 @@
 
 import { ArrowDownLeft } from "lucide-react";
 
+import { RowsSkeleton } from "@/components/loader/skeletons";
 import type { DashboardSettlement } from "@/lib/dashboard-data";
 import { useDashboardData } from "@/lib/hooks/use-dashboard-data";
 import { formatKobo } from "@/lib/money/rules";
@@ -25,7 +26,7 @@ export function RecentTransactions() {
     <Panel>
       <PanelHeading title="Recent money" sub="Your settled deliveries" action={<PanelLink href="/dashboard/transactions">All transactions</PanelLink>} />
       {loading ? (
-        <p className="px-5 py-8 text-center text-ink-muted sm:px-6">Loading…</p>
+        <RowsSkeleton rows={2} label="Loading your money" className="mt-2 px-5 sm:px-6" />
       ) : rows.length === 0 ? (
         <p className="px-5 py-8 text-center text-body-sm text-ink-muted sm:px-6">Nothing yet. Money from your deliveries will show here.</p>
       ) : (

@@ -3,6 +3,8 @@
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { useRef, useState } from "react";
 
+import { ChartSkeleton } from "@/components/loader/skeletons";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { DashboardSettlement } from "@/lib/dashboard-data";
 import { useDashboardData } from "@/lib/hooks/use-dashboard-data";
 import { formatKobo } from "@/lib/money/rules";
@@ -65,9 +67,13 @@ export function MoneyChart() {
     <Panel className="flex h-full flex-col">
       <PanelHeading title="Money earned" sub="Pick a month to see it" action={<PanelLink href="/dashboard/transactions">Details</PanelLink>} />
       <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1 px-5 pt-4 sm:px-6">
-        <p aria-live="polite" className="font-num text-[30px] leading-9 font-medium text-ink sm:text-[36px] sm:leading-10">
-          {formatKobo(value)}
-        </p>
+        {loading ? (
+          <Skeleton className="h-9 w-44 sm:h-10" />
+        ) : (
+          <p aria-live="polite" className="font-num text-[30px] leading-9 font-medium text-ink sm:text-[36px] sm:leading-10">
+            {formatKobo(value)}
+          </p>
+        )}
         {change !== null && (
           <p className="flex items-center gap-2 pb-1 text-body-sm text-ink-muted">
             <span className="inline-flex items-center gap-1 rounded-full bg-sage-soft px-2 py-0.5 text-xs font-medium text-green">
@@ -79,6 +85,11 @@ export function MoneyChart() {
         )}
       </div>
 
+      {loading && (
+        <div className="mt-auto px-5 pt-6 pb-5 sm:px-6 sm:pb-6">
+          <ChartSkeleton label="Loading your money" />
+        </div>
+      )}
       {!hasMoney && !loading && (
         <p className="mt-auto px-5 pt-6 pb-6 text-center text-body-sm text-ink-muted sm:px-6">
           Money from your deliveries will build up here, month by month.
