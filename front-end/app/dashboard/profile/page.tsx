@@ -1,8 +1,7 @@
 "use client";
 
-import Image from "next/image";
-import { useRef, useState } from "react";
-import { Camera, CheckCircle2, ShieldAlert, LogOut, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Camera, CheckCircle2, ShieldAlert, LogOut, Trash2, Loader2, BadgeCheck } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
 
@@ -14,6 +13,7 @@ import { TransactionPinModal } from "@/components/dashboard/transaction-pin-moda
 import { fx, playOnEnter, useGSAP } from "@/lib/gsap/effects";
 import { useAuthUser } from "@/components/auth/use-auth-user";
 import { getFirebaseAuth } from "@/lib/firebase/auth";
+import { apiFetch } from "@/lib/logistics/client";
 import { cn } from "@/lib/utils";
 
 
@@ -23,16 +23,46 @@ export default function ProfilePage() {
   const { user } = useAuthUser();
 
   const photoURL = user?.photoURL ?? null;
-  const displayName = user?.displayName ?? user?.email?.split("@")[0] ?? "User";
+  const fbName = user?.displayName ?? user?.email?.split("@")[0] ?? "User";
   const email = user?.email ?? "";
   const isGoogleUser = user?.providerData?.some((p) => p.providerId === "google.com") ?? false;
-  const initials = displayName.split(" ").slice(0, 2).map((w: string) => w[0]).join("").toUpperCase();
+  const initials = fbName.split(" ").slice(0, 2).map((w: string) => w[0]).join("").toUpperCase();
 
-  const [name, setName] = useState(displayName);
+  const [name, setName] = useState(fbName);
   const [phone, setPhone] = useState("");
   const [bio, setBio] = useState("");
+  const [role, setRole] = useState("");
+  const [area, setArea] = useState<string | null>(null);
+  const [dbPhotoUrl, setDbPhotoUrl] = useState<string | null>(null);
+  const [verified, setVerified] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [pinOpen, setPinOpen] = useState(false);
+
+  // Load persisted profile from the database
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    apiFetch(user, "/api/me")
+      .then(async (res) => {
+        if (!res.ok) return;
+        const profile = (await res.json()) as {
+          name?: string; phone?: string; role?: string; area?: string | null;
+          photo_url?: string | null; verified?: boolean; bio?: string;
+        } | null;
+        if (cancelled || !profile) return;
+        if (profile.name) setName(profile.name);
+        if (profile.phone) setPhone(profile.phone);
+        if (profile.role) setRole(profile.role);
+        if (profile.area !== undefined) setArea(profile.area);
+        if (profile.photo_url) setDbPhotoUrl(profile.photo_url);
+        if (profile.verified !== undefined) setVerified(profile.verified);
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [user]);
 
   useGSAP(
     () => {
@@ -49,10 +79,26 @@ export default function ProfilePage() {
     router.replace("/auth/login");
   }
 
-  function saveProfile(e: React.FormEvent) {
+  async function saveProfile(e: React.FormEvent) {
     e.preventDefault();
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    if (!user) return;
+    setSaving(true);
+    try {
+      // Update name and phone via the existing /api/me POST endpoint
+      const res = await apiFetch(user, "/api/me", { name, phone, role }).catch(() => null);
+      if (res?.ok) {
+        // Also sync display name and photo to DB
+        await apiFetch(user, "/api/profile/sync", {
+          email: user.email ?? "",
+          display_name: name,
+          photo_url: user.photoURL ?? "",
+        }).catch(() => {});
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2500);
+      }
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -70,8 +116,9 @@ export default function ProfilePage() {
           {/* Avatar */}
           <div className="relative">
             <div className="size-20 overflow-hidden rounded-full ring-4 ring-sage/30 lg:size-24">
-              {photoURL ? (
-                <Image src={photoURL} alt={displayName} fill className="object-cover" referrerPolicy="no-referrer" sizes="96px" />
+              {photoURL || dbPhotoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={photoURL ?? dbPhotoUrl ?? ""} alt={name} className="size-full object-cover" referrerPolicy="no-referrer" />
               ) : (
                 <div className="flex h-full w-full items-center justify-center bg-field-soft font-num text-display-lg-sm font-medium text-sage">
                   {initials}
@@ -87,10 +134,18 @@ export default function ProfilePage() {
           </div>
 
           <div>
-            <h1 className="font-display text-[1.6rem] font-medium leading-tight text-paper">
-              {displayName}
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="font-display text-[1.6rem] font-medium leading-tight text-paper">
+                {name}
+              </h1>
+              {verified && <BadgeCheck strokeWidth={2} className="size-5 text-sage" />}
+            </div>
             <p className="text-body-sm text-paper/60">{email}</p>
+            {role && (
+              <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-field-soft/60 px-2.5 py-1 text-label text-sage/80 capitalize">
+                {role}
+              </span>
+            )}
             {isGoogleUser && (
               <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-field-soft/60 px-2.5 py-1 text-label text-sage/80">
                 <svg viewBox="0 0 16 16" className="size-3.5" fill="none">
@@ -106,33 +161,24 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Verification status */}
+      {/* Role badge */}
       <Reveal effect="riseIn">
-        <div className="mb-6 overflow-hidden rounded-xl border border-amber/30 bg-amber-soft/40">
-          <div className="flex items-start gap-4 p-5">
-            <ShieldAlert strokeWidth={1.5} className="mt-0.5 size-5 shrink-0 text-amber" />
+        <div className="mb-6 overflow-hidden rounded-xl border border-line bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className={cn("flex size-10 items-center justify-center rounded-full", verified ? "bg-sage-soft text-green" : "bg-amber-soft text-amber")}>
+              {verified ? <BadgeCheck strokeWidth={1.5} className="size-5" /> : <ShieldAlert strokeWidth={1.5} className="size-5" />}
+            </div>
             <div className="flex-1">
-              <p className="font-medium text-ink">Verification required to list produce</p>
-              <p className="mt-1 text-body-sm text-ink-muted">
-                Submit a government ID and a short selfie. Takes less than 2 minutes. Reviewed within 24 hours.
+              <p className="font-medium text-ink">{verified ? "Verified account" : "Not verified yet"}</p>
+              <p className="mt-0.5 text-body-sm text-ink-muted">
+                {verified ? "Your account is verified and trusted by buyers and sellers." : "You can still list produce and make demands. Verification adds a trust badge."}
               </p>
             </div>
-            <button className="shrink-0 rounded-lg bg-amber px-4 py-2 text-body-sm font-medium text-ink hover:bg-amber/90">
-              Start verification
-            </button>
-          </div>
-          <div className="flex items-center gap-3 border-t border-amber/20 bg-amber-soft/30 px-5 py-3">
-            {["Upload ID", "Take selfie", "Under review", "Verified"].map((step, i) => (
-              <div key={step} className="flex items-center gap-2">
-                {i > 0 && <span className="h-px w-4 bg-amber/30" />}
-                <div className={cn("flex items-center gap-1.5 text-label", i === 0 ? "font-medium text-amber" : "text-ink-muted")}>
-                  <span className={cn("flex size-4 items-center justify-center rounded-full text-[10px] font-medium", i === 0 ? "bg-amber text-ink" : "bg-line text-ink-muted")}>
-                    {i + 1}
-                  </span>
-                  <span className="hidden sm:inline">{step}</span>
-                </div>
-              </div>
-            ))}
+            {!verified && (
+              <button className="shrink-0 rounded-lg bg-amber px-4 py-2 text-body-sm font-medium text-ink hover:bg-amber/90">
+                Get verified
+              </button>
+            )}
           </div>
         </div>
       </Reveal>
@@ -178,8 +224,9 @@ export default function ProfilePage() {
             </div>
 
             <div className="mt-5 flex items-center gap-3">
-              <button type="submit" className="rounded-lg bg-green px-5 py-2.5 text-body font-medium text-paper hover:bg-green-hover">
-                Save changes
+              <button type="submit" disabled={saving || loading} className="flex items-center gap-2 rounded-lg bg-green px-5 py-2.5 text-body font-medium text-paper hover:bg-green-hover disabled:opacity-60">
+                {saving && <Loader2 className="size-4 animate-spin" />}
+                {loading ? "Loading…" : "Save changes"}
               </button>
               {saved && (
                 <span className="flex items-center gap-1.5 text-body-sm text-success">

@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { signActionToken, verifyActionToken } from "../../lib/email/action-tokens";
-import { renderEmail, sendEmails } from "../../lib/email/send";
+import { sendEmails } from "../../lib/email/send";
 import { roadKm } from "../../lib/geo";
 import { RULES } from "../../lib/money/rules";
 import {
@@ -673,51 +673,6 @@ describe("the email outbox", () => {
 });
 
 describe("the spec's worked example", () => {
-  const facts = {
-    booking_id: "b1", code: "LM-4821", qty: 20, unit: "birds", goods: "broilers", farmer: "Amina", buyer: "Sweetfoods", area: "Rayfield",
-    price_kobo: 350_000, price_unit: "kg", window_start: "2026-12-10T06:00:00Z", window_end: "2026-12-10T10:00:00Z",
-    cutoff_at: "2026-12-09T05:00:00Z", capacity_total: 30, capacity_remaining: 10, address: "12 Rayfield Road", collects: false,
-  };
-  const render = async (kind: string, extra: object = {}, createdAt = "2026-12-08T10:00:00Z") =>
-    renderEmail({ id: "e1", to: "a@b.c", kind, data: { ...facts, ...extra }, booking_id: "b1", created_at: createdAt, action_tokens: {} }, "s", "https://lumora.test");
-
-  it("writes the farmer's booking email", async () => {
-    const email = await render("booking_confirmed");
-    expect(email.subject).toBe("Booked: 20 birds for Sweetfoods, Thursday");
-    expect(email.text).toContain("Thursday 7 to 11am, 12 Rayfield Road.");
-    expect(email.text).toContain("LM-4821");
-    expect(email.text).toContain("You can cancel for free until Wednesday 6am.");
-    expect(email.html).toContain("https://lumora.test/dashboard/bookings/b1");
-  });
-
-  it("writes the buyer's booking email", async () => {
-    const email = await render("booking_received");
-    expect(email.subject).toBe("Amina booked 20 of your 30 birds for Thursday");
-    expect(email.text).toContain("You still need 10.");
-  });
-
-  it("writes the confirm, freed and backup subjects", async () => {
-    expect((await render("confirm_request", {}, "2026-12-09T05:00:00Z")).subject).toBe("Please confirm: 20 birds for Sweetfoods tomorrow");
-    expect((await render("capacity_freed")).subject).toBe("Sweetfoods now needs 20 broilers on Thursday at ₦3,500/kg");
-    expect((await render("backup_request", { deadline_at: "2026-12-10T12:00:00Z", distance_km: 6 })).subject).toBe("Urgent: Sweetfoods needs 20 broilers today by 1pm");
-  });
-
-  it("writes the weigh-in and the payout", async () => {
-    expect((await render("weigh_in", { measured_kg: 61.6, gross_kobo: 21_560_000, reply_by: "2026-12-10T10:00:00Z", units_received: 20 })).subject).toBe("61.6 kg × ₦3,500 = ₦215,600");
-    const payout = await render("payout_breakdown", { measured_kg: 61.6, gross_kobo: 21_560_000, farmer_fee_kobo: 215_600, net_kobo: 21_344_400 });
-    expect(payout.text).toContain("₦215,600 for 61.6 kg, minus Lumora's 1% (₦2,156)");
-  });
-
-  it("has a template for every kind the database writes", async () => {
-    const { readdirSync, readFileSync } = await import("node:fs");
-    const { TEMPLATES } = await import("../../lib/email/templates");
-    const dir = `${__dirname}/../../../supabase/migrations`;
-    const sql = readdirSync(dir).filter((file) => file.includes("flow_")).map((file) => readFileSync(`${dir}/${file}`, "utf8")).join("\n");
-    const kinds = new Set([...sql.matchAll(/money_notify\([^,]+,\s*'([a-z_]+)'/g)].map((match) => match[1]));
-    expect(kinds.size).toBeGreaterThan(25);
-    for (const kind of kinds) expect(TEMPLATES[kind], kind).toBeDefined();
-  });
-
   it("measures distance the same way in SQL and TypeScript", async () => {
     const a = { lat: 9.799912, lng: 8.866667 };
     const b = { lat: 9.929486, lng: 8.909463 };

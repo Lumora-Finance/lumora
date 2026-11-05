@@ -1,20 +1,11 @@
-import { Resend } from "resend";
-
 import type { Mailer } from "./send";
 
-/** Null until RESEND_API_KEY and EMAIL_FROM are set. The row id stops a retry delivering twice. */
+/**
+ * Email sending has been removed from the app (resend/react-email stripped).
+ * This always returns null, so `sendEmails` becomes a no-op: emails stay queued
+ * in the database but nothing is claimed or sent.  In-app notifications (the bell)
+ * are unaffected because they read the `notifications` table directly.
+ */
 export function createResendMailer(): Mailer | null {
-  const key = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM;
-  if (!key || !from) return null;
-  const resend = new Resend(key);
-  return {
-    async send(email) {
-      const { error } = await resend.emails.send(
-        { from, to: email.to, subject: email.subject, html: email.html, text: email.text },
-        { idempotencyKey: email.id },
-      );
-      if (error) throw new Error(error.message);
-    },
-  };
+  return null;
 }

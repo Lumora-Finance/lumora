@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useRef, useState, useEffect } from "react";
 import {
   ArrowLeft, MapPin, Clock, MessageSquare, TrendingUp, Shield, CheckCircle2,
-  Calendar, Package, BarChart3, User,
+  Calendar, Package, BarChart3, Loader2, User, Send, Star,
 } from "lucide-react";
 import Link from "next/link";
 import { getAuth } from "firebase/auth";
@@ -12,6 +12,7 @@ import { getAuth } from "firebase/auth";
 import app from "@/lib/firebase/config";
 import { LogoVideo } from "@/components/dashboard/logo-video";
 import { Reveal } from "@/components/motion/reveal";
+import { TransactionPinModal } from "@/components/dashboard/transaction-pin-modal";
 import { fx, playOnEnter, useGSAP } from "@/lib/gsap/effects";
 import { cn } from "@/lib/utils";
 import { DetailSkeleton } from "@/components/loader/skeletons";
@@ -19,11 +20,21 @@ import { trackTask } from "@/lib/loading/progress";
 
 const TABS = [
   { key: "overview", label: "Overview", icon: Package },
+  { key: "offers", label: "Offers", icon: Star },
   { key: "details", label: "Specs", icon: BarChart3 },
   { key: "schedule", label: "Schedule", icon: Calendar },
 ] as const;
 
 type Tab = (typeof TABS)[number]["key"];
+
+type Offer = {
+  id: string;
+  qty: number;
+  note: string | null;
+  status: string;
+  created_at: string;
+  farmer: { id: string; name: string; area: string | null; verified: boolean; photo_url: string | null };
+};
 
 type Listing = {
   id: string;
@@ -39,6 +50,7 @@ type Listing = {
   min_unit_weight_kg: number | null;
   max_unit_weight_kg: number | null;
   created_at: string;
+  images: string[];
   commodity: { id: string; name: string; unit: string };
   buyer: { id: string; name: string; area: string | null };
   area: string | null;
@@ -58,6 +70,17 @@ export default function ListingDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [booking, setBooking] = useState(false);
   const [bookingDone, setBookingDone] = useState(false);
+
+  // Offers state
+  const [offers, setOffers] = useState<Offer[]>([]);
+  const [offersLoading, setOffersLoading] = useState(false);
+  const [offerQty, setOfferQty] = useState(1);
+  const [offerNote, setOfferNote] = useState("");
+  const [offerSubmitting, setOfferSubmitting] = useState(false);
+  const [offerDone, setOfferDone] = useState(false);
+  const [pinOpen, setPinOpen] = useState<"offer" | "accept" | null>(null);
+  const [acceptingOfferId, setAcceptingOfferId] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
   const id = params.id as string;
 
@@ -91,6 +114,52 @@ export default function ListingDetailPage() {
     if (!root) return;
     playOnEnter(fx("riseIn", root.querySelectorAll("[data-rise]"), { stagger: 0.08 }), root, "top 85%");
   }, { scope: heroRef });
+
+  async function loadOffers() {
+    if (!listing) return;
+    setOffersLoading(true);
+    try {
+      const token = await getAuth(app).currentUser?.getIdToken();
+      const res = await fetch(`/api/listings/${id}/offers`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) setOffers((await res.json()) as Offer[]);
+    } catch { /* */ } finally { setOffersLoading(false); }
+  }
+
+  useEffect(() => {
+    if (listing && tab === "offers") loadOffers();
+  }, [tab, listing]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function submitOffer() {
+    setOfferSubmitting(true);
+    try {
+      const token = await getAuth(app).currentUser?.getIdToken();
+      const res = await fetch("/api/offers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ listingId: id, qty: offerQty, note: offerNote || null }),
+      });
+      const result = await res.json();
+      if (result.ok) { setOfferDone(true); loadOffers(); }
+      else alert(result.message ?? result.code ?? "Offer failed.");
+    } catch { alert("Network error. Try again."); } finally { setOfferSubmitting(false); }
+  }
+
+  async function acceptOffer(offerId: string) {
+    const token = await getAuth(app).currentUser?.getIdToken();
+    const res = await fetch(`/api/offers/${offerId}`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    const result = await res.json();
+    if (result.ok) {
+      setActionSuccess(`Offer accepted! Booking code: ${result.code}`);
+      loadOffers();
+    } else {
+      alert(result.message ?? result.code ?? "Could not accept offer.");
+    }
+  }
 
   async function handleBook(slotId: string) {
     if (booking) return;
@@ -210,6 +279,18 @@ export default function ListingDetailPage() {
         </div>
       </div>
 
+      {/* Image gallery */}
+      {listing.images && listing.images.length > 0 && (
+        <div data-rise className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {listing.images.map((url, idx) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <div key={idx} className="aspect-square overflow-hidden rounded-2xl border border-line bg-paper">
+              <img src={url} alt={`Photo ${idx + 1}`} className="size-full object-cover" />
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="mb-6 flex gap-1 overflow-x-auto rounded-xl border border-line bg-white p-1 w-fit">
         {TABS.map(({ key, label, icon: Icon }) => (
@@ -322,7 +403,139 @@ export default function ListingDetailPage() {
             )}
           </div>
         )}
+
+        {tab === "offers" && (
+          <div className="space-y-4">
+            {actionSuccess && (
+              <div className="flex items-center gap-3 rounded-xl border border-green/30 bg-sage-soft/50 px-4 py-3">
+                <CheckCircle2 strokeWidth={2} className="size-5 text-green" />
+                <p className="text-body-sm font-medium text-ink">{actionSuccess}</p>
+              </div>
+            )}
+
+            {/* Make offer form (for farmers) */}
+            {!offerDone ? (
+              <div className="rounded-xl border border-amber/30 bg-amber-soft/30 p-5">
+                <h3 className="text-body font-medium text-ink">Make an Offer</h3>
+                <p className="mt-1 text-body-sm text-ink-muted">
+                  Submit how many {unit}s you can supply. The buyer will accept or decline.
+                </p>
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-body-sm font-medium text-ink">
+                      Quantity ({unit}s)
+                    </label>
+                    <input type="number" min={listing.min_qty} value={offerQty}
+                      onChange={(e) => setOfferQty(Math.max(listing.min_qty, parseInt(e.target.value) || listing.min_qty))}
+                      className="w-full rounded-lg border border-line bg-white px-3 py-2.5 font-num text-body text-ink outline-none focus:border-green" />
+                    <p className="mt-0.5 text-label text-ink-muted">Min: {listing.min_qty}</p>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-body-sm font-medium text-ink">Note (optional)</label>
+                    <input type="text" value={offerNote} onChange={(e) => setOfferNote(e.target.value)}
+                      placeholder="Quality, timing, etc."
+                      className="w-full rounded-lg border border-line bg-white px-3 py-2.5 text-body text-ink outline-none focus:border-green" />
+                  </div>
+                </div>
+                <button
+                  onClick={() => { setPinOpen("offer"); }}
+                  disabled={offerSubmitting}
+                  className="mt-4 flex items-center gap-2 rounded-xl bg-amber px-5 py-2.5 text-body-sm font-medium text-ink hover:bg-amber/90 disabled:opacity-50">
+                  {offerSubmitting ? <Loader2 className="size-4 animate-spin" /> : <Send strokeWidth={1.5} className="size-4" />}
+                  Submit offer (PIN required)
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 rounded-xl border border-green/30 bg-sage-soft/50 px-4 py-3">
+                <CheckCircle2 strokeWidth={2} className="size-5 text-green" />
+                <p className="text-body-sm text-ink">Offer submitted! The buyer will be notified.</p>
+              </div>
+            )}
+
+            {/* Existing offers */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-body font-medium text-ink">All Offers {offers.length > 0 ? `(${offers.length})` : ""}</h3>
+                {offersLoading && <Loader2 className="size-4 animate-spin text-ink-muted" />}
+              </div>
+              {offers.length === 0 ? (
+                <p className="text-body-sm text-ink-muted py-4">No offers yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {offers.map((offer) => {
+                    const initials = offer.farmer.name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+                    return (
+                      <div key={offer.id} className={cn(
+                        "rounded-xl border bg-white p-4 shadow-sm",
+                        offer.status === "accepted" ? "border-green/40 bg-sage-soft/20" : "border-line",
+                      )}>
+                        <div className="flex items-start gap-3">
+                          <Link href={`/dashboard/profile/${offer.farmer.id}`}
+                            className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-sage-soft font-num text-body-sm font-medium text-green hover:ring-2 hover:ring-green">
+                            {offer.farmer.photo_url
+                              ? <img src={offer.farmer.photo_url} alt={offer.farmer.name} className="size-full object-cover" referrerPolicy="no-referrer" />
+                              : initials}
+                          </Link>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <Link href={`/dashboard/profile/${offer.farmer.id}`}
+                                className="font-medium text-ink hover:text-green hover:underline">
+                                {offer.farmer.name}
+                              </Link>
+                              {offer.farmer.verified && (
+                                <span className="rounded-full bg-sage-soft px-2 py-0.5 text-label font-medium text-green">✓</span>
+                              )}
+                              <span className={cn("rounded-full px-2.5 py-0.5 text-label font-medium capitalize ml-auto",
+                                offer.status === "accepted" ? "bg-sage-soft text-green" :
+                                offer.status === "rejected" ? "bg-danger/10 text-danger" : "bg-amber-soft text-amber")}>
+                                {offer.status}
+                              </span>
+                            </div>
+                            {offer.farmer.area && (
+                              <p className="text-body-sm text-ink-muted flex items-center gap-1">
+                                <MapPin strokeWidth={1.5} className="size-3.5" /> {offer.farmer.area}
+                              </p>
+                            )}
+                            <p className="mt-1 font-num text-body-sm font-medium text-ink">
+                              {offer.qty} {unit}s at ₦{(listing.unit_price_kobo / 100).toLocaleString()}/{unit}
+                            </p>
+                            {offer.note && <p className="mt-1 text-body-sm text-ink-muted">{offer.note}</p>}
+                          </div>
+                        </div>
+                        {offer.status === "pending" && (
+                          <div className="mt-3 flex gap-2 border-t border-line pt-3">
+                            <button
+                              onClick={() => { setAcceptingOfferId(offer.id); setPinOpen("accept"); }}
+                              className="flex items-center gap-1.5 rounded-lg bg-green px-4 py-2 text-body-sm font-medium text-paper hover:bg-green-hover">
+                              <CheckCircle2 strokeWidth={2} className="size-3.5" /> Accept offer (PIN required)
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </Reveal>
+
+      {/* PIN modals */}
+      {pinOpen === "offer" && (
+        <TransactionPinModal
+          mode="verify"
+          onSuccess={async () => { setPinOpen(null); await submitOffer(); }}
+          onClose={() => setPinOpen(null)}
+        />
+      )}
+      {pinOpen === "accept" && acceptingOfferId && (
+        <TransactionPinModal
+          mode="verify"
+          onSuccess={async () => { setPinOpen(null); await acceptOffer(acceptingOfferId); setAcceptingOfferId(null); }}
+          onClose={() => { setPinOpen(null); setAcceptingOfferId(null); }}
+        />
+      )}
     </div>
   );
 }

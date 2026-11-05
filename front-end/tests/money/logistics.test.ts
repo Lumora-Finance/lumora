@@ -651,7 +651,7 @@ describe("the post demand steps", () => {
   const NOW = new Date("2026-12-07T08:00:00Z");
   const draft: ListingDraft = {
     commodity: "Live broilers", mode: "farmer_delivers", address: "12 Rayfield Road", date: "2026-12-10", windowStart: "07:00", windowEnd: "11:00",
-    price: "3500", capacity: "30", minQty: "1", minWeight: "2.5", maxWeight: "3.5", spec: "",
+    price: "3500", capacity: "30", minQty: "1", minWeight: "2.5", maxWeight: "3.5", spec: "", images: [],
   };
 
   it("passes a complete draft on every step", () => {

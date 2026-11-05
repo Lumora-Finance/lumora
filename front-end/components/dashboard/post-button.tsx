@@ -28,15 +28,15 @@ const CHOICES = [
     wipe: true,
   },
   {
-    // Until verification is real for each person, this always leads to it.
+    // Now goes to the sell page — no verification required.
     key: "listing",
     title: "List produce",
     description: "I have produce. Buyers find it.",
-    href: "/dashboard/profile",
+    href: "/dashboard/sell",
     Icon: Sprout,
     tone: "bg-amber-soft text-[#9A6A1A] group-hover:bg-[#9A6A1A] group-hover:text-paper",
-    note: "Verify first",
-    wipe: false,
+    note: null,
+    wipe: true,
   },
 ];
 
