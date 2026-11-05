@@ -1,14 +1,15 @@
 import type { MoneyDb } from "./db";
-import { type FlutterwaveClient, verifyWebhookSignature } from "./flutterwave";
-import { nairaToKobo } from "./rules";
+import { type PaystackClient, verifyWebhookSignature } from "./paystack";
 
 type WebhookData = {
   id?: number;
   status?: string;
   amount?: unknown;
   currency?: string;
-  tx_ref?: string;
   reference?: string;
+  transfer_code?: string;
+  tx_ref?: string;
+  [key: string]: unknown;
 };
 
 export type WebhookOutcome = { httpStatus: number; result: string };
@@ -16,73 +17,92 @@ export type WebhookOutcome = { httpStatus: number; result: string };
 const UUID_PREFIX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 /**
- * The webhook is only a hint that something happened. Nothing moves until the same facts come back
- * from Flutterwave's API. Anything that fails part way answers 500, so Flutterwave sends it again,
- * and the database's own guards make the repeat harmless.
+ * The webhook is only a hint that something happened. Nothing moves until the same facts
+ * come back from Paystack's API. Anything that fails part way answers 500, so Paystack
+ * retries it, and the database's own idempotency guards make the repeat harmless.
  */
-export async function handleFlutterwaveWebhook(
-  input: { signature: string | null; body: { event?: string; data?: WebhookData }; secretHash: string | undefined },
-  deps: { db: MoneyDb; flutterwave: FlutterwaveClient; now?: Date },
+export async function handlePaystackWebhook(
+  input: {
+    signature: string | null;
+    rawBody: string;
+    body: { event?: string; data?: WebhookData };
+    secretKey: string | undefined;
+  },
+  deps: { db: MoneyDb; paystack: PaystackClient; now?: Date },
 ): Promise<WebhookOutcome> {
-  if (!verifyWebhookSignature(input.signature, input.secretHash)) {
+  if (!verifyWebhookSignature(input.signature, input.rawBody, input.secretKey)) {
     return { httpStatus: 401, result: "bad_signature" };
   }
 
   const { event, data } = input.body;
-  if (!data || typeof data.id !== "number") return { httpStatus: 200, result: "ignored" };
+  if (!data) return { httpStatus: 200, result: "ignored" };
 
   try {
-    if (event === "charge.completed") return await handleDeposit(data as WebhookData & { id: number }, deps);
-    if (event === "transfer.completed") return await handleTransfer(data as WebhookData & { id: number }, deps);
+    if (event === "charge.success") {
+      return await handleDeposit(data, deps);
+    }
+    if (event === "transfer.success") {
+      return await handleTransferSuccess(data, deps);
+    }
+    if (event === "transfer.failed" || event === "transfer.reversed") {
+      return await handleTransferFailed(data, deps);
+    }
     return { httpStatus: 200, result: "ignored" };
   } catch (error) {
-    console.error("Flutterwave webhook failed", error instanceof Error ? error.message : error);
+    console.error("Paystack webhook failed", error instanceof Error ? error.message : error);
     return { httpStatus: 500, result: "retry" };
   }
 }
 
-async function handleDeposit(
-  data: WebhookData & { id: number },
-  { db, flutterwave, now }: { db: MoneyDb; flutterwave: FlutterwaveClient; now?: Date },
-): Promise<WebhookOutcome> {
-  if (String(data.status).toLowerCase() !== "successful") return { httpStatus: 200, result: "not_successful" };
+// ── Deposit (wallet funding via charge.success) ────────────────────────────────
 
-  const verified = await flutterwave.verifyTransaction(data.id);
-  const webhookKobo = nairaToKobo(data.amount as string);
+async function handleDeposit(
+  data: WebhookData,
+  { db, paystack, now }: { db: MoneyDb; paystack: PaystackClient; now?: Date },
+): Promise<WebhookOutcome> {
+  if (String(data.status).toLowerCase() !== "success") {
+    return { httpStatus: 200, result: "not_successful" };
+  }
+  if (!data.reference) return { httpStatus: 200, result: "no_reference" };
+
+  // Re-verify with Paystack — never trust webhook data alone
+  const verified = await paystack.verifyTransaction(data.reference);
+
   const matches =
-    verified.status === "successful" &&
+    verified.status === "success" &&
     verified.currency === "NGN" &&
-    data.currency === "NGN" &&
     verified.amountKobo !== null &&
     verified.amountKobo > 0 &&
-    verified.amountKobo === webhookKobo &&
-    verified.txRef === data.tx_ref;
+    verified.amountKobo === Number(data.amount) &&
+    verified.reference === data.reference;
 
   if (!matches) {
     await db.rpc("money_alert", {
       p_kind: "deposit_verification_failed",
-      p_detail: { tx_id: data.id, tx_ref: data.tx_ref ?? null },
+      p_detail: { reference: data.reference },
     });
     return { httpStatus: 200, result: "verification_failed" };
   }
 
   const result = await db.rpc("money_credit_deposit", {
     p_tx_id: verified.id,
-    p_tx_ref: verified.txRef,
+    p_tx_ref: verified.reference,
     p_amount: verified.amountKobo,
     p_provider_fee: verified.feeKobo,
-    p_payment_type: verified.paymentType,
+    p_payment_type: verified.paymentChannel,
     p_now: (now ?? new Date()).toISOString(),
   });
+
   if (result.duplicate) return { httpStatus: 200, result: "duplicate" };
   return { httpStatus: 200, result: result.ok ? "credited" : String(result.code) };
 }
 
-async function handleTransfer(
-  data: WebhookData & { id: number },
-  { db, flutterwave, now }: { db: MoneyDb; flutterwave: FlutterwaveClient; now?: Date },
+// ── Transfer success (payout confirmed) ───────────────────────────────────────
+
+async function handleTransferSuccess(
+  data: WebhookData,
+  { db, paystack, now }: { db: MoneyDb; paystack: PaystackClient; now?: Date },
 ): Promise<WebhookOutcome> {
-  // A retried transfer may carry a suffix on the reference, so the settlement id is read from the front.
   const settlementId = UUID_PREFIX.exec(data.reference ?? "")?.[0];
   if (!settlementId) return { httpStatus: 200, result: "not_ours" };
 
@@ -92,17 +112,25 @@ async function handleTransfer(
   );
   if (!payout) return { httpStatus: 200, result: "not_ours" };
 
-  const transfer = await flutterwave.getTransfer(data.id);
-  if (!transfer.reference.startsWith(settlementId) || transfer.amountKobo !== payout.amount_kobo) {
+  if (!data.transfer_code) return { httpStatus: 200, result: "no_transfer_code" };
+
+  // Re-verify with Paystack
+  const transfer = await paystack.getTransfer(data.transfer_code);
+
+  if (
+    !transfer.reference.startsWith(settlementId) ||
+    transfer.amountKobo !== payout.amount_kobo
+  ) {
     await db.rpc("money_alert", {
       p_kind: "transfer_verification_failed",
-      p_detail: { transfer_id: data.id, payout_id: payout.id },
+      p_detail: { transfer_code: data.transfer_code, payout_id: payout.id },
     });
     return { httpStatus: 200, result: "verification_failed" };
   }
 
   const at = (now ?? new Date()).toISOString();
-  if (transfer.status === "SUCCESSFUL") {
+
+  if (transfer.status === "success") {
     const result = await db.rpc("money_mark_paid", {
       p_payout: payout.id,
       p_transfer_id: transfer.id,
@@ -111,9 +139,29 @@ async function handleTransfer(
     });
     return { httpStatus: 200, result: result.duplicate ? "duplicate" : "paid" };
   }
-  if (transfer.status === "FAILED") {
-    await db.rpc("money_payout_failed", { p_payout: payout.id, p_error: "Transfer failed", p_now: at });
-    return { httpStatus: 200, result: "failed" };
-  }
+
   return { httpStatus: 200, result: "pending" };
+}
+
+// ── Transfer failed / reversed ────────────────────────────────────────────────
+
+async function handleTransferFailed(
+  data: WebhookData,
+  { db, now }: { db: MoneyDb; paystack: PaystackClient; now?: Date },
+): Promise<WebhookOutcome> {
+  const settlementId = UUID_PREFIX.exec(data.reference ?? "")?.[0];
+  if (!settlementId) return { httpStatus: 200, result: "not_ours" };
+
+  const payout = await db.rpc<{ id: string } | null>("money_payout_by_reference", {
+    p_reference: settlementId,
+  });
+  if (!payout) return { httpStatus: 200, result: "not_ours" };
+
+  await db.rpc("money_payout_failed", {
+    p_payout: payout.id,
+    p_error: `Transfer ${data.status ?? "failed"}`,
+    p_now: (now ?? new Date()).toISOString(),
+  });
+
+  return { httpStatus: 200, result: "failed" };
 }

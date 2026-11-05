@@ -5,8 +5,9 @@ import {
   BookOpen,
   LayoutDashboard,
   LogOut,
-  MessageSquare,
   MapPin,
+  MessageSquare,
+  ShieldCheck,
   ShoppingBag,
   Store,
   User,
@@ -19,7 +20,7 @@ import { signOut } from "firebase/auth";
 
 import { cn } from "@/lib/utils";
 import { getFirebaseAuth } from "@/lib/firebase/auth";
-import { useAuthUser } from "@/components/auth/use-auth-user";
+import { useProfile } from "@/components/auth/use-profile";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, exact: true },
@@ -36,11 +37,12 @@ const NAV = [
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user } = useAuthUser();
+  const { user, profile, isAdmin } = useProfile();
 
-  const photoURL = user?.photoURL ?? null;
-  const displayName = user?.displayName ?? user?.email?.split("@")[0] ?? "You";
-  const email = user?.email ?? "";
+  const photoURL = profile?.photo_url ?? user?.photoURL ?? null;
+  const displayName =
+    profile?.display_name ?? user?.displayName ?? user?.email?.split("@")[0] ?? "You";
+  const email = profile?.email ?? user?.email ?? "";
   const initials = displayName
     .split(" ")
     .slice(0, 2)
@@ -63,7 +65,6 @@ export function Sidebar() {
     <aside
       className="relative flex h-full w-64 flex-col overflow-hidden bg-field"
       style={{
-        /* Diagonal stripe pattern using repeating-linear-gradient */
         backgroundImage: `
           repeating-linear-gradient(
             135deg,
@@ -85,7 +86,7 @@ export function Sidebar() {
         className="pointer-events-none absolute -left-8 top-32 size-32 rounded-full bg-green/10 blur-3xl"
       />
 
-      {/* Logo notch — paper cutout like the landing hero */}
+      {/* Logo */}
       <div className="relative shrink-0 px-5 py-5">
         <Link
           href="/dashboard"
@@ -103,7 +104,6 @@ export function Sidebar() {
           </span>
         </Link>
 
-        {/* Decorative ledger lines under logo */}
         <div aria-hidden className="mt-4 space-y-1.5">
           <span className="block h-px w-full bg-sage/15" />
           <span className="block h-px w-2/3 bg-sage/10" />
@@ -116,7 +116,6 @@ export function Sidebar() {
           {NAV.map(({ href, label, icon: Icon, exact }, index) => {
             const active = isActive(href, exact);
 
-            // Each nav item gets a slightly different organic shape
             const shapes = [
               "rounded-[12px_4px_12px_4px]",
               "rounded-[4px_12px_4px_12px]",
@@ -140,14 +139,12 @@ export function Sidebar() {
                       : "text-sage/60 hover:bg-sage/10 hover:text-paper",
                   )}
                 >
-                  {/* Active left stripe */}
                   {active && (
                     <span
                       aria-hidden
                       className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-sage"
                     />
                   )}
-
                   <Icon
                     strokeWidth={active ? 2 : 1.5}
                     className={cn(
@@ -156,7 +153,6 @@ export function Sidebar() {
                     )}
                   />
                   {label}
-
                   {label === "Messages" && (
                     <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-amber px-1.5 font-num text-label font-medium text-ink">
                       2
@@ -166,10 +162,40 @@ export function Sidebar() {
               </li>
             );
           })}
+
+          {/* Admin Panel — only visible to admins */}
+          {isAdmin && (
+            <li>
+              <Link
+                href="/admin"
+                className={cn(
+                  "group relative flex items-center gap-3 px-3 py-2.5 text-body-sm font-medium transition-all duration-200 rounded-[4px_12px_4px_12px]",
+                  isActive("/admin")
+                    ? "bg-danger/20 text-danger shadow-[inset_0_0_0_1px_rgba(220,38,38,0.2)]"
+                    : "text-danger/60 hover:bg-danger/10 hover:text-danger",
+                )}
+              >
+                {isActive("/admin") && (
+                  <span
+                    aria-hidden
+                    className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-danger"
+                  />
+                )}
+                <ShieldCheck
+                  strokeWidth={isActive("/admin") ? 2 : 1.5}
+                  className="size-[17px] shrink-0 text-danger/70"
+                />
+                Admin Panel
+                <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-danger/20 px-1.5 font-num text-label font-medium text-danger">
+                  A
+                </span>
+              </Link>
+            </li>
+          )}
         </ul>
       </nav>
 
-      {/* Bottom decorative shape */}
+      {/* Bottom decorative */}
       <div aria-hidden className="pointer-events-none absolute bottom-28 left-0 right-0 px-5">
         <span className="block h-px w-full bg-sage/10" />
         <span className="mt-1.5 block h-px w-1/2 bg-sage/8" />
@@ -184,7 +210,6 @@ export function Sidebar() {
           }}
         >
           <div className="flex items-center gap-3">
-            {/* Avatar */}
             <div className="relative size-9 shrink-0 overflow-hidden rounded-[8px_2px_8px_2px] bg-field-soft ring-1 ring-sage/30">
               {photoURL ? (
                 <Image
@@ -205,6 +230,11 @@ export function Sidebar() {
             <div className="min-w-0 flex-1">
               <p className="truncate text-body-sm font-medium text-paper">{displayName}</p>
               <p className="truncate font-num text-label text-sage/60">{email}</p>
+              {isAdmin && (
+                <span className="mt-0.5 inline-block rounded-full bg-danger/20 px-1.5 py-0.5 font-num text-[0.6rem] font-medium uppercase tracking-wider text-danger">
+                  Admin
+                </span>
+              )}
             </div>
           </div>
 

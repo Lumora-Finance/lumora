@@ -1,42 +1,55 @@
 "use client";
 
-import { Bird, Egg, type LucideIcon, ShoppingBasket } from "lucide-react";
+import { Bird, Egg, type LucideIcon, ShoppingBasket, Sprout } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
+import { type DashboardBooking, otherParty, upcoming } from "@/lib/dashboard-data";
+import { clock } from "@/lib/email/format";
+import { useDashboardData } from "@/lib/hooks/use-dashboard-data";
 import { useToday } from "@/lib/use-today";
 import { cn } from "@/lib/utils";
 
 import { Panel, PanelHeading, PanelLink } from "./panel";
 
-type Booking = {
-  id: string;
-  /** Days from today. */
-  inDays: number;
-  title: string;
-  who: string;
-  time: string;
-  status: string;
-  Icon: LucideIcon;
-  tone: string;
+const WEEK = Array.from({ length: 7 }, (_, index) => index);
+const TONES = ["bg-amber-soft", "bg-sage-soft", "bg-paper"];
+const MOST_SHOWN = 4;
+
+const STATUS_WORDS: Record<string, string> = {
+  pending_approval: "Waiting",
+  booked: "To confirm",
+  confirmed: "Confirmed",
+  contested: "At the gate",
 };
 
-const BOOKINGS: Booking[] = [
-  { id: "1", inDays: 1, title: "30 live broilers", who: "Amina Farms", time: "7 to 11am", status: "Confirmed", Icon: Bird, tone: "bg-amber-soft" },
-  { id: "2", inDays: 2, title: "15 baskets of tomatoes", who: "Barkin Ladi Produce", time: "6 to 10am", status: "Confirmed", Icon: ShoppingBasket, tone: "bg-sage-soft" },
-  { id: "3", inDays: 4, title: "20 crates of eggs", who: "Bukuru Bakery", time: "8am to noon", status: "Waiting", Icon: Egg, tone: "bg-paper" },
-];
-
-const WEEK = Array.from({ length: 7 }, (_, index) => index);
+const iconFor = (commodity: string): LucideIcon => {
+  const name = commodity.toLowerCase();
+  if (name.includes("egg")) return Egg;
+  if (name.includes("tomato") || name.includes("basket")) return ShoppingBasket;
+  if (name.includes("chicken") || name.includes("broiler") || name.includes("turkey")) return Bird;
+  return Sprout;
+};
 
 const addDays = (date: Date, days: number) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
 const format = (date: Date, options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("en-GB", options).format(date);
 
+/** Whole days from today. A delivery already under way counts as today. */
+function daysAway(iso: string, today: Date) {
+  const start = addDays(today, 0).getTime();
+  const at = new Date(iso);
+  const day = new Date(at.getFullYear(), at.getMonth(), at.getDate()).getTime();
+  return Math.max(Math.round((day - start) / 86_400_000), 0);
+}
+
 /** The coming week, then what's on it. Picking a day narrows the list, and picking it again clears it. */
 export function Schedule() {
   const today = useToday();
+  const { data, loading } = useDashboardData<DashboardBooking[]>("bookings");
   const [picked, setPicked] = useState<number | null>(null);
-  const shown = BOOKINGS.filter((booking) => picked === null || booking.inDays === picked);
+
+  const bookings = today ? upcoming(data).map((booking) => ({ ...booking, inDays: daysAway(booking.window_start, today) })) : [];
+  const shown = bookings.filter((booking) => picked === null || booking.inDays === picked).slice(0, MOST_SHOWN);
 
   const dayLabel = (inDays: number) => {
     if (inDays === 0) return "Today";
@@ -56,7 +69,7 @@ export function Schedule() {
         {WEEK.map((inDays) => {
           const date = today ? addDays(today, inDays) : null;
           const selected = picked === inDays;
-          const hasBooking = BOOKINGS.some((booking) => booking.inDays === inDays);
+          const hasBooking = bookings.some((booking) => booking.inDays === inDays);
           return (
             <button
               key={inDays}
@@ -82,34 +95,41 @@ export function Schedule() {
       </div>
 
       <div className="flex-1 px-5 pt-3 pb-5 sm:px-6 sm:pb-6">
-        {shown.length === 0 ? (
-          <p className="py-6 text-center text-ink-muted">Nothing booked on this day.</p>
+        {loading ? (
+          <p className="py-6 text-center text-ink-muted">Loading your week…</p>
+        ) : shown.length === 0 ? (
+          <p className="py-6 text-center text-body-sm text-ink-muted">
+            {picked === null ? "No bookings coming up. New ones will show here." : "Nothing booked on this day."}
+          </p>
         ) : (
           <ul className="space-y-3">
-            {shown.map(({ id, inDays, title, who, time, status, Icon, tone }) => (
-              <li key={id}>
-                <p className="flex items-center gap-2 text-xs text-ink-muted">
-                  {dayLabel(inDays)}
-                  <span aria-hidden="true" className="h-px flex-1 border-t border-dashed border-line" />
-                </p>
-                <Link
-                  href="/dashboard/bookings"
-                  className={cn(
-                    "mt-1.5 flex items-center gap-3 rounded-2xl p-3 transition-transform duration-150 [-webkit-tap-highlight-color:transparent] hover:-translate-y-px focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none active:scale-[0.99] motion-reduce:transition-none",
-                    tone,
-                  )}
-                >
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white text-ink">
-                    <Icon aria-hidden="true" strokeWidth={1.75} className="size-[18px]" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium text-ink">{title}</span>
-                    <span className="block text-body-sm text-ink-muted">{who} · {time}</span>
-                  </span>
-                  <span className="shrink-0 text-xs font-medium text-ink">{status}</span>
-                </Link>
-              </li>
-            ))}
+            {shown.map((booking, index) => {
+              const Icon = iconFor(booking.commodity);
+              return (
+                <li key={booking.id}>
+                  <p className="flex items-center gap-2 text-xs text-ink-muted">
+                    {dayLabel(booking.inDays)}
+                    <span aria-hidden="true" className="h-px flex-1 border-t border-dashed border-line" />
+                  </p>
+                  <Link
+                    href={`/dashboard/bookings/${booking.id}`}
+                    className={cn(
+                      "mt-1.5 flex items-center gap-3 rounded-2xl p-3 transition-transform duration-150 [-webkit-tap-highlight-color:transparent] hover:-translate-y-px focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none active:scale-[0.99] motion-reduce:transition-none",
+                      TONES[index % TONES.length],
+                    )}
+                  >
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white text-ink">
+                      <Icon aria-hidden="true" strokeWidth={1.75} className="size-[18px]" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium text-ink">{booking.qty} {booking.commodity}</span>
+                      <span className="block text-body-sm text-ink-muted">{otherParty(booking)} · {clock(booking.window_start)}</span>
+                    </span>
+                    <span className="shrink-0 text-xs font-medium text-ink">{STATUS_WORDS[booking.status] ?? ""}</span>
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

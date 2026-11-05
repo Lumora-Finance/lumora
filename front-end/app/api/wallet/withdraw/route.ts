@@ -1,117 +1,76 @@
-import { NextRequest, NextResponse } from "next/server";
+import { connection } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+
+import { requestUser } from "@/lib/money/auth";
+import { serverMoneyDb } from "@/lib/money/db";
 
 /**
- * Withdraw funds from wallet to a Nigerian bank account via Flutterwave Transfer API.
- * 
- * Flutterwave Transfer API: https://developer.flutterwave.com/reference/endpoints/transfers
- * 
- * Flow:
- * 1. Resolve the bank account number to verify the account name
- * 2. Create a transfer to the verified account
+ * POST /api/wallet/withdraw
+ * Body: { amountKobo, bankName, accountNumber, accountName }
+ *
+ * Saves a pending withdrawal request to the database.
+ * An admin reviews and approves it from /admin/withdrawals.
  */
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { amount, bankName, accountNumber, accountName } = body;
+export async function POST(request: Request) {
+  await connection();
+  const db = serverMoneyDb();
+  const user = await requestUser(request, db);
+  if (!user) return new Response("Unauthorized", { status: 401 });
 
-    // Validate
-    if (!amount || amount < 500) {
-      return NextResponse.json({ error: "Minimum withdrawal is ₦500" }, { status: 400 });
-    }
-    if (!bankName || !accountNumber || !accountName) {
-      return NextResponse.json({ error: "All bank details are required" }, { status: 400 });
-    }
-    if (accountNumber.length !== 10) {
-      return NextResponse.json({ error: "Account number must be 10 digits" }, { status: 400 });
-    }
+  const body = (await request.json().catch(() => null)) as {
+    amountKobo?: number;
+    bankName?: string;
+    accountNumber?: string;
+    accountName?: string;
+  } | null;
 
-    const secretKey = process.env.FLUTTERWAVE_SECRET_KEY;
-
-    if (!secretKey) {
-      // Demo mode
-      return NextResponse.json({
-        success: true,
-        message: "Withdrawal initiated (demo mode). Funds arrive within 24 hours.",
-        amount,
-        ref: "FLW-WDW-DEMO-" + Date.now(),
-        status: "pending",
-      });
-    }
-
-    // Step 1: Get bank code from Flutterwave banks list
-    // See: https://developer.flutterwave.com/reference/endpoints/banks
-    const banksRes = await fetch("https://api.flutterwave.com/v3/banks/NG", {
-      headers: { "Authorization": `Bearer ${secretKey}` },
-    });
-    const banksData = await banksRes.json();
-    const bank = banksData.data?.find((b: { name: string }) =>
-      b.name.toLowerCase().includes(bankName.toLowerCase())
+  // Minimum ₦500 = 50_000 kobo
+  if (!body?.amountKobo || body.amountKobo < 50_000) {
+    return Response.json(
+      { ok: false, code: "minimum_amount", error: "Minimum withdrawal is ₦500" },
+      { status: 400 },
     );
-
-    if (!bank) {
-      return NextResponse.json({ error: "Bank not found. Please check the bank name." }, { status: 400 });
-    }
-
-    // Step 2: Resolve account number to verify name
-    // See: https://developer.flutterwave.com/v3/resolve-account
-    const resolveRes = await fetch(
-      `https://api.flutterwave.com/v3/accounts/resolve?account_number=${accountNumber}&account_bank=${bank.code}`,
-      {
-        method: "GET",
-        headers: {
-          "Authorization": `Bearer ${secretKey}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-    const resolveData = await resolveRes.json();
-
-    if (resolveData.status !== "success") {
-      return NextResponse.json({ error: "Could not verify account number. Please check it and try again." }, { status: 400 });
-    }
-
-    const resolvedName = resolveData.data.account_name;
-
-    // Optional: Verify resolved name matches provided name
-    if (!resolvedName.toLowerCase().includes(accountName.toLowerCase().split(" ")[0])) {
-      return NextResponse.json({ error: "Account name does not match. Please verify the account details." }, { status: 400 });
-    }
-
-    // Step 3: Create transfer
-    // See: https://developer.flutterwave.com/v3/transfers
-    const transferRef = "LUMORA-WDW-" + Date.now();
-    const transferRes = await fetch("https://api.flutterwave.com/v3/transfers", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${secretKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        account_bank: bank.code,
-        account_number: accountNumber,
-        amount: amount,
-        narration: `Lumora wallet withdrawal to ${accountName}`,
-        currency: "NGN",
-        reference: transferRef,
-        callback_url: process.env.FLUTTERWAVE_WEBHOOK_URL || `${process.env.NEXT_PUBLIC_SITE_URL}/api/webhooks/flutterwave`,
-        beneficiary_name: accountName,
-      }),
-    });
-    const transferData = await transferRes.json();
-
-    if (transferData.status !== "success") {
-      return NextResponse.json({ error: transferData.message || "Withdrawal failed. Please try again." }, { status: 400 });
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: "Withdrawal initiated. Funds arrive within 24 hours.",
-      amount,
-      ref: transferRef,
-      status: transferData.data.status,
-      transferId: transferData.data.id,
-    });
-  } catch {
-    return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
   }
+  if (!body.bankName || !body.accountNumber || !body.accountName) {
+    return Response.json(
+      { ok: false, code: "missing_fields", error: "All bank details are required" },
+      { status: 400 },
+    );
+  }
+  if (!/^\d{10}$/.test(body.accountNumber)) {
+    return Response.json(
+      { ok: false, code: "invalid_account", error: "Account number must be 10 digits" },
+      { status: 400 },
+    );
+  }
+
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } },
+  );
+
+  const { data, error } = await supabase
+    .from("withdrawal_requests")
+    .insert({
+      user_id: user.id,
+      amount_kobo: body.amountKobo,
+      bank_name: body.bankName,
+      account_number: body.accountNumber,
+      account_name: body.accountName,
+      status: "pending",
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    return Response.json({ ok: false, error: error.message }, { status: 500 });
+  }
+
+  return Response.json({
+    ok: true,
+    requestId: data.id,
+    status: "pending",
+    message: `Withdrawal of ₦${(body.amountKobo / 100).toLocaleString("en-NG")} submitted. Admin will process within 24 hours.`,
+  });
 }

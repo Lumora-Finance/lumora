@@ -10,6 +10,7 @@ import { LogoVideo } from "@/components/dashboard/logo-video";
 import { ProfileLocation } from "@/components/location/profile-location";
 import { ProfileReliability } from "@/components/location/profile-reliability";
 import { Reveal } from "@/components/motion/reveal";
+import { TransactionPinModal } from "@/components/dashboard/transaction-pin-modal";
 import { fx, playOnEnter, useGSAP } from "@/lib/gsap/effects";
 import { useAuthUser } from "@/components/auth/use-auth-user";
 import { getFirebaseAuth } from "@/lib/firebase/auth";
@@ -31,6 +32,7 @@ export default function ProfilePage() {
   const [phone, setPhone] = useState("");
   const [bio, setBio] = useState("");
   const [saved, setSaved] = useState(false);
+  const [pinOpen, setPinOpen] = useState(false);
 
   useGSAP(
     () => {
@@ -224,8 +226,34 @@ export default function ProfilePage() {
               </div>
             </div>
           </Reveal>
+
+          <Reveal effect="riseIn">
+            <div className="rounded-xl border border-line bg-white p-5 shadow-sm">
+              <h3 className="text-body font-medium text-ink">Security</h3>
+              <p className="mt-1 text-body-sm text-ink-muted">
+                A 4-digit PIN is required to authorise withdrawals and sensitive actions.
+              </p>
+              <button
+                onClick={() => setPinOpen(true)}
+                className="mt-4 flex w-full items-center gap-3 rounded-lg border border-line px-4 py-3 text-body-sm font-medium text-ink transition-colors hover:bg-sage-soft"
+              >
+                <span className="flex size-8 items-center justify-center rounded-full bg-green/10 text-green text-label font-bold tracking-widest">
+                  ••••
+                </span>
+                Set / change transaction PIN
+              </button>
+            </div>
+          </Reveal>
         </div>
       </div>
+
+      {pinOpen && (
+        <TransactionPinModal
+          mode="set"
+          onSuccess={() => setPinOpen(false)}
+          onClose={() => setPinOpen(false)}
+        />
+      )}
     </div>
   );
 }

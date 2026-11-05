@@ -1,20 +1,21 @@
 "use client";
 
-import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useRef, useState, useEffect } from "react";
 import {
   ArrowLeft, MapPin, Clock, MessageSquare, TrendingUp, Shield, CheckCircle2,
-  Calendar, Package, BarChart3,
+  Calendar, Package, BarChart3, Loader2,
 } from "lucide-react";
 import Link from "next/link";
+import { getAuth } from "firebase/auth";
 
+import app from "@/lib/firebase/config";
 import { LogoVideo } from "@/components/dashboard/logo-video";
 import { Reveal } from "@/components/motion/reveal";
 import { OfferModal } from "@/components/marketplace/offer-modal";
 import { fx, playOnEnter, useGSAP } from "@/lib/gsap/effects";
 import { cn } from "@/lib/utils";
-import { MARKET_ITEMS, SAMPLE_OFFERS, type MarketItem, type Offer } from "@/lib/demo/market";
+import type { MarketItem, Offer } from "@/lib/demo/market";
 
 const TABS = [
   { key: "overview", label: "Overview", icon: Package },
@@ -23,7 +24,24 @@ const TABS = [
   { key: "schedule", label: "Schedule", icon: Calendar },
 ] as const;
 
-type Tab = typeof TABS[number]["key"];
+type Tab = (typeof TABS)[number]["key"];
+
+/** Slot shape from /api/board — the same one the marketplace grid uses. */
+type Slot = {
+  id: string;
+  date: string;
+  capacity_remaining: number;
+  capacity_total: number;
+  listing: {
+    id: string;
+    spec: string | null;
+    unit_price_kobo: number;
+    location_area: string | null;
+    status: string;
+    commodity: { name: string; unit: string };
+    buyer: { id: string; name: string };
+  } | null;
+};
 
 export default function ProductDetailsPage() {
   const params = useParams();
@@ -32,9 +50,40 @@ export default function ProductDetailsPage() {
   const [tab, setTab] = useState<Tab>("overview");
   const [offerOpen, setOfferOpen] = useState(false);
   const [extraOffers, setExtraOffers] = useState<Offer[]>([]);
+  const [slot, setSlot] = useState<Slot | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const id = params.id as string;
-  const item = MARKET_ITEMS.find((i) => i.id === id);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const token = await getAuth(app).currentUser?.getIdToken();
+        const res = await fetch("/api/board", {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!res.ok) throw new Error(`${res.status}`);
+        const data = (await res.json()) as { cards?: Slot[] } | Slot[];
+        const cards = Array.isArray(data) ? data : (data as { cards?: Slot[] }).cards ?? [];
+        // Find the slot whose listing id matches the URL param.
+        const found = cards.find((s) => s.listing?.id === id) ?? null;
+        if (!cancelled) {
+          setSlot(found);
+          if (!found) setError("Item not found");
+        }
+      } catch {
+        if (!cancelled) setError("Couldn't load this listing. Please refresh.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [id]);
 
   useGSAP(
     () => {
@@ -45,10 +94,18 @@ export default function ProductDetailsPage() {
     { scope: heroRef },
   );
 
-  if (!item) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="size-6 animate-spin text-ink-muted" />
+      </div>
+    );
+  }
+
+  if (error || !slot?.listing) {
     return (
       <div className="flex flex-col items-center gap-4 px-4 py-20 text-center">
-        <p className="font-display text-title font-medium text-ink">Item not found</p>
+        <p className="font-display text-title font-medium text-ink">{error ?? "Item not found"}</p>
         <Link href="/dashboard/marketplace" className="rounded-lg bg-green px-5 py-2.5 text-body-sm font-medium text-paper">
           Back to marketplace
         </Link>
@@ -56,23 +113,52 @@ export default function ProductDetailsPage() {
     );
   }
 
-  const isDemand = item.type === "demand";
-  const allOffers = [...(SAMPLE_OFFERS[item.id] ?? []), ...extraOffers];
-  const pct = item.capacity === 0 ? 0 : Math.round((item.remaining / item.capacity) * 100);
-  const currentItem: MarketItem = item;
+  const listing = slot.listing;
+  const unit = listing.commodity?.unit ?? "unit";
+  const buyerName = listing.buyer?.name ?? "Buyer";
+  const area = listing.location_area ?? "—";
+  const priceKobo = listing.unit_price_kobo ?? 0;
+  const priceNaira = priceKobo / 100;
+  const remaining = slot.capacity_remaining;
+  const capacity = slot.capacity_total;
+  const pct = capacity === 0 ? 0 : Math.round((remaining / capacity) * 100);
+  const commodityName = listing.commodity?.name ?? "Produce";
+  const spec = listing.spec ?? "";
+
+  // Build a MarketItem-like object for OfferModal compatibility
+  const item: MarketItem = {
+    id: listing.id,
+    type: "demand",
+    commodity: commodityName,
+    spec,
+    poster: buyerName,
+    posterRole: "buyer",
+    area,
+    price: priceNaira,
+    priceUnit: unit,
+    unit,
+    unitPlural: `${unit}s`,
+    capacity,
+    remaining,
+    day: slot.date ? new Date(slot.date).toLocaleDateString("en-NG", { weekday: "short" }) : "—",
+    postedAgo: "",
+    description: spec,
+  };
+
+  const allOffers = [...extraOffers];
 
   function handleMessage() {
     const msg = encodeURIComponent(
-      `Hi ${currentItem.poster}, I'm reaching out about your ${currentItem.type === "demand" ? "demand for" : "listing of"} ${currentItem.commodity} (${currentItem.spec}). I saw it on Lumora and I'm interested.`
+      `Hi ${buyerName}, I'm reaching out about your demand for ${commodityName} (${spec}). I saw it on Lumora and I'm interested.`
     );
-    router.push(`/dashboard/messages?auto=${msg}&to=${encodeURIComponent(currentItem.poster)}`);
+    router.push(`/dashboard/messages?auto=${msg}&to=${encodeURIComponent(buyerName)}`);
   }
 
   function handleRequestDetails() {
     const msg = encodeURIComponent(
-      `Hi ${currentItem.poster}, I'd like more details about your ${currentItem.type === "demand" ? "demand for" : "listing of"} ${currentItem.commodity}. Specifically: quality requirements, delivery logistics, and payment terms.`
+      `Hi ${buyerName}, I'd like more details about your demand for ${commodityName}. Specifically: quality requirements, delivery logistics, and payment terms.`
     );
-    router.push(`/dashboard/messages?auto=${msg}&to=${encodeURIComponent(currentItem.poster)}`);
+    router.push(`/dashboard/messages?auto=${msg}&to=${encodeURIComponent(buyerName)}`);
   }
 
   function submitOffer(offer: Offer) {
@@ -100,47 +186,32 @@ export default function ProductDetailsPage() {
           <LogoVideo />
 
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
-            {/* Image */}
-            <div className="relative h-48 w-full overflow-hidden rounded-xl lg:h-56 lg:w-72 shrink-0">
-              {item.image && (
-                <Image
-                  src={item.image}
-                  alt={item.commodity}
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 1024px) 100vw, 288px"
-                />
-              )}
-            </div>
-
             {/* Info */}
             <div className="min-w-0 flex-1">
               <div data-rise className="flex items-center gap-2">
-                <span className={cn(
-                  "rounded-full px-2.5 py-1 font-num text-label font-medium",
-                  isDemand ? "bg-green/20 text-sage" : "bg-amber/20 text-amber",
-                )}>
-                  {isDemand ? "📣 DEMAND" : "🌾 LISTING"}
+                <span className="rounded-full bg-green/20 px-2.5 py-1 font-num text-label font-medium text-sage">
+                  DEMAND
                 </span>
-                <span className="text-label text-sage/50">{item.postedAgo}</span>
               </div>
 
               <h1 data-rise className="mt-3 font-display text-display-lg-sm font-medium text-paper md:text-[2rem]">
-                {item.commodity}
+                {commodityName}
               </h1>
-              <p data-rise className="mt-1 text-body text-paper/70">{item.spec}</p>
+              <p data-rise className="mt-1 text-body text-paper/70">{spec}</p>
 
               {/* Price */}
               <div data-rise className="mt-4 flex items-baseline gap-2">
-                <span className="font-num text-[2.2rem] font-medium text-amber">₦{item.price.toLocaleString()}</span>
-                <span className="text-body-sm text-paper/60">per {item.priceUnit}</span>
+                <span className="font-num text-[2.2rem] font-medium text-amber">
+                  ₦{priceNaira.toLocaleString()}
+                </span>
+                <span className="text-body-sm text-paper/60">per {unit}</span>
               </div>
 
               {/* Meta */}
               <div data-rise className="mt-4 flex flex-wrap items-center gap-4 text-body-sm text-paper/70">
                 <span className="flex items-center gap-1.5">
                   <MapPin strokeWidth={1.5} className="size-4" />
-                  {item.area}
+                  {area}
                 </span>
                 <span className="flex items-center gap-1.5">
                   <Clock strokeWidth={1.5} className="size-4" />
@@ -148,7 +219,7 @@ export default function ProductDetailsPage() {
                 </span>
                 <span className="flex items-center gap-1.5">
                   <Shield strokeWidth={1.5} className="size-4" />
-                  {item.poster} ({item.posterRole})
+                  {buyerName} (buyer)
                 </span>
               </div>
 
@@ -156,12 +227,7 @@ export default function ProductDetailsPage() {
               <div data-rise className="mt-6 flex flex-wrap gap-3">
                 <button
                   onClick={() => setOfferOpen(true)}
-                  className={cn(
-                    "flex items-center gap-2 rounded-xl px-5 py-2.5 text-body-sm font-medium",
-                    isDemand
-                      ? "bg-amber text-ink hover:bg-amber/90"
-                      : "bg-sage/20 text-sage hover:bg-sage/30",
-                  )}
+                  className="flex items-center gap-2 rounded-xl bg-amber px-5 py-2.5 text-body-sm font-medium text-ink hover:bg-amber/90"
                 >
                   <TrendingUp strokeWidth={1.5} className="size-4" />
                   Make offer
@@ -171,7 +237,7 @@ export default function ProductDetailsPage() {
                   className="flex items-center gap-2 rounded-xl border border-sage/30 bg-field-soft/60 px-5 py-2.5 text-body-sm font-medium text-paper hover:bg-field-soft"
                 >
                   <MessageSquare strokeWidth={1.5} className="size-4" />
-                  Message {item.poster}
+                  Message {buyerName}
                 </button>
                 <button
                   onClick={handleRequestDetails}
@@ -215,25 +281,25 @@ export default function ProductDetailsPage() {
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
               {/* Description */}
               <div className="rounded-xl border border-line bg-white p-6 shadow-sm" style={{ clipPath: "polygon(0 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%)" }}>
-                <h2 className="text-heading font-medium text-ink">About this {isDemand ? "demand" : "listing"}</h2>
-                <p className="mt-3 leading-relaxed text-body text-ink-muted">{item.description}</p>
+                <h2 className="text-heading font-medium text-ink">About this demand</h2>
+                <p className="mt-3 leading-relaxed text-body text-ink-muted">{spec || "No specification provided."}</p>
 
                 <div className="mt-5 space-y-3">
                   <div className="flex items-center justify-between border-t border-line pt-3">
                     <span className="text-body-sm text-ink-muted">Posted by</span>
-                    <span className="text-body-sm font-medium text-ink">{item.poster}</span>
+                    <span className="text-body-sm font-medium text-ink">{buyerName}</span>
                   </div>
                   <div className="flex items-center justify-between border-t border-line pt-3">
                     <span className="text-body-sm text-ink-muted">Location</span>
-                    <span className="text-body-sm font-medium text-ink">{item.area}</span>
+                    <span className="text-body-sm font-medium text-ink">{area}</span>
                   </div>
                   <div className="flex items-center justify-between border-t border-line pt-3">
                     <span className="text-body-sm text-ink-muted">Capacity</span>
-                    <span className="font-num text-body-sm font-medium text-ink">{item.capacity} {item.unitPlural}</span>
+                    <span className="font-num text-body-sm font-medium text-ink">{capacity} {unit}s</span>
                   </div>
                   <div className="flex items-center justify-between border-t border-line pt-3">
                     <span className="text-body-sm text-ink-muted">Remaining</span>
-                    <span className="font-num text-body-sm font-medium text-amber">{item.remaining} {item.unitPlural}</span>
+                    <span className="font-num text-body-sm font-medium text-amber">{remaining} {unit}s</span>
                   </div>
                 </div>
               </div>
@@ -242,15 +308,15 @@ export default function ProductDetailsPage() {
               <div className="flex flex-col gap-4">
                 <div className="rounded-xl bg-field p-5 text-paper" style={{ clipPath: "polygon(14px 0, 100% 0, 100% 100%, 0 100%, 0 14px)" }}>
                   <p className="text-label text-sage/60">Live capacity</p>
-                  <p className="mt-1 font-num text-[2rem] font-medium text-amber">{item.remaining}</p>
-                  <p className="text-body-sm text-paper/60">{item.unitPlural} remaining of {item.capacity}</p>
+                  <p className="mt-1 font-num text-[2rem] font-medium text-amber">{remaining}</p>
+                  <p className="text-body-sm text-paper/60">{unit}s remaining of {capacity}</p>
                   <div className="mt-4 h-2 overflow-hidden rounded-full bg-field-soft">
                     <div className="h-full rounded-full bg-amber" style={{ width: `${pct}%` }} />
                   </div>
                 </div>
 
                 <div className="rounded-xl border border-line bg-white p-5 shadow-sm">
-                  <h3 className="text-body font-medium text-ink">Trust & Safety</h3>
+                  <h3 className="text-body font-medium text-ink">Trust &amp; Safety</h3>
                   <div className="mt-3 space-y-2.5">
                     <div className="flex items-center gap-2 text-body-sm text-ink-muted">
                       <CheckCircle2 strokeWidth={2} className="size-4 text-success" /> Verified poster
@@ -274,8 +340,8 @@ export default function ProductDetailsPage() {
                 <TrendingUp strokeWidth={1.5} className="size-5 shrink-0 text-amber" />
                 <p className="flex-1 text-body-sm text-ink">
                   {allOffers.length > 0
-                    ? `${allOffers.length} offer${allOffers.length > 1 ? "s" : ""} on this ${isDemand ? "demand" : "listing"}. Submit yours to compete.`
-                    : `No offers yet. Be the first to make an offer on this ${isDemand ? "demand" : "listing"}.`}
+                    ? `${allOffers.length} offer${allOffers.length > 1 ? "s" : ""} on this demand. Submit yours to compete.`
+                    : `No offers yet. Be the first to make an offer on this demand.`}
                 </p>
                 <button
                   onClick={() => setOfferOpen(true)}
@@ -283,7 +349,7 @@ export default function ProductDetailsPage() {
                 >
                   Make offer
                 </button>
-                </div>
+              </div>
 
               {/* Offers list */}
               {allOffers.length > 0 ? (
@@ -337,7 +403,7 @@ export default function ProductDetailsPage() {
                   <TrendingUp strokeWidth={1} className="size-10 text-sage/30" />
                   <p className="font-display text-title font-medium text-paper">No offers yet</p>
                   <p className="text-body text-paper/60">
-                    {isDemand ? "Be the first to make an offer on this demand." : "This is a listing — message the farmer directly."}
+                    Be the first to make an offer on this demand.
                   </p>
                 </div>
               )}
@@ -349,13 +415,13 @@ export default function ProductDetailsPage() {
               <h2 className="text-heading font-medium text-ink">Specifications</h2>
               <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {[
-                  { label: "Commodity", value: item.commodity },
-                  { label: "Specification", value: item.spec },
-                  { label: "Unit", value: item.unit },
-                  { label: "Price per unit", value: `₦${item.price.toLocaleString()} / ${item.priceUnit}` },
-                  { label: "Total capacity", value: `${item.capacity} ${item.unitPlural}` },
-                  { label: "Remaining", value: `${item.remaining} ${item.unitPlural}` },
-                  { label: "Location", value: item.area },
+                  { label: "Commodity", value: commodityName },
+                  { label: "Specification", value: spec || "—" },
+                  { label: "Unit", value: unit },
+                  { label: "Price per unit", value: `₦${priceNaira.toLocaleString()} / ${unit}` },
+                  { label: "Total capacity", value: `${capacity} ${unit}s` },
+                  { label: "Remaining", value: `${remaining} ${unit}s` },
+                  { label: "Location", value: area },
                   { label: "Delivery", value: item.day },
                 ].map((row) => (
                   <div key={row.label} className="rounded-lg border border-line bg-paper px-4 py-3">
@@ -374,7 +440,7 @@ export default function ProductDetailsPage() {
                 <Calendar strokeWidth={1.5} className="size-6 text-green" />
                 <div>
                   <p className="text-body-sm font-medium text-ink">{item.day}</p>
-                  <p className="text-body-sm text-ink-muted">Delivery window for this {isDemand ? "demand" : "listing"}</p>
+                  <p className="text-body-sm text-ink-muted">Delivery window for this demand</p>
                 </div>
               </div>
               <div className="mt-4 space-y-3">

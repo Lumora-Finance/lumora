@@ -7,18 +7,18 @@ import { usePathname } from "next/navigation";
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { useAuthUser } from "@/components/auth/use-auth-user";
+import { useProfile } from "@/components/auth/use-profile";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { useDrawer } from "@/lib/gsap/use-drawer";
 import { useToday } from "@/lib/use-today";
 import { Sidebar } from "./sidebar";
 
 export function DashboardHeader() {
-  const { user } = useAuthUser();
+  const { user, profile } = useProfile();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const photoURL = user?.photoURL ?? null;
-  const displayName = user?.displayName ?? user?.email?.split("@")[0] ?? "You";
+  const photoURL = profile?.photo_url ?? user?.photoURL ?? null;
+  const displayName = profile?.display_name ?? user?.displayName ?? user?.email?.split("@")[0] ?? "You";
   const initials = displayName
     .split(" ")
     .slice(0, 2)

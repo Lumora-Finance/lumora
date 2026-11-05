@@ -9,7 +9,7 @@ export const instant = false;
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="flex h-svh bg-paper">
+    <div className="flex h-svh overflow-hidden bg-paper">
       {/* Desktop sidebar */}
       <div className="hidden lg:flex lg:shrink-0">
         <Suspense>
@@ -17,7 +17,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </Suspense>
       </div>
 
-      {/* Main content */}
+      {/* Main content area */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Suspense>
           <DashboardHeader />

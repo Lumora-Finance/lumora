@@ -2,6 +2,8 @@
 
 Booking, delivery and settlement rules, for engineers working on the wallet, notifications or operations. All amounts are integers in kobo.
 
+**The provider has since moved to Paystack** (`lib/money/paystack.ts`, `/api/webhooks/paystack`). The Flutterwave sections below describe the earlier design, and need rewriting along with `tests/money/flutterwave.test.ts`, which still targets it.
+
 Money only moves on proof, and every waiting state has a deadline with an automatic default outcome.
 
 ## Needed from the wallet owner

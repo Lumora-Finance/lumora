@@ -2,7 +2,7 @@ import { connection } from "next/server";
 
 import { createResendMailer } from "@/lib/email/mailer";
 import { serverMoneyDb } from "@/lib/money/db";
-import { createFlutterwaveClient } from "@/lib/money/flutterwave";
+import { createPaystackClient } from "@/lib/money/paystack";
 import { runMoneyJob, runReconciliation } from "@/lib/money/jobs";
 import { secretMatches } from "@/lib/money/secret";
 
@@ -16,9 +16,12 @@ export async function GET(request: Request) {
   }
 
   const db = serverMoneyDb();
-  const flutterwave = createFlutterwaveClient();
+  const paystack = createPaystackClient();
+
   if (new URL(request.url).searchParams.get("task") === "reconcile") {
-    return Response.json(await runReconciliation({ db, flutterwave }));
+    return Response.json(await runReconciliation({ db, paystack }));
   }
-  return Response.json(await runMoneyJob({ db, flutterwave, mailer: createResendMailer(), emailSecret: process.env.EMAIL_ACTION_SECRET }));
+  return Response.json(
+    await runMoneyJob({ db, paystack, mailer: createResendMailer(), emailSecret: process.env.EMAIL_ACTION_SECRET }),
+  );
 }

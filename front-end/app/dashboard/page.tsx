@@ -4,7 +4,7 @@ import { AlertCircle, ArrowRight, Plus } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { useAuthUser } from "@/components/auth/use-auth-user";
+import { useProfile } from "@/components/auth/use-profile";
 import { BoardPreview } from "@/components/dashboard/board-preview";
 import { MoneyChart } from "@/components/dashboard/money-chart";
 import { MyPosts } from "@/components/dashboard/my-posts";
@@ -20,9 +20,9 @@ import { apiFetch } from "@/lib/logistics/client";
 export default function DashboardPage() {
   const [postOpen, setPostOpen] = useState(false);
   const [needsLocation, setNeedsLocation] = useState(false);
-  const { user } = useAuthUser();
+  const { user, profile } = useProfile();
 
-  const displayName = user?.displayName ?? user?.email?.split("@")[0] ?? "";
+  const displayName = profile?.display_name ?? user?.displayName ?? user?.email?.split("@")[0] ?? "";
   const firstName = displayName.split(" ")[0];
 
   // Only someone we can see has no location yet. If our API can't answer, nobody is nagged.
