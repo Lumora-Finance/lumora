@@ -18,7 +18,10 @@ export type ListingDraft = {
   date: string;
   windowStart: string;
   windowEnd: string;
-  price: string;
+  /** Minimum price per unit the buyer will pay (naira string) */
+  priceMin: string;
+  /** Maximum price per unit the buyer will pay (naira string) */
+  priceMax: string;
   capacity: string;
   minQty: string;
   minWeight: string;
@@ -68,7 +71,11 @@ export function stepProblem(step: number, draft: ListingDraft, now: Date): strin
     return null;
   }
   if (step === 3) {
-    if (nairaToKobo(draft.price) === null || nairaToKobo(draft.price) === 0) return "Enter the price in naira, like 3500.";
+    const minKobo = nairaToKobo(draft.priceMin);
+    const maxKobo = nairaToKobo(draft.priceMax);
+    if (!minKobo || minKobo <= 0) return "Enter the minimum price you will pay (e.g. 3000).";
+    if (!maxKobo || maxKobo <= 0) return "Enter the maximum price you will pay (e.g. 4000).";
+    if (maxKobo < minKobo) return "The maximum price must be equal to or higher than the minimum.";
     const capacity = wholeNumber(draft.capacity);
     const smallest = wholeNumber(draft.minQty);
     if (!capacity) return "Enter how many you need.";
@@ -85,13 +92,12 @@ export function stepProblem(step: number, draft: ListingDraft, now: Date): strin
   return null;
 }
 
-/** The most this can ever hold from the buyer's balance: every unit at the largest weight. */
+/** The most this can ever hold from the buyer's balance: every unit at the largest weight × max price. */
 export function largestHoldKobo(draft: ListingDraft): number | null {
-  const kobo = nairaToKobo(draft.price);
+  const kobo = nairaToKobo(draft.priceMax); // use max price for the worst-case hold
   const capacity = wholeNumber(draft.capacity);
   const max = asksForWeight(draft) ? positive(draft.maxWeight) : 1;
   if (!kobo || !capacity || !max) return null;
-  // Worked in whole grams, so no float arithmetic touches the money.
   return Math.ceil((capacity * Math.round(max * 1000) * kobo) / 1000);
 }
 
@@ -100,7 +106,9 @@ export function listingBody(draft: ListingDraft) {
   const weighs = asksForWeight(draft);
   return {
     commodity: draft.commodity,
-    unitPriceKobo: nairaToKobo(draft.price),
+    unitPriceKobo: nairaToKobo(draft.priceMax), // use max as the posted price
+    unitPriceMinKobo: nairaToKobo(draft.priceMin),
+    unitPriceMaxKobo: nairaToKobo(draft.priceMax),
     capacity: Number(draft.capacity),
     minQty: Number(draft.minQty),
     minWeight: weighs ? Number(draft.minWeight) : 1,

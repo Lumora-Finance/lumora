@@ -28,6 +28,8 @@ type SupplyListing = {
   title: string;
   description: string | null;
   unit_price_kobo: number;
+  unit_price_min_kobo: number | null;
+  unit_price_max_kobo: number | null;
   qty: number;
   unit: string;
   images: string[];
@@ -59,6 +61,8 @@ export default function SupplyListingDetailPage() {
   const [offers, setOffers] = useState<BuyerOffer[]>([]);
   const [offersLoading, setOffersLoading] = useState(false);
   const [offerQty, setOfferQty] = useState(1);
+  const [offerPrice, setOfferPrice] = useState("");
+  const [offerPriceError, setOfferPriceError] = useState<string | null>(null);
   const [offerNote, setOfferNote] = useState("");
   const [offerSubmitting, setOfferSubmitting] = useState(false);
   const [offerDone, setOfferDone] = useState(false);
@@ -120,7 +124,7 @@ export default function SupplyListingDetailPage() {
       const res = await fetch("/api/buyer-offers", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ listingId: id, qty: offerQty, note: offerNote || null }),
+        body: JSON.stringify({ listingId: id, qty: offerQty, note: offerNote || null, unitPriceKobo: offerPrice ? Math.round(Number(offerPrice) * 100) : null }),
       });
       const result = await res.json();
       if (result.ok) { setOfferDone(true); loadOffers(); }
@@ -309,8 +313,20 @@ export default function SupplyListingDetailPage() {
               <div className="rounded-xl border border-amber/30 bg-amber-soft/30 p-5">
                 <h3 className="text-body font-medium text-ink">Make an Offer</h3>
                 <p className="mt-1 text-body-sm text-ink-muted">
-                  Submit how many {unit}s you want to buy. The farmer will accept or decline.
+                  Submit how many {unit}s you want to buy. Your price must be within the farmer&apos;s range.
                 </p>
+
+                {/* Farmer's asking price banner */}
+                <div className="mt-3 flex items-center gap-2 rounded-lg border border-line bg-white px-3 py-2.5">
+                  <span className="text-body-sm text-ink-muted">Farmer asks:</span>
+                  <span className="font-num text-body-sm font-medium text-amber">
+                    {listing.unit_price_min_kobo && listing.unit_price_min_kobo !== listing.unit_price_kobo
+                      ? `₦${(listing.unit_price_min_kobo / 100).toLocaleString("en-NG")} – ₦${(listing.unit_price_kobo / 100).toLocaleString("en-NG")}`
+                      : `₦${(listing.unit_price_kobo / 100).toLocaleString("en-NG")}`}
+                  </span>
+                  <span className="text-label text-ink-muted">/ {unit}</span>
+                </div>
+
                 <div className="mt-4 grid grid-cols-2 gap-3">
                   <div>
                     <label className="mb-1 block text-body-sm font-medium text-ink">
@@ -322,14 +338,48 @@ export default function SupplyListingDetailPage() {
                     <p className="mt-0.5 text-label text-ink-muted">Available: {listing.qty}</p>
                   </div>
                   <div>
-                    <label className="mb-1 block text-body-sm font-medium text-ink">Note (optional)</label>
-                    <input type="text" value={offerNote} onChange={(e) => setOfferNote(e.target.value)}
-                      placeholder="Delivery, timing, etc."
-                      className="w-full rounded-lg border border-line bg-white px-3 py-2.5 text-body text-ink outline-none focus:border-green" />
+                    <label className="mb-1 block text-body-sm font-medium text-ink">
+                      Your price (₦ / {unit})
+                    </label>
+                    <div className="relative">
+                      <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ink-muted">₦</span>
+                      <input
+                        type="number"
+                        value={offerPrice}
+                        min={listing.unit_price_min_kobo ? listing.unit_price_min_kobo / 100 : 1}
+                        max={listing.unit_price_max_kobo ? listing.unit_price_max_kobo / 100 : listing.unit_price_kobo / 100}
+                        onChange={(e) => { setOfferPrice(e.target.value); setOfferPriceError(null); }}
+                        placeholder={String(listing.unit_price_kobo / 100)}
+                        className="w-full rounded-lg border border-line bg-white py-2.5 pr-3 pl-7 font-num text-body text-ink outline-none focus:border-green"
+                      />
+                    </div>
+                    {listing.unit_price_min_kobo && (
+                      <p className="mt-0.5 text-label text-ink-muted">
+                        ₦{(listing.unit_price_min_kobo / 100).toLocaleString()} – ₦{((listing.unit_price_max_kobo ?? listing.unit_price_kobo) / 100).toLocaleString()}
+                      </p>
+                    )}
                   </div>
                 </div>
+                <div className="mt-3">
+                  <label className="mb-1 block text-body-sm font-medium text-ink">Note (optional)</label>
+                  <input type="text" value={offerNote} onChange={(e) => setOfferNote(e.target.value)}
+                    placeholder="Delivery, timing, etc."
+                    className="w-full rounded-lg border border-line bg-white px-3 py-2.5 text-body text-ink outline-none focus:border-green" />
+                </div>
+                {offerPriceError && (
+                  <p role="alert" className="mt-2 text-body-sm text-danger">{offerPriceError}</p>
+                )}
                 <button
-                  onClick={() => { setPinOpen("offer"); }}
+                  onClick={() => {
+                    const priceNum = Number(offerPrice);
+                    const minKobo = listing.unit_price_min_kobo ?? 0;
+                    const maxKobo = listing.unit_price_max_kobo ?? listing.unit_price_kobo;
+                    if (!priceNum || priceNum <= 0) { setOfferPriceError("Enter your price per " + unit); return; }
+                    if (priceNum * 100 < minKobo) { setOfferPriceError(`Price too low. Minimum is ₦${(minKobo / 100).toLocaleString()}`); return; }
+                    if (priceNum * 100 > maxKobo) { setOfferPriceError(`Price too high. Maximum is ₦${(maxKobo / 100).toLocaleString()}`); return; }
+                    setOfferPriceError(null);
+                    setPinOpen("offer");
+                  }}
                   disabled={offerSubmitting}
                   className="mt-4 flex items-center gap-2 rounded-xl bg-amber px-5 py-2.5 text-body-sm font-medium text-ink hover:bg-amber/90 disabled:opacity-50">
                   {offerSubmitting ? <Loader2 className="size-4 animate-spin" /> : <Send strokeWidth={1.5} className="size-4" />}

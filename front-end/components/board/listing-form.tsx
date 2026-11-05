@@ -51,7 +51,7 @@ const FAILURES: Record<string, string> = {
 
 const START: ListingDraft = {
   commodity: "Live broilers", mode: "farmer_delivers", address: "", date: "", windowStart: "07:00", windowEnd: "11:00",
-  price: "", capacity: "", minQty: "1", minWeight: "", maxWeight: "", spec: "", images: [],
+  priceMin: "", priceMax: "", capacity: "", minQty: "1", minWeight: "", maxWeight: "", spec: "", images: [],
 };
 
 /** The check sits against its label and slides open, so the two stay centred together as one. */
@@ -436,13 +436,35 @@ export function ListingForm() {
 
             {step === 3 && (
               <>
-                <label className={LABEL}>
-                  Price per {rules.unit}
-                  <span className="relative block">
-                    <span aria-hidden="true" className="absolute top-1/2 left-4 mt-1 -translate-y-1/2 text-ink-muted">₦</span>
-                    <input {...input("price")} inputMode="decimal" placeholder="3500" className={cn(FIELD, "font-num pl-9")} />
-                  </span>
-                </label>
+                <div>
+                  <p className={LABEL}>Price range per {rules.unit}</p>
+                  <p className="mt-0.5 text-body-sm text-ink-muted">Set the minimum and maximum you will pay. Farmers must offer within this range.</p>
+                  <div className="mt-2 grid grid-cols-2 gap-3 sm:gap-4">
+                    <label className={LABEL}>
+                      Minimum (₦)
+                      <span className="relative block">
+                        <span aria-hidden="true" className="absolute top-1/2 left-4 mt-1 -translate-y-1/2 text-ink-muted">₦</span>
+                        <input {...input("priceMin")} inputMode="decimal" placeholder="3000" className={cn(FIELD, "font-num pl-9")} />
+                      </span>
+                    </label>
+                    <label className={LABEL}>
+                      Maximum (₦)
+                      <span className="relative block">
+                        <span aria-hidden="true" className="absolute top-1/2 left-4 mt-1 -translate-y-1/2 text-ink-muted">₦</span>
+                        <input {...input("priceMax")} inputMode="decimal" placeholder="4000" className={cn(FIELD, "font-num pl-9")} />
+                      </span>
+                    </label>
+                  </div>
+                  {/* Live range preview */}
+                  {draft.priceMin && draft.priceMax && nairaToKobo(draft.priceMin) && nairaToKobo(draft.priceMax) && (
+                    <p className="mt-2 rounded-2xl bg-sage-soft px-4 py-2.5 text-body-sm text-ink">
+                      Range: <span className="font-num font-medium">₦{Number(draft.priceMin).toLocaleString("en-NG")}</span>
+                      {" – "}
+                      <span className="font-num font-medium">₦{Number(draft.priceMax).toLocaleString("en-NG")}</span>
+                      {" "}per {rules.unit}
+                    </p>
+                  )}
+                </div>
                 <div className="grid grid-cols-2 gap-3 sm:gap-4">
                   <label className={LABEL}>
                     How many?
@@ -493,7 +515,12 @@ export function ListingForm() {
                   />
                   <Review
                     label="Price"
-                    value={<><span className="font-num">{money(nairaToKobo(draft.price) ?? 0)}</span> per {rules.unit}{weighs && <span className="block text-body-sm text-ink-muted"><span className="font-num">{draft.minWeight}</span> to <span className="font-num">{draft.maxWeight}</span> kg each. Smallest order <span className="font-num">{draft.minQty}</span>.</span>}{!weighs && <span className="block text-body-sm text-ink-muted">Smallest order <span className="font-num">{draft.minQty}</span>.</span>}</>}
+                    value={<>
+                      <span className="font-num">₦{Number(draft.priceMin).toLocaleString("en-NG")} – ₦{Number(draft.priceMax).toLocaleString("en-NG")}</span>
+                      {" "}per {rules.unit}
+                      {weighs && <span className="block text-body-sm text-ink-muted"><span className="font-num">{draft.minWeight}</span> to <span className="font-num">{draft.maxWeight}</span> kg each. Smallest order <span className="font-num">{draft.minQty}</span>.</span>}
+                      {!weighs && <span className="block text-body-sm text-ink-muted">Smallest order <span className="font-num">{draft.minQty}</span>.</span>}
+                    </>}
                     onEdit={() => goTo(3)}
                   />
                 </dl>

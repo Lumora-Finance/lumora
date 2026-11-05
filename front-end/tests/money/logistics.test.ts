@@ -651,7 +651,7 @@ describe("the post demand steps", () => {
   const NOW = new Date("2026-12-07T08:00:00Z");
   const draft: ListingDraft = {
     commodity: "Live broilers", mode: "farmer_delivers", address: "12 Rayfield Road", date: "2026-12-10", windowStart: "07:00", windowEnd: "11:00",
-    price: "3500", capacity: "30", minQty: "1", minWeight: "2.5", maxWeight: "3.5", spec: "", images: [],
+    priceMin: "3000", priceMax: "3500", capacity: "30", minQty: "1", minWeight: "2.5", maxWeight: "3.5", spec: "", images: [],
   };
 
   it("passes a complete draft on every step", () => {
@@ -672,8 +672,8 @@ describe("the post demand steps", () => {
   });
 
   it("checks the numbers", () => {
-    expect(stepProblem(3, { ...draft, price: "abc" }, NOW)).toMatch(/price/);
-    expect(stepProblem(3, { ...draft, price: "0" }, NOW)).toMatch(/price/);
+    expect(stepProblem(3, { ...draft, priceMin: "abc", priceMax: "abc" }, NOW)).toMatch(/price/);
+    expect(stepProblem(3, { ...draft, priceMin: "0", priceMax: "0" }, NOW)).toMatch(/price/);
     expect(stepProblem(3, { ...draft, capacity: "2.5" }, NOW)).toMatch(/how many/);
     expect(stepProblem(3, { ...draft, minQty: "31" }, NOW)).toMatch(/smallest order/);
     expect(stepProblem(3, { ...draft, maxWeight: "2" }, NOW)).toMatch(/largest weight/);
@@ -687,8 +687,8 @@ describe("the post demand steps", () => {
 
   it("works out the largest hold the same way as book_slot", () => {
     expect(largestHoldKobo(draft)).toBe(30 * 3.5 * 350_000);
-    expect(largestHoldKobo({ ...draft, commodity: "Eggs", price: "5600", capacity: "25" })).toBe(25 * 560_000);
-    expect(largestHoldKobo({ ...draft, price: "" })).toBeNull();
+    expect(largestHoldKobo({ ...draft, commodity: "Eggs", priceMin: "5000", priceMax: "5600", capacity: "25" })).toBe(25 * 560_000);
+    expect(largestHoldKobo({ ...draft, priceMin: "", priceMax: "" })).toBeNull();
   });
 
   it("sends no address when the buyer collects", () => {
