@@ -130,7 +130,7 @@ export function MarketCard({
                 : "bg-amber-soft text-amber hover:bg-amber hover:text-ink",
             )}
           >
-            {isDemand ? "Make offer" : "Request details"}
+            Make offer
           </button>
           <button
             onClick={(e) => e.preventDefault()}

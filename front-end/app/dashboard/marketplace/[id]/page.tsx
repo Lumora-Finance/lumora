@@ -68,6 +68,13 @@ export default function ProductDetailsPage() {
     router.push(`/dashboard/messages?auto=${msg}&to=${encodeURIComponent(currentItem.poster)}`);
   }
 
+  function handleRequestDetails() {
+    const msg = encodeURIComponent(
+      `Hi ${currentItem.poster}, I'd like more details about your ${currentItem.type === "demand" ? "demand for" : "listing of"} ${currentItem.commodity}. Specifically: quality requirements, delivery logistics, and payment terms.`
+    );
+    router.push(`/dashboard/messages?auto=${msg}&to=${encodeURIComponent(currentItem.poster)}`);
+  }
+
   function submitOffer(offer: Offer) {
     setExtraOffers((prev) => [...prev, offer]);
   }
@@ -150,21 +157,31 @@ export default function ProductDetailsPage() {
 
               {/* Actions */}
               <div data-rise className="mt-6 flex flex-wrap gap-3">
-                {isDemand && (
-                  <button
-                    onClick={() => setOfferOpen(true)}
-                    className="flex items-center gap-2 rounded-xl bg-amber px-5 py-2.5 text-body-sm font-medium text-ink hover:bg-amber/90"
-                  >
-                    <TrendingUp strokeWidth={1.5} className="size-4" />
-                    Make offer
-                  </button>
-                )}
+                <button
+                  onClick={() => setOfferOpen(true)}
+                  className={cn(
+                    "flex items-center gap-2 rounded-xl px-5 py-2.5 text-body-sm font-medium",
+                    isDemand
+                      ? "bg-amber text-ink hover:bg-amber/90"
+                      : "bg-sage/20 text-sage hover:bg-sage/30",
+                  )}
+                >
+                  <TrendingUp strokeWidth={1.5} className="size-4" />
+                  Make offer
+                </button>
                 <button
                   onClick={handleMessage}
                   className="flex items-center gap-2 rounded-xl border border-sage/30 bg-field-soft/60 px-5 py-2.5 text-body-sm font-medium text-paper hover:bg-field-soft"
                 >
                   <MessageSquare strokeWidth={1.5} className="size-4" />
                   Message {item.poster}
+                </button>
+                <button
+                  onClick={handleRequestDetails}
+                  className="flex items-center gap-2 rounded-xl border border-sage/30 bg-field-soft/60 px-5 py-2.5 text-body-sm font-medium text-paper hover:bg-field-soft"
+                >
+                  <Package strokeWidth={1.5} className="size-4" />
+                  Request details
                 </button>
               </div>
             </div>
@@ -256,22 +273,20 @@ export default function ProductDetailsPage() {
           {tab === "offers" && (
             <div className="flex flex-col gap-4">
               {/* Make offer CTA */}
-              {isDemand && (
-                <div className="flex items-center gap-3 rounded-xl border border-amber/30 bg-amber-soft/40 p-4">
-                  <TrendingUp strokeWidth={1.5} className="size-5 shrink-0 text-amber" />
-                  <p className="flex-1 text-body-sm text-ink">
-                    {allOffers.length > 0
-                      ? `${allOffers.length} offer${allOffers.length > 1 ? "s" : ""} on this demand. Submit yours to compete.`
-                      : "No offers yet. Be the first to make an offer."}
-                  </p>
-                  <button
-                    onClick={() => setOfferOpen(true)}
-                    className="shrink-0 rounded-lg bg-amber px-4 py-2 text-body-sm font-medium text-ink hover:bg-amber/90"
-                  >
-                    Make offer
-                  </button>
+              <div className="flex items-center gap-3 rounded-xl border border-amber/30 bg-amber-soft/40 p-4">
+                <TrendingUp strokeWidth={1.5} className="size-5 shrink-0 text-amber" />
+                <p className="flex-1 text-body-sm text-ink">
+                  {allOffers.length > 0
+                    ? `${allOffers.length} offer${allOffers.length > 1 ? "s" : ""} on this ${isDemand ? "demand" : "listing"}. Submit yours to compete.`
+                    : `No offers yet. Be the first to make an offer on this ${isDemand ? "demand" : "listing"}.`}
+                </p>
+                <button
+                  onClick={() => setOfferOpen(true)}
+                  className="shrink-0 rounded-lg bg-amber px-4 py-2 text-body-sm font-medium text-ink hover:bg-amber/90"
+                >
+                  Make offer
+                </button>
                 </div>
-              )}
 
               {/* Offers list */}
               {allOffers.length > 0 ? (
