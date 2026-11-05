@@ -1,77 +1,39 @@
 "use client";
 
-import { MoreHorizontal, Pause, Pencil, Plus } from "lucide-react";
+import { Loader2, MoreHorizontal, Pause, Pencil, Plus } from "lucide-react";
 import { useState } from "react";
-
 import { cn } from "@/lib/utils";
+import { useDashboardData } from "@/lib/hooks/use-dashboard-data";
 
 type Post = {
   id: string;
-  type: "DEMAND" | "LISTING";
-  commodity: string;
-  spec: string;
-  price: string;
-  unit: string;
-  remaining: string;
-  total: string;
-  status: "active" | "paused" | "full";
+  spec: string | null;
+  unit_price_kobo: number;
+  capacity_per_day: number;
+  status: "active" | "paused" | "closed";
+  commodity: { id: string; name: string; unit: string } | null;
 };
 
-const POSTS: Post[] = [
-  {
-    id: "1",
-    type: "DEMAND",
-    commodity: "Live Broilers",
-    spec: "2.5–3.5 kg each, healthy",
-    price: "₦3,500",
-    unit: "/ kg",
-    remaining: "50",
-    total: "80",
-    status: "active",
-  },
-  {
-    id: "2",
-    type: "LISTING",
-    commodity: "Tomatoes",
-    spec: "Grade A, Plateau Roma",
-    price: "₦850",
-    unit: "/ basket",
-    remaining: "20",
-    total: "40",
-    status: "active",
-  },
-  {
-    id: "3",
-    type: "DEMAND",
-    commodity: "Eggs",
-    spec: "Crates of 30, medium",
-    price: "₦2,100",
-    unit: "/ crate",
-    remaining: "0",
-    total: "15",
-    status: "full",
-  },
-  {
-    id: "4",
-    type: "LISTING",
-    commodity: "Live Turkey",
-    spec: "5–7 kg, dressed or live",
-    price: "₦4,200",
-    unit: "/ kg",
-    remaining: "10",
-    total: "20",
-    status: "paused",
-  },
-];
-
-const STATUS_STYLES: Record<Post["status"], string> = {
+const STATUS_STYLES: Record<string, string> = {
   active: "bg-sage-soft text-green",
   paused: "bg-amber-soft text-amber",
-  full: "bg-line text-ink-muted",
+  closed: "bg-line text-ink-muted",
 };
+
+const ACCENT: Record<string, string> = {
+  active: "border-l-green",
+  paused: "border-l-amber",
+  closed: "border-l-ink-muted",
+};
+
+function formatKobo(kobo: number) {
+  return `₦${(kobo / 100).toLocaleString("en-NG")}`;
+}
 
 export function MyPosts({ onPost }: { onPost?: () => void }) {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const { data, loading } = useDashboardData<Post[]>("posts");
+  const posts = data ?? [];
 
   return (
     <div className="rounded-xl border border-line bg-white shadow-sm">
@@ -79,9 +41,7 @@ export function MyPosts({ onPost }: { onPost?: () => void }) {
       <div className="flex items-center justify-between border-b border-line px-5 py-4">
         <div>
           <h2 className="text-heading font-medium text-ink">My Posts</h2>
-          <p className="mt-0.5 text-body-sm text-ink-muted">
-            Your active demand and listings
-          </p>
+          <p className="mt-0.5 text-body-sm text-ink-muted">Your active demand and listings</p>
         </div>
         <button
           onClick={onPost}
@@ -94,113 +54,105 @@ export function MyPosts({ onPost }: { onPost?: () => void }) {
 
       {/* Posts */}
       <div className="flex flex-col gap-3 p-4">
-        {POSTS.map((post, index) => {
-          const pct = post.total === "0" ? 0 : Math.round((parseInt(post.remaining) / parseInt(post.total)) * 100);
-          // Alternate 4 card shapes
-          const shapes = [
-            { clip: "polygon(0 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%)", border: "border-l-[3px] border-l-green" },
-            { clip: "polygon(14px 0, 100% 0, 100% 100%, 0 100%, 0 14px)", border: "border-r-[3px] border-r-amber" },
-            { clip: "polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%)", border: "border-b-[3px] border-b-green" },
-            { clip: "polygon(0 0, 100% 0, 100% 100%, 14px 100%, 0 calc(100% - 14px))", border: "border-t-[3px] border-t-sage" },
-          ];
-          const { clip, border } = shapes[index % 4];
-
-          return (
-            <div
-              key={post.id}
-              className={cn("group flex items-start gap-4 bg-paper px-5 py-4 transition-all hover:shadow-md hover:-translate-y-px", border)}
-              style={{ clipPath: clip }}
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="size-5 animate-spin text-ink-muted" />
+          </div>
+        ) : posts.length === 0 ? (
+          <div className="py-6 text-center">
+            <p className="text-body-sm text-ink-muted">No posts yet.</p>
+            <button
+              onClick={onPost}
+              className="mt-2 text-body-sm font-medium text-green hover:underline"
             >
-              {/* Type tag */}
-              <span
+              Create your first post →
+            </button>
+          </div>
+        ) : (
+          posts.map((post) => {
+            const unit = post.commodity?.unit ?? "unit";
+            const name = post.commodity?.name ?? "Produce";
+
+            return (
+              <div
+                key={post.id}
                 className={cn(
-                  "mt-0.5 shrink-0 rounded-md px-2 py-0.5 font-num text-label font-medium tracking-wide",
-                  post.type === "DEMAND"
-                    ? "bg-green/10 text-green"
-                    : "bg-amber-soft text-amber",
+                  "group flex items-start gap-4 rounded-lg border border-line border-l-[3px] bg-paper px-5 py-4 transition-all hover:shadow-md",
+                  ACCENT[post.status] ?? "border-l-ink-muted",
                 )}
               >
-                {post.type}
-              </span>
+                <span
+                  className={cn(
+                    "mt-0.5 shrink-0 rounded-md px-2 py-0.5 font-num text-label font-medium tracking-wide bg-green/10 text-green",
+                  )}
+                >
+                  DEMAND
+                </span>
 
-              {/* Content */}
-              <div className="min-w-0 flex-1">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-medium text-ink">{post.commodity}</p>
-                    <p className="text-body-sm text-ink-muted">{post.spec}</p>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    {/* Status */}
-                    <span
-                      className={cn(
-                        "rounded-full px-2.5 py-0.5 text-label font-medium capitalize",
-                        STATUS_STYLES[post.status],
-                      )}
-                    >
-                      {post.status}
-                    </span>
-
-                    {/* Menu */}
-                    <div className="relative">
-                      <button
-                        onClick={() => setActiveMenu(activeMenu === post.id ? null : post.id)}
-                        className="flex size-7 items-center justify-center rounded-md text-ink-muted opacity-0 transition-opacity group-hover:opacity-100 hover:bg-sage-soft hover:text-ink"
-                      >
-                        <MoreHorizontal strokeWidth={1.5} className="size-4" />
-                      </button>
-                      {activeMenu === post.id && (
-                        <>
-                          <div
-                            className="fixed inset-0 z-10"
-                            onClick={() => setActiveMenu(null)}
-                          />
-                          <div className="absolute right-0 top-8 z-20 min-w-[130px] overflow-hidden rounded-lg border border-line bg-white py-1 shadow-lg">
-                            <button className="flex w-full items-center gap-2.5 px-3.5 py-2 text-body-sm text-ink hover:bg-sage-soft">
-                              <Pencil strokeWidth={1.5} className="size-3.5" /> Edit
-                            </button>
-                            <button className="flex w-full items-center gap-2.5 px-3.5 py-2 text-body-sm text-ink hover:bg-sage-soft">
-                              <Pause strokeWidth={1.5} className="size-3.5" /> Pause
-                            </button>
-                          </div>
-                        </>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-ink">{name}</p>
+                      {post.spec && (
+                        <p className="text-body-sm text-ink-muted">{post.spec}</p>
                       )}
                     </div>
-                  </div>
-                </div>
 
-                {/* Price + capacity bar */}
-                <div className="mt-2 flex items-center gap-4">
-                  <span className="font-num text-number font-medium text-amber">
-                    {post.price}
-                    <span className="font-sans text-body-sm text-ink-muted">{post.unit}</span>
-                  </span>
-
-                  <div className="flex flex-1 items-center gap-2">
-                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
-                      <div
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span
                         className={cn(
-                          "h-full rounded-full transition-all duration-500",
-                          post.status === "full" ? "bg-ink-muted" : "bg-green",
+                          "rounded-full px-2.5 py-0.5 text-label font-medium capitalize",
+                          STATUS_STYLES[post.status] ?? "bg-line text-ink-muted",
                         )}
-                        style={{ width: `${pct}%` }}
-                      />
+                      >
+                        {post.status}
+                      </span>
+
+                      <div className="relative">
+                        <button
+                          onClick={() => setActiveMenu(activeMenu === post.id ? null : post.id)}
+                          aria-label="Post options"
+                          className="flex size-7 items-center justify-center rounded-md text-ink-muted transition-opacity hover:bg-sage-soft hover:text-ink sm:opacity-0 sm:group-hover:opacity-100"
+                        >
+                          <MoreHorizontal strokeWidth={1.5} className="size-4" />
+                        </button>
+                        {activeMenu === post.id && (
+                          <>
+                            <div className="fixed inset-0 z-10" onClick={() => setActiveMenu(null)} />
+                            <div className="absolute right-0 top-8 z-20 min-w-[130px] overflow-hidden rounded-lg border border-line bg-white py-1 shadow-lg">
+                              <button className="flex w-full items-center gap-2.5 px-3.5 py-2 text-body-sm text-ink hover:bg-sage-soft">
+                                <Pencil strokeWidth={1.5} className="size-3.5" /> Edit
+                              </button>
+                              <button className="flex w-full items-center gap-2.5 px-3.5 py-2 text-body-sm text-ink hover:bg-sage-soft">
+                                <Pause strokeWidth={1.5} className="size-3.5" /> Pause
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
+                  </div>
+
+                  <div className="mt-2 flex items-center gap-4">
+                    <span className="font-num text-number font-medium text-amber">
+                      {formatKobo(post.unit_price_kobo)}
+                      <span className="font-sans text-body-sm text-ink-muted">/{unit}</span>
+                    </span>
                     <span className="font-num text-label text-ink-muted">
-                      {post.remaining}/{post.total} left
+                      {post.capacity_per_day} {unit}/day
                     </span>
                   </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
+
       <div className="border-t border-line px-5 py-3">
-        <button className="text-body-sm font-medium text-green hover:underline">
+        <a href="/dashboard/posts" className="text-body-sm font-medium text-green hover:underline">
           View all posts →
-        </button>
+        </a>
       </div>
     </div>
   );

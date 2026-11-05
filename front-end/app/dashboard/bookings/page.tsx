@@ -133,9 +133,6 @@ export default function BookingsPage() {
               <div
                 className={cn(
                   "group relative overflow-hidden rounded-xl border border-line bg-white p-5 shadow-sm transition-shadow hover:shadow-md",
-                  i % 3 === 0 && "rotate-[-0.2deg] hover:rotate-0",
-                  i % 3 === 1 && "rotate-[0.15deg] hover:rotate-0",
-                  "transition-transform duration-300",
                 )}
               >
                 <div className="flex items-start justify-between gap-4">
@@ -181,7 +178,7 @@ export default function BookingsPage() {
                 <div className="mt-4 flex items-center justify-between border-t border-line pt-3">
                   <span className="font-num text-label text-ink-muted">{booking.code}</span>
                   {booking.tab === "upcoming" && (
-                    <div className="flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                    <div className="flex gap-2">
                       <button className="rounded-lg bg-sage-soft px-3 py-1.5 text-label font-medium text-green hover:bg-sage-soft/80">
                         View details
                       </button>

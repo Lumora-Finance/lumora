@@ -1,19 +1,42 @@
 import { serverMoneyDb } from "@/lib/money/db";
-import { createFlutterwaveClient, verifyWebhookSignature } from "@/lib/money/flutterwave";
-import { handleFlutterwaveWebhook } from "@/lib/money/webhooks";
+import { createPaystackClient, verifyWebhookSignature } from "@/lib/money/paystack";
+import { handlePaystackWebhook } from "@/lib/money/webhooks";
 
+export const runtime = "nodejs";
+
+/**
+ * Paystack webhook handler.
+ * Paystack signs with HMAC-SHA512 using PAYSTACK_SECRET_KEY.
+ * Header: x-paystack-signature
+ *
+ * Events handled:
+ *   charge.success      → wallet funding credited
+ *   transfer.success    → payout confirmed, farmer marked paid
+ *   transfer.failed     → payout marked failed, queued for retry
+ *   transfer.reversed   → same as failed
+ */
 export async function POST(request: Request) {
-  const signature = request.headers.get("verif-hash");
-  const secretHash = process.env.FLUTTERWAVE_WEBHOOK_HASH;
-  // Forged requests stop here, before anything touches the database.
-  if (!verifyWebhookSignature(signature, secretHash)) {
+  // Read raw body first — signature verification needs the exact bytes
+  const rawBody = await request.text();
+  const signature = request.headers.get("x-paystack-signature");
+  const secretKey = process.env.PAYSTACK_SECRET_KEY;
+
+  // Reject forged requests before touching the database
+  if (!verifyWebhookSignature(signature, rawBody, secretKey)) {
     return Response.json({ result: "bad_signature" }, { status: 401 });
   }
 
-  const body = await request.json().catch(() => ({}));
-  const { httpStatus, result } = await handleFlutterwaveWebhook(
-    { signature, body, secretHash },
-    { db: serverMoneyDb(), flutterwave: createFlutterwaveClient() },
+  let body: { event?: string; data?: Record<string, unknown> };
+  try {
+    body = JSON.parse(rawBody);
+  } catch {
+    return Response.json({ result: "bad_json" }, { status: 400 });
+  }
+
+  const { httpStatus, result } = await handlePaystackWebhook(
+    { signature, rawBody, body, secretKey },
+    { db: serverMoneyDb(), paystack: createPaystackClient() },
   );
+
   return Response.json({ result }, { status: httpStatus });
 }

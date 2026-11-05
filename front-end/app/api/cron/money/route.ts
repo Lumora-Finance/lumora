@@ -1,10 +1,12 @@
 import { connection } from "next/server";
 
 import { serverMoneyDb } from "@/lib/money/db";
-import { createFlutterwaveClient } from "@/lib/money/flutterwave";
+import { createPaystackClient } from "@/lib/money/paystack";
 import { runMoneyJob, runReconciliation } from "@/lib/money/jobs";
 import { secretMatches } from "@/lib/money/secret";
 import { createSmsSender } from "@/lib/money/sms-sender";
+
+export const runtime = "nodejs";
 
 /** `?task=reconcile` runs the nightly check. Otherwise this is the 5-minute job. */
 export async function GET(request: Request) {
@@ -16,9 +18,11 @@ export async function GET(request: Request) {
   }
 
   const db = serverMoneyDb();
-  const flutterwave = createFlutterwaveClient();
+  const paystack = createPaystackClient();
+
   if (new URL(request.url).searchParams.get("task") === "reconcile") {
-    return Response.json(await runReconciliation({ db, flutterwave }));
+    return Response.json(await runReconciliation({ db, paystack }));
   }
-  return Response.json(await runMoneyJob({ db, flutterwave, sms: createSmsSender() }));
+
+  return Response.json(await runMoneyJob({ db, paystack, sms: createSmsSender() }));
 }
