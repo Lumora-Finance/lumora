@@ -1,5 +1,5 @@
 import type { MoneyDb, MoneyResult } from "./db";
-import type { FlutterwaveClient } from "./flutterwave";
+import type { PaystackClient } from "./paystack";
 import type { SmsSender } from "./jobs";
 import { namesMatch } from "./rules";
 
@@ -61,11 +61,11 @@ export async function regenerateCode(
 /** Payouts only go to accounts in the farmer's registered name. */
 export async function addPayoutAccount(
   input: { farmerId: string; bankCode: string; accountNumber: string },
-  deps: { db: MoneyDb; flutterwave: FlutterwaveClient; now?: Date },
+  deps: { db: MoneyDb; paystack: PaystackClient; now?: Date },
 ): Promise<MoneyResult> {
   const farmer = await deps.db.rpc<{ name: string } | null>("money_get_user", { p_user: input.farmerId });
   if (!farmer) return { ok: false, code: "user_not_found" };
-  const resolved = await deps.flutterwave.resolveAccount(input.bankCode, input.accountNumber);
+  const resolved = await deps.paystack.resolveAccount(input.bankCode, input.accountNumber);
   return deps.db.rpc("money_save_payout_account", {
     p_farmer: input.farmerId,
     p_bank_code: input.bankCode,

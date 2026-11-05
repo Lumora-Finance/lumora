@@ -1,61 +1,34 @@
 "use client";
 
-import { ArrowRight, MapPin, Zap } from "lucide-react";
+import { ArrowRight, Loader2, MapPin, Zap } from "lucide-react";
 import Link from "next/link";
-
 import { cn } from "@/lib/utils";
+import { useDashboardData } from "@/lib/hooks/use-dashboard-data";
 
-type BoardItem = {
+type Slot = {
   id: string;
-  type: "DEMAND" | "LISTING";
-  commodity: string;
-  org: string;
-  price: string;
-  unit: string;
-  capacity: string;
-  location: string;
-  distance: string;
-  highlight?: boolean;
+  date: string;
+  capacity_remaining: number;
+  capacity_total: number;
+  listing: {
+    id: string;
+    spec: string;
+    unit_price_kobo: number;
+    location_area: string | null;
+    status: string;
+    commodity: { name: string; unit: string };
+    buyer: { id: string; name: string };
+  } | null;
 };
 
-const ITEMS: BoardItem[] = [
-  {
-    id: "1",
-    type: "DEMAND",
-    commodity: "Live Broilers",
-    org: "Rayfield Restaurant",
-    price: "₦3,800",
-    unit: "/kg",
-    capacity: "40 birds left",
-    location: "Rayfield, Jos",
-    distance: "3.2 km",
-    highlight: true,
-  },
-  {
-    id: "2",
-    type: "LISTING",
-    commodity: "Tomatoes",
-    org: "Barkin Ladi Farm",
-    price: "₦780",
-    unit: "/basket",
-    capacity: "60 baskets",
-    location: "Barkin Ladi",
-    distance: "8.7 km",
-  },
-  {
-    id: "3",
-    type: "DEMAND",
-    commodity: "Live Broilers",
-    org: "Grand Hotel Jos",
-    price: "₦3,650",
-    unit: "/kg",
-    capacity: "25 birds left",
-    location: "GRA, Jos",
-    distance: "5.1 km",
-  },
-];
+function formatKobo(kobo: number, unit: string) {
+  return `₦${(kobo / 100).toLocaleString("en-NG")}/${unit}`;
+}
 
 export function BoardPreview() {
+  const { data, loading } = useDashboardData<Slot[]>("board");
+  const slots = data ?? [];
+
   return (
     <div className="rounded-xl border border-line bg-white shadow-sm">
       {/* Header */}
@@ -75,83 +48,81 @@ export function BoardPreview() {
 
       {/* Items */}
       <div className="flex flex-col gap-3 p-4">
-        {ITEMS.map((item, index) => {
-          // Shape 6: skewed parallelogram-ish via clip-path
-          const isHighlight = item.highlight;
-          const clipPath = isHighlight
-            ? "polygon(16px 0, 100% 0, calc(100% - 16px) 100%, 0 100%)"
-            : "polygon(0 0, 100% 0, 100% 100%, 0 100%)";
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="size-5 animate-spin text-ink-muted" />
+          </div>
+        ) : slots.length === 0 ? (
+          <p className="py-6 text-center text-body-sm text-ink-muted">No open slots right now.</p>
+        ) : (
+          slots.map((slot, i) => {
+            const listing = slot.listing;
+            if (!listing) return null;
+            const highlight = i === 0;
+            const unit = listing.commodity?.unit ?? "unit";
+            const priceStr = formatKobo(listing.unit_price_kobo, unit);
+            const price = `₦${(listing.unit_price_kobo / 100).toLocaleString("en-NG")}`;
+            const unitLabel = `/${unit}`;
 
-          return (
-          <div
-            key={item.id}
-            className={cn(
-              "group relative flex items-start gap-4 px-5 py-4 transition-all hover:shadow-md hover:-translate-y-px",
-              item.highlight && "bg-amber-soft/40",
-              !item.highlight && "bg-paper",
-            )}
-            style={{ clipPath }}
-          >
-            {/* Highest bid indicator */}
-            {item.highlight && (
-              <span className="absolute left-0 top-0 h-full w-0.5 rounded-r-full bg-amber" />
-            )}
+            return (
+              <div
+                key={slot.id}
+                className={cn(
+                  "group relative flex items-start gap-4 rounded-lg border px-5 py-4 transition-all hover:shadow-md",
+                  highlight ? "border-amber/30 bg-amber-soft/30" : "border-line bg-paper",
+                )}
+              >
+                {highlight && (
+                  <span className="absolute left-0 top-0 h-full w-0.5 rounded-r-full bg-amber" />
+                )}
 
-            <div className="min-w-0 flex-1">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <span
-                    className={cn(
-                      "shrink-0 rounded-md px-2 py-0.5 font-num text-label font-medium",
-                      item.type === "DEMAND"
-                        ? "bg-green/10 text-green"
-                        : "bg-amber-soft text-amber",
-                    )}
-                  >
-                    {item.type}
-                  </span>
-                  <p className="font-medium text-ink">{item.commodity}</p>
-                  {item.highlight && (
-                    <Zap
-                      strokeWidth={2}
-                      className="size-3.5 shrink-0 text-amber"
-                      fill="currentColor"
-                    />
-                  )}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="shrink-0 rounded-md bg-green/10 px-2 py-0.5 font-num text-label font-medium text-green">
+                        DEMAND
+                      </span>
+                      <p className="font-medium text-ink">{listing.commodity?.name}</p>
+                      {highlight && (
+                        <Zap strokeWidth={2} className="size-3.5 shrink-0 text-amber" fill="currentColor" />
+                      )}
+                    </div>
+                    <p className="shrink-0 font-num text-number font-medium text-amber">
+                      {price}
+                      <span className="font-sans text-body-sm text-ink-muted">{unitLabel}</span>
+                    </p>
+                  </div>
+
+                  <p className="mt-0.5 text-body-sm text-ink-muted">{listing.buyer?.name}</p>
+
+                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+                    <span className="flex items-center gap-1 text-body-sm text-ink-muted">
+                      <MapPin strokeWidth={1.5} className="size-3.5 shrink-0" />
+                      {listing.location_area ?? "—"}
+                    </span>
+                    <span className="font-num text-body-sm text-ink-muted">
+                      {slot.capacity_remaining} of {slot.capacity_total} {unit} left
+                    </span>
+                  </div>
+
+                  <div className="mt-3 sm:hidden">
+                    <button className="rounded-lg bg-green px-3.5 py-2 text-body-sm font-medium text-paper hover:bg-green-hover">
+                      Book
+                    </button>
+                  </div>
                 </div>
 
-                <p className="shrink-0 font-num text-number font-medium text-amber">
-                  {item.price}
-                  <span className="font-sans text-body-sm text-ink-muted">{item.unit}</span>
-                </p>
+                <button className="hidden shrink-0 self-center rounded-lg bg-green px-3.5 py-2 text-body-sm font-medium text-paper opacity-0 transition-all duration-150 group-hover:opacity-100 hover:bg-green-hover sm:flex">
+                  Book
+                </button>
               </div>
-
-              <p className="mt-0.5 text-body-sm text-ink-muted">{item.org}</p>
-
-              <div className="mt-2 flex items-center gap-4">
-                <span className="flex items-center gap-1 text-body-sm text-ink-muted">
-                  <MapPin strokeWidth={1.5} className="size-3.5 shrink-0" />
-                  {item.location} · {item.distance}
-                </span>
-                <span className="font-num text-body-sm text-ink-muted">{item.capacity}</span>
-              </div>
-            </div>
-
-            {/* CTA */}
-            <button className="shrink-0 self-center rounded-lg bg-green px-3.5 py-2 text-body-sm font-medium text-paper opacity-0 transition-all duration-150 group-hover:opacity-100 hover:bg-green-hover">
-              Book
-            </button>
-          </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
 
-      {/* Footer */}
       <div className="border-t border-line px-5 py-3">
-        <Link
-          href="/dashboard/marketplace"
-          className="text-body-sm font-medium text-green hover:underline"
-        >
+        <Link href="/dashboard/marketplace" className="text-body-sm font-medium text-green hover:underline">
           See full marketplace →
         </Link>
       </div>

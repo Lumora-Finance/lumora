@@ -13,7 +13,7 @@ import { RecentTransactions } from "@/components/dashboard/recent-transactions";
 import { StatsRow } from "@/components/dashboard/stats-row";
 import { UpcomingBookings } from "@/components/dashboard/upcoming-bookings";
 import { Reveal } from "@/components/motion/reveal";
-import { useAuthUser } from "@/components/auth/use-auth-user";
+import { useProfile } from "@/components/auth/use-profile";
 import { fx, useGSAP, playOnEnter } from "@/lib/gsap/effects";
 import { cn } from "@/lib/utils";
 
@@ -32,16 +32,16 @@ const CROPS = [
 
 export default function DashboardPage() {
   const [postOpen, setPostOpen] = useState(false);
-  const { user } = useAuthUser();
+  const { user, profile } = useProfile();
   const heroRef = useRef<HTMLDivElement>(null);
   const count1Ref = useRef<HTMLSpanElement>(null);
   const count2Ref = useRef<HTMLSpanElement>(null);
   const count3Ref = useRef<HTMLSpanElement>(null);
 
   const profileIncomplete = user && !user.phoneNumber;
-  const displayName = user?.displayName ?? user?.email?.split("@")[0] ?? "there";
+  const displayName = profile?.display_name ?? user?.displayName ?? user?.email?.split("@")[0] ?? "there";
   const firstName = displayName.split(" ")[0];
-  const photoURL = user?.photoURL ?? null;
+  const photoURL = profile?.photo_url ?? user?.photoURL ?? null;
   const initials = displayName
     .split(" ")
     .slice(0, 2)
@@ -220,9 +220,7 @@ export default function DashboardPage() {
           {/* Left column */}
           <div className="flex flex-col gap-6">
             <Reveal effect="riseIn">
-              <div className="rotate-[-0.3deg] hover:rotate-0 transition-transform duration-300">
-                <MyPosts onPost={() => setPostOpen(true)} />
-              </div>
+              <MyPosts onPost={() => setPostOpen(true)} />
             </Reveal>
             <Reveal effect="riseIn">
               <RecentTransactions />
@@ -232,9 +230,7 @@ export default function DashboardPage() {
           {/* Right column */}
           <div className="flex flex-col gap-6">
             <Reveal effect="riseIn">
-              <div className="rotate-[0.2deg] hover:rotate-0 transition-transform duration-300">
-                <UpcomingBookings />
-              </div>
+              <UpcomingBookings />
             </Reveal>
             <Reveal effect="riseIn">
               <BoardPreview />

@@ -5,16 +5,16 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { useAuthUser } from "@/components/auth/use-auth-user";
+import { useProfile } from "@/components/auth/use-profile";
 import { cn } from "@/lib/utils";
 import { Sidebar } from "./sidebar";
 
 export function DashboardHeader() {
-  const { user } = useAuthUser();
+  const { user, profile } = useProfile();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const photoURL = user?.photoURL ?? null;
-  const displayName = user?.displayName ?? user?.email?.split("@")[0] ?? "You";
+  const photoURL = profile?.photo_url ?? user?.photoURL ?? null;
+  const displayName = profile?.display_name ?? user?.displayName ?? user?.email?.split("@")[0] ?? "You";
   const initials = displayName
     .split(" ")
     .slice(0, 2)

@@ -1,5 +1,5 @@
 import type { MoneyDb } from "./db";
-import { type FlutterwaveClient, FlutterwaveRejected } from "./flutterwave";
+import { type PaystackClient, PaystackRejected } from "./paystack";
 
 export type SmsSender = { send(phone: string, body: string): Promise<void> };
 
@@ -15,30 +15,53 @@ type ClaimedPayout = {
 };
 
 /**
- * Sends claimed payouts. The check by reference comes first, so a run that died after Flutterwave
- * accepted a transfer can't create a second one. A network error leaves the row claimed rather than
- * failed, because the transfer may have gone through. The next run looks it up and finds out.
+ * Sends claimed payouts via Paystack transfers.
+ * The check by reference comes first so a run that died after Paystack accepted a transfer
+ * cannot create a second one. The database's idempotency key prevents double-pays.
  */
-export async function sendPayouts(deps: { db: MoneyDb; flutterwave: FlutterwaveClient; now?: Date }) {
-  const { db, flutterwave } = deps;
+export async function sendPayouts(deps: { db: MoneyDb; paystack: PaystackClient; now?: Date }) {
+  const { db, paystack } = deps;
   const at = (deps.now ?? new Date()).toISOString();
   const claimed = await db.rpc<ClaimedPayout[]>("money_claim_payouts", { p_now: at });
   const outcome = { sent: 0, failed: 0, unknown: 0 };
 
   for (const payout of claimed) {
     try {
-      const existing = await flutterwave.findTransferByReference(payout.reference);
-      const transfer =
-        existing && existing.status === "FAILED"
-          ? await flutterwave.retryTransfer(existing.id)
-          : (existing ??
-            (await flutterwave.createTransfer({
-              reference: payout.reference,
-              amountKobo: payout.amount_kobo,
-              bankCode: payout.bank_code,
-              accountNumber: payout.account_number,
-              accountName: payout.account_name,
-            })));
+      // Check if a transfer for this reference already exists
+      const existing = await paystack.findTransferByReference(payout.reference);
+
+      let transfer;
+      if (existing && existing.status === "failed") {
+        // Retry by creating a new recipient and transfer
+        // (Paystack doesn't have a direct retry — resend_otp is for OTP, not failed transfers)
+        const recipientCode = await paystack.createTransferRecipient({
+          bankCode: payout.bank_code,
+          accountNumber: payout.account_number,
+          accountName: payout.account_name ?? "Lumora Farmer",
+        });
+        transfer = await paystack.createTransfer({
+          reference: `${payout.reference}-r${payout.attempts}`,
+          amountKobo: payout.amount_kobo,
+          recipientCode,
+          reason: "Lumora payout",
+        });
+      } else if (existing) {
+        transfer = existing;
+      } else {
+        // First attempt — create recipient then transfer
+        const recipientCode = await paystack.createTransferRecipient({
+          bankCode: payout.bank_code,
+          accountNumber: payout.account_number,
+          accountName: payout.account_name ?? "Lumora Farmer",
+        });
+        transfer = await paystack.createTransfer({
+          reference: payout.reference,
+          amountKobo: payout.amount_kobo,
+          recipientCode,
+          reason: "Lumora payout",
+        });
+      }
+
       await db.rpc("money_transfer_sent", {
         p_payout: payout.payout_id,
         p_transfer_id: transfer.id,
@@ -46,7 +69,7 @@ export async function sendPayouts(deps: { db: MoneyDb; flutterwave: FlutterwaveC
       });
       outcome.sent += 1;
     } catch (error) {
-      if (error instanceof FlutterwaveRejected) {
+      if (error instanceof PaystackRejected) {
         await db.rpc("money_payout_failed", {
           p_payout: payout.payout_id,
           p_error: error.message,
@@ -62,19 +85,25 @@ export async function sendPayouts(deps: { db: MoneyDb; flutterwave: FlutterwaveC
   return outcome;
 }
 
-export async function sendRefunds(deps: { db: MoneyDb; flutterwave: FlutterwaveClient; now?: Date }) {
+export async function sendRefunds(deps: { db: MoneyDb; paystack: PaystackClient; now?: Date }) {
   const at = (deps.now ?? new Date()).toISOString();
-  const due = await deps.db.rpc<{ tx_id: number; amount_kobo: number }[]>("money_refunds_due", { p_now: at });
+  const due = await deps.db.rpc<{ tx_id: number; amount_kobo: number }[]>(
+    "money_refunds_due",
+    { p_now: at },
+  );
   let sent = 0;
   for (const refund of due) {
     try {
-      await deps.flutterwave.refund(refund.tx_id, refund.amount_kobo);
+      await deps.paystack.refund(refund.tx_id, refund.amount_kobo);
       await deps.db.rpc("money_refund_sent", { p_tx_id: refund.tx_id });
       sent += 1;
     } catch (error) {
       await deps.db.rpc("money_alert", {
         p_kind: "refund_failed",
-        p_detail: { tx_id: refund.tx_id, error: error instanceof Error ? error.message : "unknown" },
+        p_detail: {
+          tx_id: refund.tx_id,
+          error: error instanceof Error ? error.message : "unknown",
+        },
       });
     }
   }
@@ -82,7 +111,9 @@ export async function sendRefunds(deps: { db: MoneyDb; flutterwave: FlutterwaveC
 }
 
 export async function sendOutbox(deps: { db: MoneyDb; sms: SmsSender }) {
-  const messages = await deps.db.rpc<{ id: string; phone: string; body: string }[]>("money_outbox_claim");
+  const messages = await deps.db.rpc<{ id: string; phone: string; body: string }[]>(
+    "money_outbox_claim",
+  );
   let sent = 0;
   for (const message of messages) {
     try {
@@ -95,10 +126,10 @@ export async function sendOutbox(deps: { db: MoneyDb; sms: SmsSender }) {
   return { sent };
 }
 
-/** The 5-minute job. The sweep is safe to run alongside pg_cron's copy. */
+/** The 5-minute cron job. */
 export async function runMoneyJob(deps: {
   db: MoneyDb;
-  flutterwave: FlutterwaveClient;
+  paystack: PaystackClient;
   sms: SmsSender;
   now?: Date;
 }) {
@@ -110,11 +141,15 @@ export async function runMoneyJob(deps: {
   return { sweep, payouts, refunds, outbox };
 }
 
-/** The nightly job. A mismatch writes an alert and stops new payouts until ops resolve it. */
-export async function runReconciliation(deps: { db: MoneyDb; flutterwave: FlutterwaveClient; now?: Date }) {
-  const balance = await deps.flutterwave.ledgerBalanceKobo();
+/** The nightly reconciliation job. */
+export async function runReconciliation(deps: {
+  db: MoneyDb;
+  paystack: PaystackClient;
+  now?: Date;
+}) {
+  const balance = await deps.paystack.ledgerBalanceKobo();
   return deps.db.rpc("money_reconcile", {
-    p_flw_balance_kobo: balance,
+    p_flw_balance_kobo: balance,          // column name unchanged in DB
     p_now: (deps.now ?? new Date()).toISOString(),
   });
 }
