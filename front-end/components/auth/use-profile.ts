@@ -10,10 +10,13 @@ import { useAuthUser } from "./use-auth-user";
  * and other UI components expect (display_name, photo_url, email, isAdmin).
  *
  * isAdmin is fetched from /api/me which reads the users table directly.
+ * `loading` stays true until BOTH Firebase auth AND the /api/me fetch complete,
+ * so the admin layout doesn't redirect before isAdmin is known.
  */
 export function useProfile() {
-  const { user, loading } = useAuthUser();
+  const { user, loading: authLoading } = useAuthUser();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(true);
   const [serverProfile, setServerProfile] = useState<{
     is_admin?: boolean;
     area?: string | null;
@@ -25,8 +28,12 @@ export function useProfile() {
     if (!user) {
       setIsAdmin(false);
       setServerProfile(null);
+      setProfileLoading(false);
       return;
     }
+
+    // Reset to loading when a new user signs in
+    setProfileLoading(true);
 
     let cancelled = false;
     async function loadProfile() {
@@ -41,14 +48,21 @@ export function useProfile() {
             setIsAdmin(Boolean(data.is_admin));
             setServerProfile(data);
           }
+        } else {
+          // 401 or error — user exists in Firebase but not in users table yet
+          if (!cancelled) setIsAdmin(false);
         }
       } catch {
         // Silent fail — isAdmin defaults to false
+      } finally {
+        if (!cancelled) setProfileLoading(false);
       }
     }
     loadProfile();
     return () => { cancelled = true; };
   }, [user]);
+
+  const loading = authLoading || (user ? profileLoading : false);
 
   const profile = user
     ? {
