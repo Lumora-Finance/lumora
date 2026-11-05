@@ -1,13 +1,12 @@
 "use client";
 
 import { AlertCircle, Banknote, ChevronDown, ChevronUp, CreditCard, Plus, X } from "lucide-react";
-import { getAuth } from "firebase/auth";
 import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { BusyBar } from "@/components/loader/busy-bar";
-import app from "@/lib/firebase/config";
+import { getToken } from "@/lib/firebase/auth";
 import { gsap, isReducedMotion, useGSAP } from "@/lib/gsap/effects";
 import { playMoment } from "@/lib/loading/moment";
 import { cn } from "@/lib/utils";
@@ -20,7 +19,6 @@ const DISMISS_PX = 90;
 const DISMISS_SPEED = 0.5;
 
 const QUICK_AMOUNTS = [1000, 5000, 10000, 50000];
-const BANKS = ["GTBank", "Access Bank", "UBA", "Zenith Bank", "First Bank", "Stanbic IBTC", "Opay", "Kuda Bank", "Wema Bank", "Fidelity Bank"];
 const METHODS = [
   { key: "card", title: "Card", detail: "Visa, Mastercard", Icon: CreditCard },
   { key: "bank", title: "Bank transfer", detail: "Direct deposit", Icon: Banknote },
@@ -30,7 +28,7 @@ const FIELD =
   "w-full rounded-xl border border-line bg-paper px-4 py-3 text-[16px] text-ink placeholder:text-ink-muted outline-none transition-[border-color,box-shadow] duration-150 focus:border-green focus:ring-3 focus:ring-green/20";
 
 async function authHeaders(): Promise<Record<string, string>> {
-  const token = await getAuth(app).currentUser?.getIdToken();
+  const token = await getToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
@@ -452,50 +450,91 @@ export function WithdrawModal({
 }: {
   open: boolean;
   onClose: () => void;
-  /** Null until the wallet has loaded. */
   availableKobo: number | null;
   onDone: (message: string) => void;
 }) {
   const id = useId();
   const [amount, setAmount] = useState("");
+  const [bankCode, setBankCode] = useState("");
   const [bankName, setBankName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [accountName, setAccountName] = useState("");
+  const [verifying, setVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [banks, setBanks] = useState<Array<{ name: string; code: string }>>([]);
+  const [banksLoading, setBanksLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const verifyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load banks when modal opens
+  useEffect(() => {
+    if (!open || banks.length > 0) return;
+    setBanksLoading(true);
+    fetch("/api/wallet/banks")
+      .then((r) => r.ok ? r.json() : [])
+      .then((data: Array<{ name: string; code: string }>) => setBanks(data))
+      .catch(() => {})
+      .finally(() => setBanksLoading(false));
+  }, [open, banks.length]);
+
+  // Auto-verify account name when bank + 10 digits are set
+  useEffect(() => {
+    if (!bankCode || accountNumber.length !== 10) {
+      setAccountName("");
+      setVerifyError(null);
+      return;
+    }
+    if (verifyTimer.current) clearTimeout(verifyTimer.current);
+    verifyTimer.current = setTimeout(async () => {
+      setVerifying(true);
+      setVerifyError(null);
+      setAccountName("");
+      try {
+        const headers = await authHeaders();
+        const res = await fetch(
+          `/api/wallet/verify-account?bankCode=${encodeURIComponent(bankCode)}&accountNumber=${encodeURIComponent(accountNumber)}`,
+          { headers },
+        );
+        const data = (await res.json()) as { ok: boolean; accountName?: string; message?: string };
+        if (data.ok && data.accountName) {
+          setAccountName(data.accountName);
+        } else {
+          setVerifyError(data.message ?? "Could not verify account. Check the number.");
+        }
+      } catch {
+        setVerifyError("Could not reach Paystack. Check your connection.");
+      } finally {
+        setVerifying(false);
+      }
+    }, 600);
+  }, [bankCode, accountNumber]);
 
   function dismiss() {
     setError(null);
+    setVerifyError(null);
     onClose();
   }
 
   async function withdraw() {
     const naira = parseFloat(amount);
-    if (!naira || naira < 500) {
-      setError("The least you can withdraw is ₦500.");
-      return;
-    }
+    if (!naira || naira < 500) { setError("The least you can withdraw is ₦500."); return; }
     const amountKobo = Math.round(naira * 100);
-    if (availableKobo !== null && amountKobo > availableKobo) {
-      setError(`You have ${formatKobo(availableKobo)} available.`);
-      return;
-    }
-    if (!bankName || accountNumber.length !== 10 || !accountName.trim()) {
-      setError("Add your bank, 10-digit account number and account name.");
-      return;
-    }
+    if (availableKobo !== null && amountKobo > availableKobo) { setError(`You have ${formatKobo(availableKobo)} available.`); return; }
+    if (!bankCode) { setError("Select your bank."); return; }
+    if (accountNumber.length !== 10) { setError("Enter your 10-digit account number."); return; }
+    if (!accountName.trim()) { setError("Wait for the account name to be verified, or check your account details."); return; }
     setBusy(true);
     setError(null);
     try {
       const res = await fetch("/api/wallet/withdraw", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(await authHeaders()) },
-        body: JSON.stringify({ amountKobo, bankName, accountNumber, accountName: accountName.trim() }),
+        body: JSON.stringify({ amountKobo, bankName, bankCode, accountNumber, accountName: accountName.trim() }),
       });
       const data = (await res.json().catch(() => ({}))) as { message?: string; error?: string; transferStatus?: string };
       if (!res.ok) throw new Error(data.error ?? data.message ?? "We couldn't send that withdrawal. Try again.");
       const shown = `₦${naira.toLocaleString("en-NG")}`;
-      // "Paid" only once the transfer has really gone through. Until then, it's on its way.
       playMoment({
         label: "Sending your money",
         work: Promise.resolve({
@@ -505,12 +544,9 @@ export function WithdrawModal({
           text: shown,
         }),
       });
-      setAmount("");
-      setBankName("");
-      setAccountNumber("");
-      setAccountName("");
+      setAmount(""); setBankCode(""); setBankName(""); setAccountNumber(""); setAccountName("");
       onClose();
-      onDone(data.message ?? `Withdrawal of ${shown} submitted. Admin will process within 24 hours.`);
+      onDone(data.message ?? `Withdrawal of ${shown} submitted.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "We couldn't send that withdrawal. Try again.");
     } finally {
@@ -524,7 +560,7 @@ export function WithdrawModal({
       onClose={dismiss}
       busy={busy}
       title="Withdraw to bank"
-      lead="Admin processes within 24 hours"
+      lead="Processed via Paystack to your Nigerian bank"
       error={error}
       submitLabel="Withdraw funds"
       submitIcon={<ChevronUp aria-hidden="true" strokeWidth={2} className="size-4" />}
@@ -536,60 +572,81 @@ export function WithdrawModal({
           <div className="mt-2.5 flex items-center gap-2">
             <span className="text-label text-ink-muted">Available</span>
             <span className="font-num text-body-sm font-medium text-green">{formatKobo(availableKobo)}</span>
-            <button
-              type="button"
-              onClick={() => { setAmount(String(availableKobo / 100)); setError(null); }}
-              className="ml-auto min-h-9 rounded-full border border-line px-3.5 text-label font-medium text-ink-muted transition-colors duration-150 hover:border-green hover:text-green focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-            >
+            <button type="button" onClick={() => { setAmount(String(availableKobo / 100)); setError(null); }}
+              className="ml-auto min-h-9 rounded-full border border-line px-3.5 text-label font-medium text-ink-muted transition-colors duration-150 hover:border-green hover:text-green focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none">
               Max
             </button>
           </div>
         )}
       </div>
 
-      <div data-rise className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
-          <label htmlFor={`${id}-bank`} className="mb-2 block text-body-sm font-medium text-ink">Bank</label>
-          <div className="relative">
-            <select
-              id={`${id}-bank`}
-              value={bankName}
-              onChange={(event) => { setBankName(event.target.value); setError(null); }}
-              className={cn(FIELD, "appearance-none pr-10", !bankName && "text-ink-muted")}
-            >
-              <option value="">Select bank</option>
-              {BANKS.map((bank) => <option key={bank}>{bank}</option>)}
-            </select>
-            <ChevronDown aria-hidden="true" strokeWidth={1.75} className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-ink-muted" />
-          </div>
-        </div>
-        <div>
-          <label htmlFor={`${id}-number`} className="mb-2 block text-body-sm font-medium text-ink">Account number</label>
-          <input
-            id={`${id}-number`}
-            type="text"
-            inputMode="numeric"
-            autoComplete="off"
-            maxLength={10}
-            value={accountNumber}
-            onChange={(event) => { setAccountNumber(event.target.value.replace(/\D/g, "")); setError(null); }}
-            placeholder="10 digits"
-            className={cn(FIELD, "font-num")}
-          />
+      <div data-rise>
+        <label htmlFor={`${id}-bank`} className="mb-2 block text-body-sm font-medium text-ink">Bank</label>
+        <div className="relative">
+          <select
+            id={`${id}-bank`}
+            value={bankCode}
+            disabled={banksLoading}
+            onChange={(e) => {
+              const selected = banks.find((b) => b.code === e.target.value);
+              setBankCode(e.target.value);
+              setBankName(selected?.name ?? "");
+              setAccountName("");
+              setVerifyError(null);
+              setError(null);
+            }}
+            className={cn(FIELD, "appearance-none pr-10", !bankCode && "text-ink-muted")}
+          >
+            <option value="">{banksLoading ? "Loading banks…" : "Select your bank"}</option>
+            {banks.map((b) => <option key={b.code} value={b.code}>{b.name}</option>)}
+          </select>
+          <ChevronDown aria-hidden="true" strokeWidth={1.75} className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-ink-muted" />
         </div>
       </div>
 
       <div data-rise>
-        <label htmlFor={`${id}-name`} className="mb-2 block text-body-sm font-medium text-ink">Account name</label>
+        <label htmlFor={`${id}-number`} className="mb-2 block text-body-sm font-medium text-ink">Account number</label>
+        <input
+          id={`${id}-number`}
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          maxLength={10}
+          value={accountNumber}
+          onChange={(e) => { setAccountNumber(e.target.value.replace(/\D/g, "")); setAccountName(""); setVerifyError(null); setError(null); }}
+          placeholder="10 digits"
+          className={cn(FIELD, "font-num")}
+        />
+        <p className="mt-1 font-num text-label tabular-nums text-ink-muted">{accountNumber.length}/10</p>
+      </div>
+
+      {/* Auto-verified account name */}
+      <div data-rise>
+        <label htmlFor={`${id}-name`} className="mb-2 block text-body-sm font-medium text-ink">
+          Account name
+          {verifying && <span className="ml-2 text-label font-normal text-ink-muted animate-pulse">Verifying…</span>}
+        </label>
         <input
           id={`${id}-name`}
           type="text"
-          autoComplete="name"
+          readOnly={!!accountName}
           value={accountName}
-          onChange={(event) => { setAccountName(event.target.value); setError(null); }}
-          placeholder="Name on the account"
-          className={FIELD}
+          onChange={(e) => { if (!verifying) setAccountName(e.target.value); }}
+          placeholder={verifying ? "Verifying with Paystack…" : "Auto-filled after verification"}
+          className={cn(
+            FIELD,
+            accountName ? "border-green bg-sage-soft/40 text-green font-medium" : "",
+            verifying ? "opacity-60" : "",
+          )}
         />
+        {verifyError && (
+          <p role="alert" className="mt-1.5 text-body-sm text-danger">{verifyError}</p>
+        )}
+        {accountName && !verifying && (
+          <p className="mt-1.5 flex items-center gap-1.5 text-body-sm font-medium text-green">
+            <span aria-hidden>✓</span> Account verified
+          </p>
+        )}
       </div>
     </ModalShell>
   );
