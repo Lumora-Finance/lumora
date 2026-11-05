@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { AlertCircle, ArrowRight, Sparkles } from "lucide-react";
 import Link from "next/link";
 
+import { LogoVideo } from "@/components/dashboard/logo-video";
 import { BoardPreview } from "@/components/dashboard/board-preview";
 import { MyPosts } from "@/components/dashboard/my-posts";
 import { PostModal } from "@/components/dashboard/post-button";
@@ -26,11 +27,6 @@ const CROPS = [
     src: "/images/step-farmer.jpg",
     pos: "object-[28%_10%]",
     cls: "absolute bottom-6 right-6 size-16 lg:size-20",
-  },
-  {
-    src: "/images/step-scale.jpg",
-    pos: "object-[50%_40%]",
-    cls: "absolute top-8 left-[45%] size-14 hidden lg:block",
   },
 ];
 
@@ -59,7 +55,6 @@ export default function DashboardPage() {
       if (!root) return;
 
       // ledger lines
-      playOnEnter(fx("ledgerDraw", root.querySelectorAll("[data-ledger]")), root, "top 90%");
 
       // stat chips pop in
       playOnEnter(
@@ -107,15 +102,7 @@ export default function DashboardPage() {
           data-rhythm="field"
           className="relative isolate mb-8 overflow-hidden rounded-2xl bg-field px-6 py-10 text-paper lg:px-10 lg:py-12"
         >
-          {/* Ledger decoration */}
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 -z-10 flex flex-col items-center justify-center gap-8"
-          >
-            <span data-ledger aria-hidden className="h-1.5 w-[92%] bg-sage/10" />
-            <span data-ledger aria-hidden className="h-1.5 w-[70%] bg-sage/10" />
-            <span data-ledger aria-hidden className="h-1.5 w-[45%] bg-sage/10" />
-          </div>
+          <LogoVideo />
 
           {/* Floating crop photos */}
           {CROPS.map((crop, i) => (
@@ -166,7 +153,7 @@ export default function DashboardPage() {
           <div className="mt-8 flex flex-wrap gap-3">
             <div
               data-chip
-              className="flex flex-col rounded-[20px_6px_20px_6px] bg-field-soft/70 px-4 py-3 backdrop-blur-sm"
+              className="flex flex-col rounded-[20px_6px_20px_6px] bg-field-soft/70 px-4 py-3"
             >
               <span className="text-body-sm text-sage/70">Active Posts</span>
               <span ref={count1Ref} className="font-num text-number-lg font-medium text-paper">
@@ -175,7 +162,7 @@ export default function DashboardPage() {
             </div>
             <div
               data-chip
-              className="flex flex-col rounded-[6px_20px_6px_20px] bg-field-soft/70 px-4 py-3 backdrop-blur-sm"
+              className="flex flex-col rounded-[6px_20px_6px_20px] bg-field-soft/70 px-4 py-3"
             >
               <span className="text-body-sm text-sage/70">Bookings</span>
               <span ref={count2Ref} className="font-num text-number-lg font-medium text-paper">
@@ -184,7 +171,7 @@ export default function DashboardPage() {
             </div>
             <div
               data-chip
-              className="flex flex-col rounded-[20px_6px_20px_6px] bg-amber/20 px-4 py-3 backdrop-blur-sm"
+              className="flex flex-col rounded-[20px_6px_20px_6px] bg-amber/20 px-4 py-3"
             >
               <span className="text-body-sm text-amber/80">This Month</span>
               <span ref={count3Ref} className="font-num text-number-lg font-medium text-amber">

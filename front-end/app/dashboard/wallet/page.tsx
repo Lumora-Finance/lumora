@@ -7,6 +7,7 @@ import {
   CreditCard, Banknote, AlertCircle, CheckCircle2, Loader2, History, X,
 } from "lucide-react";
 
+import { LogoVideo } from "@/components/dashboard/logo-video";
 import { Reveal } from "@/components/motion/reveal";
 import { fx, playOnEnter, useGSAP } from "@/lib/gsap/effects";
 import { useAuthUser } from "@/components/auth/use-auth-user";
@@ -66,7 +67,6 @@ export default function WalletPage() {
     () => {
       const root = heroRef.current;
       if (!root) return;
-      playOnEnter(fx("ledgerDraw", root.querySelectorAll("[data-ledger]")), root, "top 90%");
       playOnEnter(fx("chipPop", root.querySelectorAll("[data-chip]"), { stagger: 0.12 }), root, "top 85%");
       if (balanceRef.current) {
         playOnEnter(fx("countUp", balanceRef.current, { to: 449400, format: "naira" }), root, "top 85%");
@@ -116,12 +116,7 @@ export default function WalletPage() {
         data-rhythm="field"
         className="relative isolate mb-8 overflow-hidden rounded-2xl bg-field px-6 py-8 text-paper md:px-8 md:py-10 lg:px-12 lg:py-14"
       >
-        {/* Ledger decoration */}
-        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 flex flex-col justify-center gap-12 px-8">
-          <span data-ledger aria-hidden className="h-px w-full bg-sage/12" />
-          <span data-ledger aria-hidden className="h-px w-[68%] bg-sage/8" />
-          <span data-ledger aria-hidden className="h-px w-[40%] bg-sage/6" />
-        </div>
+        <LogoVideo />
 
         {/* Floating crops */}
         {CROPS.map((c, i) => (
@@ -146,7 +141,7 @@ export default function WalletPage() {
         {/* Balance card — the centerpiece */}
         <div
           data-chip
-          className="mt-8 overflow-hidden rounded-[24px_8px_24px_8px] border border-sage/15 bg-gradient-to-br from-sage/10 via-field-soft/40 to-field-soft/10 p-6 md:p-8 backdrop-blur-sm"
+          className="mt-8 overflow-hidden rounded-[24px_8px_24px_8px] border border-sage/15 bg-gradient-to-br from-sage/10 via-field-soft/40 to-field-soft/10 p-6 md:p-8"
         >
           <p className="text-body-sm font-medium text-sage/50">Available balance</p>
           <p ref={balanceRef} className="mt-3 font-num text-[2.4rem] font-medium leading-none tracking-tight text-paper md:text-[3rem]">

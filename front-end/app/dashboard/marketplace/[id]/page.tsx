@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+import { LogoVideo } from "@/components/dashboard/logo-video";
 import { Reveal } from "@/components/motion/reveal";
 import { OfferModal } from "@/components/marketplace/offer-modal";
 import { fx, playOnEnter, useGSAP } from "@/lib/gsap/effects";
@@ -39,7 +40,6 @@ export default function ProductDetailsPage() {
     () => {
       const root = heroRef.current;
       if (!root) return;
-      playOnEnter(fx("ledgerDraw", root.querySelectorAll("[data-ledger]")), root, "top 90%");
       playOnEnter(fx("riseIn", root.querySelectorAll("[data-rise]"), { stagger: 0.08 }), root, "top 85%");
     },
     { scope: heroRef },
@@ -97,10 +97,7 @@ export default function ProductDetailsPage() {
           ref={heroRef}
           className="relative isolate mb-6 overflow-hidden rounded-2xl bg-field px-6 py-8 text-paper lg:px-10 lg:py-10"
         >
-          <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 flex flex-col justify-center gap-8 px-8">
-            <span data-ledger aria-hidden className="h-px w-full bg-sage/15" />
-            <span data-ledger aria-hidden className="h-px w-[65%] bg-sage/10" />
-          </div>
+          <LogoVideo />
 
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
             {/* Image */}

@@ -444,10 +444,25 @@ export function fx(name: EffectName, targets: EffectTargets, config: EffectConfi
   return effects[name](targets, config);
 }
 
+/**
+ * Which element scrolls this one, for the app screens that scroll inside a panel rather than the
+ * window. A trigger watching the wrong one never fires, and whatever it reveals stays invisible.
+ */
+const scrollRoot = (element: Element) => element.closest("[data-scroll-root]") ?? undefined;
+
 /** Runs a paused animation once, when its trigger scrolls into view. */
 export function playOnEnter(animation: gsap.core.Animation, trigger: Element, start = "top 85%") {
   animation.pause(0);
-  return ScrollTrigger.create({ trigger, start, once: true, onEnter: () => animation.play() });
+  const scroller = scrollRoot(trigger);
+  return ScrollTrigger.create({
+    trigger,
+    scroller,
+    // App screens reveal as soon as something reaches the screen. A later line would leave blank
+    // space at the bottom of the panel, and the last item might never reach it at all.
+    start: scroller ? "top bottom+=30" : start,
+    once: true,
+    onEnter: () => animation.play(),
+  });
 }
 
 /**
@@ -485,6 +500,7 @@ export function pauseOffscreen(
   };
   const scrollTrigger = ScrollTrigger.create({
     trigger,
+    scroller: scrollRoot(trigger),
     start: "top bottom",
     end: "bottom top",
     onToggle: (self) => sync(self.isActive),

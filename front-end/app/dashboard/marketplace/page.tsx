@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useRef, useState } from "react";
 import { Sparkles, SlidersHorizontal, Zap, Search } from "lucide-react";
 
+import { LogoVideo } from "@/components/dashboard/logo-video";
 import { MarketCard } from "@/components/marketplace/market-card";
 import { FilterPanel, type FilterState } from "@/components/marketplace/filter-panel";
 import { OfferModal } from "@/components/marketplace/offer-modal";
@@ -14,8 +15,7 @@ import { MARKET_ITEMS, type MarketItem, type Offer } from "@/lib/demo/market";
 
 const CROPS = [
   { src: "/images/hero-farm.jpg", pos: "object-[52%_25%]", cls: "absolute top-4 right-10 size-16 hidden sm:block" },
-  { src: "/images/step-buyer.jpg", pos: "object-[85%_30%]", cls: "absolute bottom-4 right-4 size-14" },
-  { src: "/images/step-farmer.jpg", pos: "object-[28%_10%]", cls: "absolute top-6 left-[40%] size-12 hidden lg:block" },
+  { src: "/images/step-buyer.jpg", pos: "object-[85%_30%]", cls: "absolute bottom-4 right-4 size-14 hidden xl:block" },
 ];
 
 export default function MarketplacePage() {
@@ -35,7 +35,6 @@ export default function MarketplacePage() {
     () => {
       const root = heroRef.current;
       if (!root) return;
-      playOnEnter(fx("ledgerDraw", root.querySelectorAll("[data-ledger]")), root, "top 90%");
       playOnEnter(fx("riseIn", root.querySelectorAll("[data-rise]"), { stagger: 0.1 }), root, "top 85%");
       fx("floatDrift", root.querySelectorAll("[data-crop]"));
     },
@@ -76,11 +75,7 @@ export default function MarketplacePage() {
           data-rhythm="field"
           className="relative isolate mb-8 overflow-hidden rounded-2xl bg-field px-6 py-10 text-paper lg:px-10 lg:py-12"
         >
-          <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 flex flex-col justify-center gap-8 px-8">
-            <span data-ledger aria-hidden className="h-px w-full bg-sage/15" />
-            <span data-ledger aria-hidden className="h-px w-[80%] bg-sage/10" />
-            <span data-ledger aria-hidden className="h-px w-[55%] bg-sage/8" />
-          </div>
+          <LogoVideo />
 
           {CROPS.map((c, i) => (
             <div key={i} data-crop aria-hidden className={cn("overflow-hidden rounded-full", c.cls)}>
@@ -100,7 +95,7 @@ export default function MarketplacePage() {
 
           {/* Search bar */}
           <div data-rise className="mt-6 flex items-center gap-2">
-            <div className="flex flex-1 items-center gap-2 rounded-xl bg-field-soft/60 px-4 py-3 backdrop-blur-sm">
+            <div className="flex flex-1 items-center gap-2 rounded-xl bg-field-soft/60 px-4 py-3">
               <Search strokeWidth={1.5} className="size-4 text-sage/50" />
               <input
                 placeholder="Search commodity, buyer, or area…"

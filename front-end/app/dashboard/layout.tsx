@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Suspense } from "react";
 
+import { DashboardScroll } from "@/components/dashboard/dashboard-scroll";
 import { DashboardHeader } from "@/components/dashboard/header";
 import { Sidebar } from "@/components/dashboard/sidebar";
 
@@ -21,11 +22,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         <Suspense>
           <DashboardHeader />
         </Suspense>
-        <main className="flex-1 overflow-y-auto">
+        <DashboardScroll>
           <Suspense>
             {children}
           </Suspense>
-        </main>
+        </DashboardScroll>
       </div>
     </div>
   );

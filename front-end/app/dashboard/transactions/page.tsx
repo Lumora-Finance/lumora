@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useRef, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, CheckCircle2, ChevronDown, ChevronUp, Wallet } from "lucide-react";
 
+import { LogoVideo } from "@/components/dashboard/logo-video";
 import { Reveal } from "@/components/motion/reveal";
 import { fx, playOnEnter, useGSAP } from "@/lib/gsap/effects";
 import { cn } from "@/lib/utils";
@@ -80,7 +81,6 @@ export default function TransactionsPage() {
     () => {
       const root = heroRef.current;
       if (!root) return;
-      playOnEnter(fx("ledgerDraw", root.querySelectorAll("[data-ledger]")), root, "top 90%");
       playOnEnter(fx("chipPop", root.querySelectorAll("[data-chip]"), { stagger: 0.1 }), root, "top 85%");
       if (totalRef.current) {
         playOnEnter(fx("countUp", totalRef.current, { to: 842000, format: "naira" }), root, "top 85%");
@@ -99,11 +99,7 @@ export default function TransactionsPage() {
         data-rhythm="field"
         className="relative isolate mb-8 overflow-hidden rounded-2xl bg-field px-6 py-10 text-paper lg:px-10 lg:py-12"
       >
-        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 flex flex-col justify-center gap-10 px-8">
-          <span data-ledger aria-hidden className="h-px w-full bg-sage/15" />
-          <span data-ledger aria-hidden className="h-px w-[72%] bg-sage/10" />
-          <span data-ledger aria-hidden className="h-px w-[44%] bg-sage/8" />
-        </div>
+        <LogoVideo />
         {CROPS.map((c, i) => (
           <div key={i} data-crop aria-hidden className={cn("overflow-hidden rounded-full", c.cls)}>
             <Image src={c.src} alt="" width={140} height={140} className={cn("size-full object-cover", c.pos)} />

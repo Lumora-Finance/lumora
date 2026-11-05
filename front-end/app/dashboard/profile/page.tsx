@@ -6,6 +6,7 @@ import { Camera, CheckCircle2, ShieldAlert, LogOut, Trash2 } from "lucide-react"
 import { signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
 
+import { LogoVideo } from "@/components/dashboard/logo-video";
 import { ProfileLocation } from "@/components/location/profile-location";
 import { Reveal } from "@/components/motion/reveal";
 import { fx, playOnEnter, useGSAP } from "@/lib/gsap/effects";
@@ -34,7 +35,6 @@ export default function ProfilePage() {
     () => {
       const root = heroRef.current;
       if (!root) return;
-      playOnEnter(fx("ledgerDraw", root.querySelectorAll("[data-ledger]")), root, "top 90%");
       playOnEnter(fx("riseIn", root.querySelectorAll("[data-rise]"), { stagger: 0.1 }), root, "top 85%");
     },
     { scope: heroRef },
@@ -61,11 +61,7 @@ export default function ProfilePage() {
         data-rhythm="field"
         className="relative isolate mb-8 overflow-hidden rounded-2xl bg-field px-6 py-10 text-paper lg:px-10 lg:py-12"
       >
-        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 flex flex-col justify-center gap-10 px-8">
-          <span data-ledger aria-hidden className="h-px w-full bg-sage/15" />
-          <span data-ledger aria-hidden className="h-px w-[65%] bg-sage/10" />
-          <span data-ledger aria-hidden className="h-px w-[38%] bg-sage/8" />
-        </div>
+        <LogoVideo />
 
         <div data-rise className="flex items-center gap-5">
           {/* Avatar */}
