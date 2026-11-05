@@ -7,10 +7,10 @@ import { getAuth } from "firebase/auth";
 
 import app from "@/lib/firebase/config";
 import { type LiveBooking, LiveBookings } from "@/components/board/live-bookings";
-import { LogoVideo } from "@/components/dashboard/logo-video";
 import { Reveal } from "@/components/motion/reveal";
 import { cn } from "@/lib/utils";
 import { CardsSkeleton } from "@/components/loader/skeletons";
+import { HillsCard, HillsStats } from "@/components/profile/hills-card";
 import { trackTask } from "@/lib/loading/progress";
 
 type Tab = "upcoming" | "past" | "cancelled";
@@ -22,11 +22,6 @@ function tabOf(b: Booking): Tab {
   if (b.status === "settled") return "past";
   return "upcoming";
 }
-
-const CROPS = [
-  { src: "/images/step-scale.jpg", pos: "object-[50%_40%]", cls: "absolute top-4 right-8 size-14 hidden sm:block" },
-  { src: "/images/step-buyer.jpg", pos: "object-[85%_30%]", cls: "absolute bottom-4 right-4 size-12" },
-];
 
 export default function BookingsPage() {
   const [tab, setTab] = useState<Tab>("upcoming");
@@ -69,40 +64,21 @@ export default function BookingsPage() {
   return (
     <div className="mx-auto w-full max-w-[1120px] px-4 py-6 md:px-6 lg:px-8">
 
-      {/* Hero */}
-      <div
-        data-rhythm="field"
-        className="relative isolate mb-8 overflow-hidden rounded-2xl bg-field px-6 py-10 text-paper lg:px-10 lg:py-12"
-      >
-        <LogoVideo />
-        {CROPS.map((c, i) => (
-          <div key={i} aria-hidden className={cn("overflow-hidden rounded-full", c.cls)}>
-            <img src={c.src} alt="" className={cn("size-full object-cover", c.pos)} />
+      <HillsCard className="mb-8">
+        <div className="px-5 pt-24 pb-6 sm:px-10 sm:pt-28 sm:pb-9 lg:px-14 lg:pt-32 lg:pb-11">
+          <p data-card="rise" className="text-body-sm font-medium text-ink/70">My activity</p>
+          <h1 data-card="rise" className="mt-1 text-[26px] leading-tight font-medium tracking-tight text-ink sm:text-[34px]">My bookings</h1>
+          <div className="mt-6 sm:mt-8">
+            <HillsStats
+              stats={[
+                { value: loading ? null : confirmed.length, label: "confirmed" },
+                { value: loading ? null : upcoming.length, label: "upcoming" },
+                { value: loading ? null : bookings.length, label: "total" },
+              ]}
+            />
           </div>
-        ))}
-
-        <p className="text-label font-medium text-sage/70">My Activity</p>
-        <h1 className="mt-2 font-display text-display-lg-sm font-medium text-paper md:text-[2rem]">
-          My Bookings
-        </h1>
-
-        {!loading && (
-          <div className="mt-6 flex flex-wrap gap-3">
-            <div className="flex flex-col rounded-[16px_4px_16px_4px] bg-sage/20 px-4 py-3">
-              <span className="text-label text-sage/70">Confirmed</span>
-              <span className="font-num text-number-lg font-medium text-paper">{confirmed.length}</span>
-            </div>
-            <div className="flex flex-col rounded-[4px_16px_4px_16px] bg-field-soft/70 px-4 py-3">
-              <span className="text-label text-paper/50">Upcoming</span>
-              <span className="font-num text-number-lg font-medium text-paper/80">{upcoming.length}</span>
-            </div>
-            <div className="flex flex-col rounded-[16px_4px_16px_4px] bg-amber/20 px-4 py-3">
-              <span className="text-label text-amber/70">Total</span>
-              <span className="font-num text-number-lg font-medium text-amber">{bookings.length}</span>
-            </div>
-          </div>
-        )}
-      </div>
+        </div>
+      </HillsCard>
 
       {/* Tabs */}
       <Reveal effect="riseIn">

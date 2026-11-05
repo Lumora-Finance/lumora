@@ -2,11 +2,13 @@
 
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { MapPin, ShieldCheck, MessageSquare, Store } from "lucide-react";
+import { MapPin, Store } from "lucide-react";
 import Link from "next/link";
 import { getAuth } from "firebase/auth";
 
 import { DetailSkeleton } from "@/components/loader/skeletons";
+import { Reveal } from "@/components/motion/reveal";
+import { ProfileCard, SaveProfileButton } from "@/components/profile/profile-card";
 import app from "@/lib/firebase/config";
 import { trackTask } from "@/lib/loading/progress";
 import { cn } from "@/lib/utils";
@@ -89,79 +91,27 @@ export default function PublicProfilePage() {
     );
   }
 
-  const initials = profile.name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
-
   return (
-    <div className="mx-auto w-full max-w-[900px] px-4 py-8 md:px-6 lg:px-8">
+    <div className="mx-auto w-full max-w-[1120px] px-4 py-6 md:px-6 lg:px-8">
 
-      {/* Profile card */}
-      <div className="overflow-hidden rounded-2xl bg-field text-paper">
-        <div className="px-6 py-10 md:px-10">
-          <div className="flex items-start gap-5">
-            {/* Avatar */}
-            <div className="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-full ring-4 ring-sage/30 lg:size-24">
-              {profile.photo_url ? (
-                <img src={profile.photo_url} alt={profile.name} className="size-full object-cover" referrerPolicy="no-referrer" />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center bg-field-soft font-num text-display-lg-sm font-medium text-sage">
-                  {initials}
-                </div>
-              )}
-            </div>
-
-            {/* Info */}
-            <div className="flex-1 min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="font-display text-2xl font-medium text-paper">{profile.name}</h1>
-                {profile.verified && (
-                  <span className="flex items-center gap-1 rounded-full bg-sage/20 px-2.5 py-1 text-label font-medium text-sage">
-                    <ShieldCheck strokeWidth={2} className="size-3.5" /> Verified
-                  </span>
-                )}
-              </div>
-
-              <p className="mt-1 text-body-sm text-paper/70 capitalize">{profile.role}</p>
-
-              {profile.area && (
-                <p className="mt-1.5 flex items-center gap-1.5 text-body-sm text-paper/70">
-                  <MapPin strokeWidth={1.5} className="size-3.5" /> {profile.area}
-                </p>
-              )}
-
-              {profile.bio && (
-                <p className="mt-3 text-body text-paper/80 leading-relaxed">{profile.bio}</p>
-              )}
-
-              <div className="mt-4 flex flex-wrap gap-4">
-                <div className="flex flex-col rounded-xl bg-sage/15 px-4 py-2.5">
-                  <span className="font-num text-xl font-medium text-paper">{profile.listing_count}</span>
-                  <span className="text-label text-sage/70">Active posts</span>
-                </div>
-                <div className="flex flex-col rounded-xl bg-sage/15 px-4 py-2.5">
-                  <span className="font-num text-xl font-medium text-paper">{profile.booking_count}</span>
-                  <span className="text-label text-sage/70">Deliveries</span>
-                </div>
-                <div className="flex flex-col rounded-xl bg-sage/15 px-4 py-2.5">
-                  <span className="font-num text-xl font-medium text-paper">{relDate(profile.created_at)}</span>
-                  <span className="text-label text-sage/70">Joined</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-6 flex gap-3">
-            <button
-              onClick={() => window.location.href = `/dashboard/messages?to=${encodeURIComponent(profile.name)}`}
-              className="flex items-center gap-2 rounded-xl border border-sage/30 bg-field-soft/60 px-5 py-2.5 text-body-sm font-medium text-paper hover:bg-field-soft">
-              <MessageSquare strokeWidth={1.5} className="size-4" /> Message
-            </button>
-          </div>
-        </div>
-      </div>
+      <ProfileCard
+        name={profile.name}
+        lead={profile.bio || `${profile.role === "buyer" ? "Buying" : "Selling"} produce on Lumora`}
+        role={profile.role}
+        area={profile.area}
+        joined={relDate(profile.created_at)}
+        photoUrl={profile.photo_url}
+        verified={profile.verified}
+        deliveries={profile.booking_count}
+        posts={profile.listing_count}
+        produce={(profile.listings ?? []).map((listing) => listing.commodity.name)}
+        corner={<SaveProfileButton id={profile.id} />}
+        action={{ label: "Get in touch", href: `/dashboard/messages?to=${encodeURIComponent(profile.name)}` }}
+      />
 
       {/* Listings */}
       {profile.listings && profile.listings.length > 0 && (
-        <div className="mt-8">
+        <Reveal effect="riseIn" className="mt-8">
           <h2 className="flex items-center gap-2 text-heading font-medium text-ink">
             <Store strokeWidth={1.5} className="size-5 text-green" />
             {profile.role === "buyer" ? "Demand Listings" : "Activity"}
@@ -170,7 +120,7 @@ export default function PublicProfilePage() {
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {profile.listings.map((listing) => (
               <Link key={listing.id} href={`/dashboard/marketplace/${listing.id}`}
-                className="group flex flex-col overflow-hidden rounded-xl border border-line bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+                className="group flex flex-col overflow-hidden rounded-[20px] border border-line bg-white transition-[transform,border-color] duration-200 ease-out hover:-translate-y-0.5 hover:border-green">
                 <div className="flex-1 p-4">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
@@ -196,11 +146,11 @@ export default function PublicProfilePage() {
               </Link>
             ))}
           </div>
-        </div>
+        </Reveal>
       )}
 
       {(!profile.listings || profile.listings.length === 0) && (
-        <div className="mt-8 rounded-xl bg-paper px-6 py-10 text-center text-ink-muted border border-line">
+        <div className="mt-8 rounded-[20px] bg-paper px-6 py-10 text-center text-ink-muted border border-line">
           <p className="text-body">No listings posted yet.</p>
         </div>
       )}

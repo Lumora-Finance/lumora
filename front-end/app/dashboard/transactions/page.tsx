@@ -1,15 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, CheckCircle2, ChevronDown, ChevronUp, Wallet } from "lucide-react";
 import { getAuth } from "firebase/auth";
 
 import app from "@/lib/firebase/config";
-import { LogoVideo } from "@/components/dashboard/logo-video";
 import { Reveal } from "@/components/motion/reveal";
-import { fx, playOnEnter, useGSAP } from "@/lib/gsap/effects";
 import { cn } from "@/lib/utils";
 import { RowsSkeleton } from "@/components/loader/skeletons";
+import { HillsCard, HillsStats } from "@/components/profile/hills-card";
 import { trackTask } from "@/lib/loading/progress";
 
 type Filter = "all" | "trade" | "wallet" | "received" | "paid";
@@ -50,7 +49,7 @@ const STATUS_STYLE: Record<string, string> = {
 };
 
 function formatKobo(kobo: number) {
-  return `₦${(kobo / 100).toLocaleString("en-NG", { minimumFractionDigits: 0 })}`;
+  return `₦${(kobo / 100).toLocaleString("en-NG", { minimumFractionDigits: kobo % 100 ? 2 : 0 })}`;
 }
 
 function relativeDate(iso: string) {
@@ -62,13 +61,7 @@ function relativeDate(iso: string) {
   return d.toLocaleDateString("en-NG", { weekday: "short", day: "numeric", month: "short" });
 }
 
-const CROPS = [
-  { src: "/images/step-scale.jpg", pos: "object-[50%_40%]", cls: "absolute top-4 right-10 size-14 hidden sm:block" },
-  { src: "/images/hero-farm.jpg", pos: "object-[52%_25%]", cls: "absolute bottom-4 right-4 size-12" },
-];
-
 export default function TransactionsPage() {
-  const heroRef = useRef<HTMLDivElement>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [txs, setTxs] = useState<Settlement[]>([]);
@@ -100,16 +93,6 @@ export default function TransactionsPage() {
     return () => { cancelled = true; };
   }, []);
 
-  useGSAP(
-    () => {
-      const root = heroRef.current;
-      if (!root) return;
-      playOnEnter(fx("chipPop", root.querySelectorAll("[data-chip]"), { stagger: 0.1 }), root, "top 85%");
-      fx("floatDrift", root.querySelectorAll("[data-crop]"));
-    },
-    { scope: heroRef },
-  );
-
   // All trade settlements come from kind = "farmer_pay" / "partial" etc.
   const received = txs.filter((t) => t.net_kobo > 0);
   const paid = txs.filter((t) => t.net_kobo <= 0);
@@ -126,47 +109,22 @@ export default function TransactionsPage() {
   return (
     <div className="mx-auto w-full max-w-[1120px] px-4 py-6 md:px-6 lg:px-8">
 
-      {/* Hero */}
-      <div
-        ref={heroRef}
-        data-rhythm="field"
-        className="relative isolate mb-8 overflow-hidden rounded-2xl bg-field px-6 py-10 text-paper lg:px-10 lg:py-12"
-      >
-        <LogoVideo />
-        {CROPS.map((c, i) => (
-          <div key={i} aria-hidden className={cn("overflow-hidden rounded-full", c.cls)}>
-            <img src={c.src} alt="" className={cn("size-full object-cover", c.pos)} />
+      <HillsCard className="mb-8">
+        <div className="px-5 pt-24 pb-6 sm:px-10 sm:pt-28 sm:pb-9 lg:px-14 lg:pt-32 lg:pb-11">
+          <p data-card="rise" className="text-body-sm font-medium text-ink/70">Financial activity</p>
+          <h1 data-card="rise" className="mt-1 text-[26px] leading-tight font-medium tracking-tight text-ink sm:text-[34px]">Transactions</h1>
+          <div className="mt-6 sm:mt-8">
+            <HillsStats
+              rowsOnPhones
+              stats={[
+                { value: loading ? null : <span className="font-num whitespace-nowrap">{formatKobo(received.reduce((s, t) => s + t.net_kobo, 0))}</span>, label: "received" },
+                { value: loading ? null : <span className="font-num whitespace-nowrap">{formatKobo(Math.abs(paid.reduce((s, t) => s + t.net_kobo, 0)))}</span>, label: "paid out" },
+                { value: loading ? null : <span className="font-num whitespace-nowrap">{formatKobo(totalNet)}</span>, label: "net total" },
+              ]}
+            />
           </div>
-        ))}
-
-        <p className="text-label font-medium text-sage/70">Financial Activity</p>
-        <h1 className="mt-2 font-display text-display-lg-sm font-medium text-paper md:text-[2rem]">
-          Transactions
-        </h1>
-
-        {!loading && (
-          <div className="mt-6 flex flex-wrap gap-3">
-            <div data-chip className="flex flex-col rounded-[16px_4px_16px_4px] bg-sage/20 px-4 py-3">
-              <span className="text-label text-sage/70">Received</span>
-              <span className="font-num text-number-lg font-medium text-paper">
-                {formatKobo(received.reduce((s, t) => s + t.net_kobo, 0))}
-              </span>
-            </div>
-            <div data-chip className="flex flex-col rounded-[4px_16px_4px_16px] bg-field-soft/70 px-4 py-3">
-              <span className="text-label text-paper/50">Paid out</span>
-              <span className="font-num text-number-lg font-medium text-paper/80">
-                {formatKobo(Math.abs(paid.reduce((s, t) => s + t.net_kobo, 0)))}
-              </span>
-            </div>
-            <div data-chip className="flex flex-col rounded-[4px_16px_4px_16px] bg-amber/20 px-4 py-3">
-              <span className="text-label text-amber/70">Net total</span>
-              <span className="font-num text-number-lg font-medium text-amber">
-                {formatKobo(totalNet)}
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
+        </div>
+      </HillsCard>
 
       {/* Filters */}
       <Reveal effect="riseIn">

@@ -1,47 +1,90 @@
 "use client";
 
-import Image from "next/image";
-import { useRef, useState } from "react";
-import { Camera, CheckCircle2, ShieldAlert, LogOut, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CheckCircle2, ShieldAlert, LogOut, Trash2 } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
 
-import { LogoVideo } from "@/components/dashboard/logo-video";
+import { DetailSkeleton } from "@/components/loader/skeletons";
 import { ProfileLocation } from "@/components/location/profile-location";
 import { ProfileReliability } from "@/components/location/profile-reliability";
 import { Reveal } from "@/components/motion/reveal";
+import { CopyProfileLink, ProfileCard } from "@/components/profile/profile-card";
 import { TransactionPinModal } from "@/components/dashboard/transaction-pin-modal";
-import { fx, playOnEnter, useGSAP } from "@/lib/gsap/effects";
+import { isReducedMotion } from "@/lib/gsap/effects";
+import { trackTask } from "@/lib/loading/progress";
+import { apiFetch } from "@/lib/logistics/client";
 import { useAuthUser } from "@/components/auth/use-auth-user";
 import { getFirebaseAuth } from "@/lib/firebase/auth";
 import { cn } from "@/lib/utils";
 
+type Summary = {
+  id?: string;
+  name?: string;
+  display_name?: string | null;
+  role?: string | null;
+  area?: string | null;
+  photo_url?: string | null;
+  verified?: boolean;
+  created_at?: string;
+  booking_count?: number;
+  listing_count?: number;
+  listings?: Array<{ commodity: { name: string } }>;
+};
+
+function joinedDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-NG", { month: "long", year: "numeric" });
+}
 
 export default function ProfilePage() {
-  const heroRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const { user } = useAuthUser();
 
-  const photoURL = user?.photoURL ?? null;
   const displayName = user?.displayName ?? user?.email?.split("@")[0] ?? "User";
   const email = user?.email ?? "";
   const isGoogleUser = user?.providerData?.some((p) => p.providerId === "google.com") ?? false;
-  const initials = displayName.split(" ").slice(0, 2).map((w: string) => w[0]).join("").toUpperCase();
 
   const [name, setName] = useState(displayName);
   const [phone, setPhone] = useState("");
   const [bio, setBio] = useState("");
   const [saved, setSaved] = useState(false);
   const [pinOpen, setPinOpen] = useState(false);
+  const [summary, setSummary] = useState<Summary | null>(null);
 
-  useGSAP(
-    () => {
-      const root = heroRef.current;
-      if (!root) return;
-      playOnEnter(fx("riseIn", root.querySelectorAll("[data-rise]"), { stagger: 0.1 }), root, "top 85%");
-    },
-    { scope: heroRef },
-  );
+  useEffect(() => {
+    if (!user) return;
+    const signedIn = user;
+    let cancelled = false;
+    const finished = trackTask("profile-card");
+    async function load() {
+      try {
+        const meRes = await apiFetch(signedIn, "/api/me");
+        const me = meRes.ok ? ((await meRes.json()) as Summary | null) : null;
+        // Without a Lumora account there's nothing to count yet.
+        if (!me?.id) {
+          if (!cancelled) setSummary({ booking_count: 0, listing_count: 0 });
+          return;
+        }
+        const publicRes = await apiFetch(signedIn, `/api/users/${me.id}`);
+        const counts = publicRes.ok ? ((await publicRes.json()) as Summary) : null;
+        if (!cancelled) setSummary({ ...counts, ...me });
+      } catch {
+        if (!cancelled) setSummary({ booking_count: 0, listing_count: 0 });
+      } finally {
+        finished();
+      }
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  function startEditing() {
+    const field = document.getElementById("profile-name");
+    field?.scrollIntoView({ behavior: isReducedMotion() ? "auto" : "smooth", block: "center" });
+    field?.focus({ preventScroll: true });
+  }
 
   async function handleSignOut() {
     const auth = getFirebaseAuth();
@@ -58,52 +101,26 @@ export default function ProfilePage() {
   return (
     <div className="mx-auto w-full max-w-[1120px] px-4 py-6 md:px-6 lg:px-8">
 
-      {/* Hero */}
-      <div
-        ref={heroRef}
-        data-rhythm="field"
-        className="relative isolate mb-8 overflow-hidden rounded-2xl bg-field px-6 py-10 text-paper lg:px-10 lg:py-12"
-      >
-        <LogoVideo />
-
-        <div data-rise className="flex items-center gap-5">
-          {/* Avatar */}
-          <div className="relative">
-            <div className="size-20 overflow-hidden rounded-full ring-4 ring-sage/30 lg:size-24">
-              {photoURL ? (
-                <Image src={photoURL} alt={displayName} fill className="object-cover" referrerPolicy="no-referrer" sizes="96px" />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center bg-field-soft font-num text-display-lg-sm font-medium text-sage">
-                  {initials}
-                </div>
-              )}
-            </div>
-            <button
-              aria-label="Change photo"
-              className="absolute -bottom-1 -right-1 flex size-7 items-center justify-center rounded-full bg-paper text-ink shadow-md hover:bg-sage-soft"
-            >
-              <Camera strokeWidth={1.5} className="size-3.5" />
-            </button>
-          </div>
-
-          <div>
-            <h1 className="font-display text-[1.6rem] font-medium leading-tight text-paper">
-              {displayName}
-            </h1>
-            <p className="text-body-sm text-paper/60">{email}</p>
-            {isGoogleUser && (
-              <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-field-soft/60 px-2.5 py-1 text-label text-sage/80">
-                <svg viewBox="0 0 16 16" className="size-3.5" fill="none">
-                  <path fill="#4285F4" d="M15.1 8.17c0-.52-.05-1.02-.13-1.5H8v2.84h3.95a3.37 3.37 0 0 1-1.47 2.21v1.84h2.38c1.39-1.28 2.19-3.16 2.19-5.39z" />
-                  <path fill="#34A853" d="M8 15.33c1.98 0 3.64-.66 4.86-1.77l-2.38-1.84c-.66.44-1.49.7-2.48.7-1.9 0-3.52-1.29-4.1-3.02H1.43v1.9A7.33 7.33 0 0 0 8 15.33z" />
-                  <path fill="#FBBC05" d="M3.9 9.4a4.4 4.4 0 0 1 0-2.8V4.7H1.43a7.33 7.33 0 0 0 0 6.59L3.9 9.4z" />
-                  <path fill="#EA4335" d="M8 3.58c1.07 0 2.04.37 2.8 1.1l2.1-2.1A7.33 7.33 0 0 0 1.43 4.7L3.9 6.6C4.48 4.87 6.1 3.58 8 3.58z" />
-                </svg>
-                Connected with Google
-              </span>
-            )}
-          </div>
-        </div>
+      <div className="mb-8">
+        {user ? (
+          <ProfileCard
+            name={summary?.display_name || summary?.name || displayName}
+            lead={email}
+            role={summary?.role}
+            area={summary?.area}
+            joined={summary?.created_at ? joinedDate(summary.created_at) : null}
+            photoUrl={summary?.photo_url || user.photoURL}
+            verified={summary?.verified}
+            deliveries={summary ? summary.booking_count ?? 0 : null}
+            posts={summary ? summary.listing_count ?? 0 : null}
+            produce={summary?.listings?.map((listing) => listing.commodity.name)}
+            note={isGoogleUser ? <span>Connected with Google</span> : undefined}
+            corner={summary?.id ? <CopyProfileLink id={summary.id} /> : undefined}
+            action={{ label: "Edit profile", onClick: startEditing }}
+          />
+        ) : (
+          <DetailSkeleton label="Opening your profile" />
+        )}
       </div>
 
       {/* Verification status */}
@@ -147,12 +164,13 @@ export default function ProfilePage() {
 
             <div className="mt-5 space-y-4">
               {[
-                { label: "Full name", value: name, onChange: setName, type: "text", placeholder: "Your full name" },
-                { label: "Phone number", value: phone, onChange: setPhone, type: "tel", placeholder: "+234 800 000 0000" },
+                { id: "profile-name", label: "Full name", value: name, onChange: setName, type: "text", placeholder: "Your full name" },
+                { id: "profile-phone", label: "Phone number", value: phone, onChange: setPhone, type: "tel", placeholder: "+234 800 000 0000" },
               ].map((field) => (
                 <div key={field.label}>
-                  <label className="mb-1.5 block text-body-sm font-medium text-ink">{field.label}</label>
+                  <label htmlFor={field.id} className="mb-1.5 block text-body-sm font-medium text-ink">{field.label}</label>
                   <input
+                    id={field.id}
                     type={field.type}
                     value={field.value}
                     onChange={(e) => field.onChange(e.target.value)}
