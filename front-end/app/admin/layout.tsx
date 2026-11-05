@@ -34,6 +34,7 @@ const NAV = [
   { href: "/admin/disputes",     label: "Disputes",     icon: Scale,          badge: "•",  badgeColor: "bg-danger text-paper" },
   { href: "/admin/transactions", label: "Transactions", icon: BarChart3 },
   { href: "/admin/payouts",      label: "Payouts",      icon: Banknote },
+  { href: "/admin/withdrawals",  label: "Withdrawals",  icon: Banknote },
   { href: "/admin/alerts",       label: "Alerts",       icon: Bell,           badge: "•",  badgeColor: "bg-amber text-ink" },
   { href: "/admin/sms",          label: "SMS Log",      icon: MessageSquare },
 ];

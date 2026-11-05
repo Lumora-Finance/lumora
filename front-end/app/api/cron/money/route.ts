@@ -6,7 +6,6 @@ import { runMoneyJob, runReconciliation } from "@/lib/money/jobs";
 import { secretMatches } from "@/lib/money/secret";
 import { createSmsSender } from "@/lib/money/sms-sender";
 
-export const runtime = "nodejs";
 
 /** `?task=reconcile` runs the nightly check. Otherwise this is the 5-minute job. */
 export async function GET(request: Request) {

@@ -14,6 +14,7 @@ import { StatsRow } from "@/components/dashboard/stats-row";
 import { UpcomingBookings } from "@/components/dashboard/upcoming-bookings";
 import { Reveal } from "@/components/motion/reveal";
 import { useProfile } from "@/components/auth/use-profile";
+import { useDashboardData } from "@/lib/hooks/use-dashboard-data";
 import { fx, useGSAP, playOnEnter } from "@/lib/gsap/effects";
 import { cn } from "@/lib/utils";
 
@@ -34,9 +35,12 @@ export default function DashboardPage() {
   const [postOpen, setPostOpen] = useState(false);
   const { user, profile } = useProfile();
   const heroRef = useRef<HTMLDivElement>(null);
-  const count1Ref = useRef<HTMLSpanElement>(null);
-  const count2Ref = useRef<HTMLSpanElement>(null);
-  const count3Ref = useRef<HTMLSpanElement>(null);
+  const { data: stats } = useDashboardData<{
+    activePosts: number;
+    upcomingBookings: number;
+    monthlyKobo: number;
+    monthlyCount: number;
+  }>("stats");
 
   const profileIncomplete = user && !user.phoneNumber;
   const displayName = profile?.display_name ?? user?.displayName ?? user?.email?.split("@")[0] ?? "there";
@@ -65,29 +69,6 @@ export default function DashboardPage() {
 
       // float crop photos
       fx("floatDrift", root.querySelectorAll("[data-crop]"));
-
-      // count up numbers
-      if (count1Ref.current) {
-        playOnEnter(
-          fx("countUp", count1Ref.current, { to: 4, format: "integer" }),
-          root,
-          "top 85%",
-        );
-      }
-      if (count2Ref.current) {
-        playOnEnter(
-          fx("countUp", count2Ref.current, { to: 7, format: "integer" }),
-          root,
-          "top 85%",
-        );
-      }
-      if (count3Ref.current) {
-        playOnEnter(
-          fx("countUp", count3Ref.current, { to: 842000, format: "naira" }),
-          root,
-          "top 85%",
-        );
-      }
     },
     { scope: heroRef },
   );
@@ -156,8 +137,8 @@ export default function DashboardPage() {
               className="flex flex-col rounded-[20px_6px_20px_6px] bg-field-soft/70 px-4 py-3"
             >
               <span className="text-body-sm text-sage/70">Active Posts</span>
-              <span ref={count1Ref} className="font-num text-number-lg font-medium text-paper">
-                4
+              <span className="font-num text-number-lg font-medium text-paper">
+                {stats?.activePosts ?? "—"}
               </span>
             </div>
             <div
@@ -165,8 +146,8 @@ export default function DashboardPage() {
               className="flex flex-col rounded-[6px_20px_6px_20px] bg-field-soft/70 px-4 py-3"
             >
               <span className="text-body-sm text-sage/70">Bookings</span>
-              <span ref={count2Ref} className="font-num text-number-lg font-medium text-paper">
-                7
+              <span className="font-num text-number-lg font-medium text-paper">
+                {stats?.upcomingBookings ?? "—"}
               </span>
             </div>
             <div
@@ -174,8 +155,10 @@ export default function DashboardPage() {
               className="flex flex-col rounded-[20px_6px_20px_6px] bg-amber/20 px-4 py-3"
             >
               <span className="text-body-sm text-amber/80">This Month</span>
-              <span ref={count3Ref} className="font-num text-number-lg font-medium text-amber">
-                ₦842,000
+              <span className="font-num text-number-lg font-medium text-amber">
+                {stats?.monthlyKobo != null
+                  ? `₦${(stats.monthlyKobo / 100).toLocaleString("en-NG")}`
+                  : "—"}
               </span>
             </div>
           </div>

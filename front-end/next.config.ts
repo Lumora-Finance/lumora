@@ -5,6 +5,11 @@ const nextConfig: NextConfig = {
   experimental: {
     agentFeedback: true,
   },
+  turbopack: {
+    // Pin the root to this package so Turbopack never walks up to a stray
+    // lockfile at the repo root and resolves plugins from the wrong directory.
+    root: __dirname,
+  },
   cacheComponents: true,
   partialPrefetching: true,
   images: {
