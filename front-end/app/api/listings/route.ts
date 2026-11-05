@@ -1,21 +1,49 @@
+import { connection } from "next/server";
+
 import { requestUser } from "@/lib/money/auth";
 import { serverMoneyDb } from "@/lib/money/db";
 
-type Body = {
-  commodity?: string; unitPriceKobo?: number; capacity?: number; minQty?: number; minWeight?: number; maxWeight?: number;
-  mode?: string; date?: string; windowStart?: string; windowEnd?: string; cutoffHours?: number; address?: string; spec?: string;
-};
+/**
+ * GET /api/listings — all active listings (marketplace board).
+ * Returns listings directly from the DB, not filtered by slot cutoff,
+ * so buyers can see their own posts immediately after creation.
+ */
+export async function GET(request: Request) {
+  await connection();
+  const db = serverMoneyDb();
+  const user = await requestUser(request, db);
+  if (!user) return new Response("Unauthorized", { status: 401 });
 
+  try {
+    const rows = await db.rpc("logistics_board_rows", { p_now: new Date().toISOString() });
+    return Response.json(Array.isArray(rows) ? rows : []);
+  } catch {
+    return Response.json([]);
+  }
+}
+
+/**
+ * POST /api/listings — create a new demand listing.
+ */
 export async function POST(request: Request) {
   const db = serverMoneyDb();
   const user = await requestUser(request, db);
   if (!user) return new Response("Unauthorized", { status: 401 });
 
-  const body = ((await request.json().catch(() => null)) ?? {}) as Body;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(body.date ?? "") || !/^\d{2}:\d{2}$/.test(body.windowStart ?? "") || !/^\d{2}:\d{2}$/.test(body.windowEnd ?? "")) {
+  const body = ((await request.json().catch(() => null)) ?? {}) as {
+    commodity?: string; unitPriceKobo?: number; capacity?: number; minQty?: number;
+    minWeight?: number; maxWeight?: number; mode?: string; date?: string;
+    windowStart?: string; windowEnd?: string; cutoffHours?: number; address?: string; spec?: string;
+  };
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(body.date ?? "") ||
+    !/^\d{2}:\d{2}$/.test(body.windowStart ?? "") ||
+    !/^\d{2}:\d{2}$/.test(body.windowEnd ?? "")) {
     return Response.json({ ok: false, code: "invalid_window" }, { status: 400 });
   }
-  if (!Number.isSafeInteger(body.unitPriceKobo)) return Response.json({ ok: false, code: "invalid_numbers" }, { status: 400 });
+  if (!Number.isSafeInteger(body.unitPriceKobo)) {
+    return Response.json({ ok: false, code: "invalid_numbers" }, { status: 400 });
+  }
 
   const result = await db.rpc("logistics_create_listing", {
     p_buyer: user.id,

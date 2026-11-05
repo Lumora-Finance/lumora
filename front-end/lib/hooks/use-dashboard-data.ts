@@ -23,6 +23,7 @@ type DashboardState<T> = {
   data: T | null;
   loading: boolean;
   error: string | null;
+  refetch?: () => void;
 };
 
 /**
@@ -32,12 +33,13 @@ type DashboardState<T> = {
  * Usage:
  *   const { data, loading } = useDashboardData<Slot[]>("board");
  */
-export function useDashboardData<T>(key: string): DashboardState<T> {
+export function useDashboardData<T>(key: string): DashboardState<T> & { refetch: () => void } {
   const [state, setState] = useState<DashboardState<T>>({
     data: null,
     loading: true,
     error: null,
   });
+  const [tick, setTick] = useState(0);
 
   // Prevent state updates after the component unmounts.
   const cancelledRef = useRef(false);
@@ -99,7 +101,7 @@ export function useDashboardData<T>(key: string): DashboardState<T> {
       cancelled = true;
       cancelledRef.current = true;
     };
-  }, [key]);
+  }, [key, tick]);
 
-  return state;
+  return { ...state, refetch: () => setTick((t) => t + 1) };
 }

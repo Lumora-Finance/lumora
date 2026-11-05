@@ -271,10 +271,7 @@ function ModalShell({
             <button
               type="submit"
               aria-busy={busy}
-              className={cn(
-                "relative flex min-h-12 flex-1 items-center justify-center gap-2 overflow-hidden rounded-xl bg-green text-body-sm font-medium text-paper transition-[background-color,transform] duration-150 hover:bg-green-hover focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none active:scale-[0.98] motion-reduce:active:scale-100",
-                busy && "pointer-events-none",
-              )}
+              className={`relative flex min-h-12 flex-1 items-center justify-center gap-2 overflow-hidden rounded-xl bg-green text-body-sm font-medium text-paper transition-[background-color,transform] duration-150 hover:bg-green-hover focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none active:scale-[0.98] motion-reduce:active:scale-100${busy ? " pointer-events-none" : ""}`}
             >
               {submitIcon}
               {submitLabel}
