@@ -112,10 +112,15 @@ export async function POST(request: Request) {
   // that's already posted and funded stays posted if this fails: it just shows without a photo.
   const images = ownListingImages(body.images, process.env.NEXT_PUBLIC_SUPABASE_URL, user.id);
   if (listingId && images.length > 0) {
-    const { error } = await createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+    const { data: updated, error } = await createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
       auth: { persistSession: false },
-    }).from("demand_listings").update({ images }).eq("id", listingId).eq("buyer_id", user.id);
-    if (error) console.error("Saving listing photos failed", listingId);
+    }).from("demand_listings").update({ images }).eq("id", listingId).eq("buyer_id", user.id).select("id");
+    if (error) {
+      console.error("Saving listing photos failed — DB error", listingId, error.message);
+    } else if (!updated || updated.length === 0) {
+      // 0-row update: listing exists (we just created it) but buyer_id doesn't match — log the mismatch
+      console.error("Saving listing photos failed — 0 rows updated (buyer_id mismatch?)", listingId, "user:", user.id);
+    }
   }
 
   // Notify the buyer that their listing is live

@@ -37,16 +37,22 @@ export async function POST(request: Request) {
     return Response.json({ ok: false, code: "images_required", message: "Add 1 to 4 photos." }, { status: 400 });
   }
 
-  const result = await db.rpc("logistics_create_supply_listing", {
-    p_farmer: user.id,
-    p_title: body.title.trim(),
-    p_description: body.description ?? null,
-    p_commodity: body.commodity ?? null,
-    p_unit_price_kobo: body.unitPriceKobo,
-    p_qty: body.qty,
-    p_unit: body.unit ?? "kg",
-    p_images: body.images,
-  });
+  try {
+    const result = await db.rpc("logistics_create_supply_listing", {
+      p_farmer: user.id,
+      p_title: body.title.trim(),
+      p_description: body.description ?? null,
+      p_commodity: body.commodity ?? null,
+      p_unit_price_kobo: body.unitPriceKobo,
+      p_qty: body.qty,
+      p_unit: body.unit ?? "kg",
+      p_images: body.images,
+    }) as { ok: boolean; code?: string; listing_id?: string };
 
-  return Response.json(result, { status: result.ok ? 200 : 400 });
+    return Response.json(result, { status: result.ok ? 200 : 400 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("supply-listings POST failed:", message);
+    return Response.json({ ok: false, code: "db_error", message }, { status: 500 });
+  }
 }

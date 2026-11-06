@@ -146,21 +146,36 @@ export function ListingForm() {
     const toUpload = Array.from(files).slice(0, remaining);
     if (toUpload.length === 0) return;
     setUploading(true);
+    setError(null);
     const newImages: string[] = [];
+    let uploadFailed = false;
     for (const file of toUpload) {
       const formData = new FormData();
       formData.append("photo", file);
-      const token = await user.getIdToken();
-      const res = await fetch("/api/uploads/listing-image?bucket=demand-listing-images", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-      const result = await res.json();
-      if (result.ok && result.url) newImages.push(result.url);
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch("/api/uploads/listing-image?bucket=demand-listing-images", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        });
+        const result = await res.json() as { ok?: boolean; url?: string; code?: string; error?: string };
+        if (result.ok && result.url) {
+          newImages.push(result.url);
+        } else {
+          uploadFailed = true;
+          console.error("Upload failed:", result);
+        }
+      } catch (err) {
+        uploadFailed = true;
+        console.error("Upload error:", err);
+      }
     }
     if (newImages.length > 0) {
       change({ images: [...draft.images, ...newImages] });
+    }
+    if (uploadFailed) {
+      setError("One or more photos didn't upload. Check your connection and try again.");
     }
     setUploading(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
