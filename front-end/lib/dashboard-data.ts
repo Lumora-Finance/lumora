@@ -11,7 +11,9 @@ export type DashboardBooking = {
   arrived: boolean;
   commodity: string;
   unit_price_kobo: number;
-  farmer?: string;
+  // A name or { id, name }: `/api/bookings` can answer from either of two database functions.
+  farmer?: string | { name?: string };
+  buyer?: { name?: string };
   contact?: { ok: boolean; name?: string };
 };
 
@@ -46,8 +48,11 @@ export const upcoming = (bookings: DashboardBooking[] | null | undefined) =>
     .sort((a, b) => new Date(a.window_start).getTime() - new Date(b.window_start).getTime());
 
 /** Who's on the other side, whichever side the viewer is. */
-export const otherParty = (booking: DashboardBooking) =>
-  booking.is_buyer ? (booking.farmer ?? "A farmer") : (booking.contact?.name ?? "Your buyer");
+export function otherParty(booking: DashboardBooking): string {
+  if (!booking.is_buyer) return booking.buyer?.name ?? booking.contact?.name ?? "Your buyer";
+  const farmer = typeof booking.farmer === "string" ? booking.farmer : booking.farmer?.name;
+  return farmer ?? "A farmer";
+}
 
 export type MoneyRow = { amount_kobo: number; direction: "credit" | "debit"; kind: string; created_at: string };
 

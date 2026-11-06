@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { countsTowardsChart, type MoneyRow, monthlyTotals } from "../../lib/dashboard-data";
+import { countsTowardsChart, type DashboardBooking, type MoneyRow, monthlyTotals, otherParty } from "../../lib/dashboard-data";
 
 const today = new Date("2026-11-20T10:00:00Z");
 const row = (kind: string, amount_kobo: number, created_at = "2026-11-05T10:00:00Z", direction: MoneyRow["direction"] = "credit"): MoneyRow =>
@@ -38,5 +38,21 @@ describe("the dashboard money chart", () => {
     const months = monthlyTotals(today, [row("deposit", Number.NaN), row("deposit", 500, "2025-01-01T00:00:00Z")], "buyer", 6);
     expect(months.every((month) => month.kobo === 0)).toBe(true);
     expect(months.map((month) => month.name)).toEqual(["Jun", "Jul", "Aug", "Sept", "Oct", "Nov"]);
+  });
+});
+
+describe("who's on the other side of a booking", () => {
+  const booking = (extra: Partial<DashboardBooking>) => ({ is_buyer: true, ...extra }) as DashboardBooking;
+
+  it("is always text, whichever shape the API sends", () => {
+    expect(otherParty(booking({ farmer: { name: "Amina" } }))).toBe("Amina");
+    expect(otherParty(booking({ farmer: "Amina" }))).toBe("Amina");
+    expect(otherParty(booking({ is_buyer: false, buyer: { name: "Sweetfoods" } }))).toBe("Sweetfoods");
+    expect(otherParty(booking({ is_buyer: false, contact: { ok: true, name: "Sweetfoods" } }))).toBe("Sweetfoods");
+  });
+
+  it("falls back to plain words", () => {
+    expect(otherParty(booking({}))).toBe("A farmer");
+    expect(otherParty(booking({ is_buyer: false }))).toBe("Your buyer");
   });
 });
