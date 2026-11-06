@@ -9,6 +9,7 @@ import {
 import Link from "next/link";
 import { getToken } from "@/lib/firebase/auth";
 
+import { ImageGallery } from "@/components/marketplace/image-gallery";
 import { LogoVideo } from "@/components/dashboard/logo-video";
 import { Reveal } from "@/components/motion/reveal";
 import { TransactionPinModal } from "@/components/dashboard/transaction-pin-modal";
@@ -290,16 +291,7 @@ export default function SupplyListingDetailPage() {
       </div>
 
       {/* Image gallery */}
-      {listing.images && listing.images.length > 0 && (
-        <div data-rise className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {listing.images.map((url, idx) => (
-            <div key={idx} className="aspect-square overflow-hidden rounded-2xl border border-line bg-paper">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt={`Photo ${idx + 1}`} className="size-full object-cover" />
-            </div>
-          ))}
-        </div>
-      )}
+      <ImageGallery images={listing.images} alt={listing.title} />
 
       {/* Tabs */}
       <div className="mb-6 flex gap-1 overflow-x-auto rounded-xl border border-line bg-white p-1 w-fit">

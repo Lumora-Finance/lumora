@@ -10,6 +10,7 @@ import Link from "next/link";
 
 
 import { getToken } from "@/lib/firebase/auth";
+import { ImageGallery } from "@/components/marketplace/image-gallery";
 import { Reveal } from "@/components/motion/reveal";
 import { TransactionPinModal } from "@/components/dashboard/transaction-pin-modal";
 import { cn } from "@/lib/utils";
@@ -313,16 +314,7 @@ export default function ListingDetailPage() {
       </HillsCard>
 
       {/* Image gallery */}
-      {listing.images && listing.images.length > 0 && (
-        <div data-rise className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {listing.images.map((url, idx) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <div key={idx} className="aspect-square overflow-hidden rounded-2xl border border-line bg-paper">
-              <img src={url} alt={`Photo ${idx + 1}`} className="size-full object-cover" />
-            </div>
-          ))}
-        </div>
-      )}
+      <ImageGallery images={listing.images} alt={listing.commodity?.name ?? "listing"} />
 
       {/* Tabs */}
       <div className="mb-6 flex gap-1 overflow-x-auto rounded-xl border border-line bg-white p-1 w-full [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
