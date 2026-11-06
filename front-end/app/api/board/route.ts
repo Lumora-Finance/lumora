@@ -15,13 +15,27 @@ async function withListingDetails(raw: RawBoard): Promise<RawBoard> {
     });
     const { data } = await supabase.from("demand_listings").select("id, images, buyer_id").in("id", ids);
     const details = new Map((data ?? []).map((listing) => [listing.id as string, listing]));
+
+    // Fetch photo_url for each unique buyer_id from the users table
+    const buyerIds = [...new Set((data ?? []).map((l) => l.buyer_id as string).filter(Boolean))];
+    let photoMap = new Map<string, string | null>();
+    if (buyerIds.length > 0) {
+      const { data: users } = await supabase.from("users").select("id, photo_url").in("id", buyerIds);
+      photoMap = new Map((users ?? []).map((u) => [u.id as string, (u.photo_url as string | null) ?? null]));
+    }
+
     return {
       ...raw,
-      rows: raw.rows.map((row) => ({
-        ...row,
-        images: (details.get(row.listing_id)?.images as string[] | null) ?? [],
-        buyer_id: details.get(row.listing_id)?.buyer_id as string | undefined,
-      })),
+      rows: raw.rows.map((row) => {
+        const listing = details.get(row.listing_id);
+        const buyerId = listing?.buyer_id as string | undefined;
+        return {
+          ...row,
+          images: (listing?.images as string[] | null) ?? [],
+          buyer_id: buyerId,
+          buyer_photo_url: buyerId ? (photoMap.get(buyerId) ?? null) : null,
+        };
+      }),
     };
   } catch {
     return raw;

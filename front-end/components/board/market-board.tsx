@@ -60,7 +60,7 @@ const inDays = (days: number, hour: number) => {
 };
 
 const example = (id: string, buyer: string, area: string, km: number, priceKobo: number, remaining: number, commodity: CommodityMeta, days: number, collects = false, weights = [2.5, 3.5]): BoardCard => ({
-  images: [], buyerId: null, listingId: id, slotId: id, buyer, area, km, priceKobo, priceUnit: commodity.unit, remaining, minQty: 1,
+  images: [], buyerId: null, buyerPhotoUrl: null, listingId: id, slotId: id, buyer, area, km, priceKobo, priceUnit: commodity.unit, remaining, minQty: 1,
   windowStart: inDays(days, 7), windowEnd: inDays(days, 11), collects, plainName: commodity.one, plainPlural: commodity.many, spec: null,
   commodity: commodity.name, minWeightKg: weights[0], maxWeightKg: weights[1], urgent: false, pinned: false,
 });

@@ -20,6 +20,7 @@ type BoardRow = {
   slot_id: string;
   buyer: string;
   buyer_id?: string;
+  buyer_photo_url?: string | null;
   area: string;
   price_kobo: number;
   price_unit: string;
@@ -55,7 +56,7 @@ function formatKobo(kobo: number, unit: string) {
   return `₦${(kobo / 100).toLocaleString("en-NG")}/${unit}`;
 }
 
-function DemandCard({ row, meId, mePhoto }: { row: BoardRow; meId: string | null; mePhoto: string | null }) {
+function DemandCard({ row, meId }: { row: BoardRow; meId: string | null }) {
   const isOwn = Boolean(meId && row.buyer_id === meId);
   const buyerInitials = row.buyer.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
   return (
@@ -95,13 +96,11 @@ function DemandCard({ row, meId, mePhoto }: { row: BoardRow; meId: string | null
             href={`/dashboard/profile/${row.buyer_id ?? ""}`}
             className="relative z-[2] flex w-fit items-center gap-1.5 font-medium text-ink hover:text-green hover:underline"
           >
-            {isOwn ? (
-              <span className="flex size-5 items-center justify-center overflow-hidden rounded-full bg-sage-soft font-num text-[10px] font-medium text-green">
-                {mePhoto
-                  ? <img src={mePhoto} alt="" className="size-full object-cover" referrerPolicy="no-referrer" />
-                  : buyerInitials}
-              </span>
-            ) : null}
+            <span className="flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-sage-soft font-num text-[10px] font-medium text-green">
+              {row.buyer_photo_url
+                ? <img src={row.buyer_photo_url} alt="" className="size-full object-cover" referrerPolicy="no-referrer" />
+                : buyerInitials}
+            </span>
             {row.buyer}
           </Link>
           {row.area && (
@@ -203,7 +202,6 @@ export default function MarketplacePage() {
   const [error, setError] = useState<string | null>(null);
 
   const [meId, setMeId] = useState<string | null>(null);
-  const [mePhoto, setMePhoto] = useState<string | null>(null);
 
   const [filters, setFilters] = useState<FilterState>({
     commodity: "All",
@@ -241,7 +239,6 @@ export default function MarketplacePage() {
           const me = (await meRes.json()) as { id?: string; photo_url?: string | null };
           if (!cancelled) {
             setMeId(me?.id ?? null);
-            setMePhoto(me?.photo_url ?? null);
           }
         }
 
@@ -279,6 +276,7 @@ export default function MarketplacePage() {
       spec: (rc.spec ?? null) as string | null,
       commodity: (rc.commodity ?? "") as string,
       images: (rc.images ?? []) as string[],
+      buyer_photo_url: (rc.buyerPhotoUrl ?? rc.buyer_photo_url ?? null) as string | null,
     };
   });
 
@@ -391,7 +389,7 @@ export default function MarketplacePage() {
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {filteredDemand.map((row) => (
                 <Reveal key={row.listing_id} effect="riseIn" config={{ stagger: 0 }} className="h-full">
-                  <DemandCard row={row} meId={meId} mePhoto={mePhoto} />
+                  <DemandCard row={row} meId={meId} />
                 </Reveal>
               ))}
             </div>
