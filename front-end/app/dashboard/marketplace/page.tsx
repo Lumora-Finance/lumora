@@ -11,6 +11,7 @@ import { PostModal } from "@/components/dashboard/post-button";
 import { Reveal } from "@/components/motion/reveal";
 import { cn } from "@/lib/utils";
 import { CardsSkeleton } from "@/components/loader/skeletons";
+import { ListingPhoto } from "@/components/marketplace/listing-photo";
 import { HillsCard } from "@/components/profile/hills-card";
 import { trackTask } from "@/lib/loading/progress";
 
@@ -58,10 +59,14 @@ function DemandCard({ row, meId, mePhoto }: { row: BoardRow; meId: string | null
   const isOwn = Boolean(meId && row.buyer_id === meId);
   const buyerInitials = row.buyer.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
   return (
-    <Link
-      href={`/dashboard/marketplace/${row.listing_id}`}
-      className="group flex flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
-    >
+    <article className="group flex flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg relative h-full">
+      {/* Covers the card, under the buyer's link, so the whole card opens the listing without a link inside a link. */}
+      <Link
+        href={`/dashboard/marketplace/${row.listing_id}`}
+        aria-label={`View and book ${row.commodity} for ${row.buyer}`}
+        className="absolute inset-0 z-[1] rounded-2xl focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+      />
+      <ListingPhoto images={row.images} alt={`${row.commodity} from ${row.buyer}`} className="aspect-[16/9] w-full" />
       <div className="flex-1 p-5">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
@@ -75,14 +80,6 @@ function DemandCard({ row, meId, mePhoto }: { row: BoardRow; meId: string | null
                 </span>
               )}
             </div>
-            {isOwn && row.images && row.images.length > 0 && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={row.images[0]}
-                alt={row.commodity}
-                className="mt-2 size-[60px] rounded-lg object-cover"
-              />
-            )}
             <p className="mt-2 font-medium text-ink">{row.commodity}</p>
             {row.spec && (
               <p className="mt-0.5 line-clamp-2 text-body-sm text-ink-muted">{row.spec}</p>
@@ -96,8 +93,7 @@ function DemandCard({ row, meId, mePhoto }: { row: BoardRow; meId: string | null
         <div className="mt-3 space-y-1 text-body-sm text-ink-muted">
           <Link
             href={`/dashboard/profile/${row.buyer_id ?? ""}`}
-            onClick={(e) => e.stopPropagation()}
-            className="flex items-center gap-1.5 font-medium text-ink hover:text-green hover:underline"
+            className="relative z-[2] flex w-fit items-center gap-1.5 font-medium text-ink hover:text-green hover:underline"
           >
             {isOwn ? (
               <span className="flex size-5 items-center justify-center overflow-hidden rounded-full bg-sage-soft font-num text-[10px] font-medium text-green">
@@ -125,7 +121,7 @@ function DemandCard({ row, meId, mePhoto }: { row: BoardRow; meId: string | null
           View &amp; Book
         </span>
       </div>
-    </Link>
+    </article>
   );
 }
 
@@ -261,38 +257,6 @@ export default function MarketplacePage() {
     return () => { cancelled = true; };
   }, []);
 
-  // Enrich own demand rows with images from the listing detail API
-  useEffect(() => {
-    if (!meId || rows.length === 0) return;
-    let cancelled = false;
-    async function enrich() {
-      const token = await getToken();
-      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
-      const ownRows = rows.filter((r) => r.buyer_id === meId && !r.images);
-      if (ownRows.length === 0) return;
-      await Promise.all(
-        ownRows.map(async (r) => {
-          try {
-            const res = await fetch(`/api/listings/${r.listing_id}`, { headers });
-            if (!res.ok) return;
-            const data = (await res.json()) as { images?: string[] };
-            if (cancelled) return;
-            if (data.images && data.images.length > 0) {
-              setRows((prev) =>
-                prev.map((row) =>
-                  row.listing_id === r.listing_id ? { ...row, images: data.images } : row,
-                ),
-              );
-            }
-          } catch { /* ignore */ }
-        }),
-      );
-    }
-    enrich();
-    return () => { cancelled = true; };
-  }, [meId, rows.length]); // eslint-disable-line react-hooks/exhaustive-deps
-
-
   // Map board cards to display shape (board returns BoardCard from buildBoard)
   const demandItems = rows.map((r) => {
     // Handle both raw board rows and built board cards
@@ -314,6 +278,7 @@ export default function MarketplacePage() {
       plain_plural: (rc.plainPlural ?? rc.plain_plural ?? "") as string,
       spec: (rc.spec ?? null) as string | null,
       commodity: (rc.commodity ?? "") as string,
+      images: (rc.images ?? []) as string[],
     };
   });
 
@@ -425,7 +390,7 @@ export default function MarketplacePage() {
           ) : (
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {filteredDemand.map((row) => (
-                <Reveal key={row.listing_id} effect="riseIn" config={{ stagger: 0 }}>
+                <Reveal key={row.listing_id} effect="riseIn" config={{ stagger: 0 }} className="h-full">
                   <DemandCard row={row} meId={meId} mePhoto={mePhoto} />
                 </Reveal>
               ))}

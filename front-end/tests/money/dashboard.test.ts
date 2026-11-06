@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { buildBoard } from "../../lib/logistics/board";
+import { ownListingImages } from "../../lib/logistics/listing-draft";
 import { countsTowardsChart, type DashboardBooking, type MoneyRow, monthlyTotals, otherParty } from "../../lib/dashboard-data";
 
 const today = new Date("2026-11-20T10:00:00Z");
@@ -56,3 +58,41 @@ describe("who's on the other side of a booking", () => {
     expect(otherParty(booking({ is_buyer: false }))).toBe("Your buyer");
   });
 });
+
+describe("photos on board cards", () => {
+  const row = { listing_id: "l", slot_id: "s", buyer: "B", area: "Jos", area_lat: 9, area_lng: 8, price_kobo: 1, price_unit: "kg", remaining: 1, min_qty: 1, window_start: "", window_end: "", delivery_mode: "farmer_delivers", plain_name: "a", plain_plural: "b", spec: null } as never;
+
+  it("carries a listing's photos and buyer", () => {
+    const [card] = buildBoard({ farmer_area: null, rows: [{ ...(row as object), images: ["u"], buyer_id: "b1" } as never] }, "price");
+    expect(card.images).toEqual(["u"]);
+    expect(card.buyerId).toBe("b1");
+  });
+
+  it("is empty for a listing without any", () => {
+    const [card] = buildBoard({ farmer_area: null, rows: [row] }, "price");
+    expect(card.images).toEqual([]);
+    expect(card.buyerId).toBeNull();
+  });
+});
+
+describe("which photos can go on a listing", () => {
+  const base = "https://x.supabase.co";
+  const mine = `${base}/storage/v1/object/public/demand-listing-images/me/a.jpg`;
+
+  it("keeps this person's uploads", () => {
+    expect(ownListingImages([mine], `${base}/`, "me")).toEqual([mine]);
+  });
+
+  it("drops anything else", () => {
+    const theirs = `${base}/storage/v1/object/public/demand-listing-images/you/a.jpg`;
+    const elsewhere = "https://evil.test/a.jpg";
+    const climbing = `${base}/storage/v1/object/public/demand-listing-images/me/../you/a.jpg`;
+    expect(ownListingImages([theirs, elsewhere, climbing, 5], base, "me")).toEqual([]);
+    expect(ownListingImages("nope", base, "me")).toEqual([]);
+  });
+
+  it("keeps at most four", () => {
+    expect(ownListingImages(Array(6).fill(mine), base, "me")).toHaveLength(4);
+  });
+});
+

@@ -10,6 +10,7 @@ import { playMoment } from "@/lib/loading/moment";
 import type { BoardCard } from "@/lib/logistics/board";
 import { whenLabel } from "@/lib/logistics/board-copy";
 import { apiFetch } from "@/lib/logistics/client";
+import { ListingPhoto } from "@/components/marketplace/listing-photo";
 import { MAX_SLOTS, needsMore, slotShape, takesLabel, unitsTaken, unitWords } from "@/lib/logistics/crate";
 import { formatKobo } from "@/lib/money/rules";
 import { takeHomeKobo } from "@/lib/pricing";
@@ -117,7 +118,7 @@ export function CrateCard({
       data-card
       data-crate={card.listingId}
       className={cn(
-        "rounded-[20px] border bg-white transition-colors duration-200",
+        "min-w-0 rounded-[20px] border bg-white transition-colors duration-200",
         selected ? "border-field" : card.pinned ? "border-amber" : "border-line hover:border-sage",
         full && "opacity-70",
       )}
@@ -127,8 +128,13 @@ export function CrateCard({
         aria-pressed={selected}
         disabled={full}
         onClick={onToggle}
-        className="block w-full cursor-pointer rounded-[20px] p-4 text-left [-webkit-tap-highlight-color:transparent] focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none disabled:cursor-default sm:p-5"
+        className="group block w-full cursor-pointer rounded-[20px] p-4 text-left [-webkit-tap-highlight-color:transparent] focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none disabled:cursor-default sm:p-5"
       >
+        <ListingPhoto
+          images={card.images}
+          alt={`${card.commodity} from ${card.buyer}`}
+          className="-mx-4 -mt-4 mb-3.5 aspect-[16/7] w-[calc(100%+2rem)] rounded-t-[20px]"
+        />
         <span className="flex items-start justify-between gap-3">
           <span className="min-w-0">
             <span className="block truncate font-medium text-ink">{card.buyer}</span>

@@ -1,7 +1,9 @@
 import { connection } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
 import { requestUser } from "@/lib/money/auth";
 import { serverMoneyDb } from "@/lib/money/db";
+import { ownListingImages } from "@/lib/logistics/listing-draft";
 import { formatKobo } from "@/lib/money/rules";
 
 const CUTOFF_HOURS = 24;
@@ -105,6 +107,16 @@ export async function POST(request: Request) {
   }
 
   const listingId = result.listing_id;
+
+  // The database function takes the photos but doesn't store them, so they're saved here. A demand
+  // that's already posted and funded stays posted if this fails: it just shows without a photo.
+  const images = ownListingImages(body.images, process.env.NEXT_PUBLIC_SUPABASE_URL, user.id);
+  if (listingId && images.length > 0) {
+    const { error } = await createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+      auth: { persistSession: false },
+    }).from("demand_listings").update({ images }).eq("id", listingId).eq("buyer_id", user.id);
+    if (error) console.error("Saving listing photos failed", listingId);
+  }
 
   // Notify the buyer that their listing is live
   if (listingId) {

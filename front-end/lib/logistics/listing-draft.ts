@@ -135,3 +135,10 @@ export function listingBody(draft: ListingDraft) {
     images: draft.images,
   };
 }
+
+/** Only photos this person uploaded to our own storage can go on their listing. */
+export function ownListingImages(images: unknown, supabaseUrl: string | undefined, userId: string): string[] {
+  if (!Array.isArray(images) || !supabaseUrl) return [];
+  const prefix = `${supabaseUrl.replace(/\/$/, "")}/storage/v1/object/public/demand-listing-images/${userId}/`;
+  return images.filter((url): url is string => typeof url === "string" && url.startsWith(prefix) && !url.includes("..")).slice(0, 4);
+}

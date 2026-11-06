@@ -14,6 +14,7 @@ export type RawBoard = {
     price_kobo: number; price_unit: string; remaining: number; min_qty: number; window_start: string; window_end: string;
     delivery_mode: "farmer_delivers" | "buyer_collects"; plain_name: string; plain_plural: string; spec: string | null;
     commodity?: string; min_weight_kg?: number; max_weight_kg?: number; urgent?: boolean;
+    images?: string[]; buyer_id?: string;
   }[];
 };
 
@@ -40,6 +41,8 @@ export type BoardCard = {
   maxWeightKg: number;
   urgent: boolean;
   pinned: boolean;
+  images: string[];
+  buyerId: string | null;
 };
 
 /** Distances run from area to area, so a card never reveals anyone's exact location. */
@@ -65,6 +68,8 @@ export function buildBoard(raw: RawBoard, sort: BoardSort): BoardCard[] {
     maxWeightKg: Number(row.max_weight_kg ?? 0),
     urgent: row.urgent ?? false,
     pinned: raw.pinned?.includes(row.slot_id) ?? false,
+    images: row.images ?? [],
+    buyerId: row.buyer_id ?? null,
   }));
   // Urgent requests sent to this farmer stay at the top, whatever the sort.
   const pinnedFirst = (a: BoardCard, b: BoardCard) => Number(b.pinned) - Number(a.pinned);

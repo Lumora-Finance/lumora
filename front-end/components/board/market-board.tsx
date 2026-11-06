@@ -60,7 +60,7 @@ const inDays = (days: number, hour: number) => {
 };
 
 const example = (id: string, buyer: string, area: string, km: number, priceKobo: number, remaining: number, commodity: CommodityMeta, days: number, collects = false, weights = [2.5, 3.5]): BoardCard => ({
-  listingId: id, slotId: id, buyer, area, km, priceKobo, priceUnit: commodity.unit, remaining, minQty: 1,
+  images: [], buyerId: null, listingId: id, slotId: id, buyer, area, km, priceKobo, priceUnit: commodity.unit, remaining, minQty: 1,
   windowStart: inDays(days, 7), windowEnd: inDays(days, 11), collects, plainName: commodity.one, plainPlural: commodity.many, spec: null,
   commodity: commodity.name, minWeightKg: weights[0], maxWeightKg: weights[1], urgent: false, pinned: false,
 });
@@ -374,7 +374,7 @@ export function MarketBoard() {
           {pinned.length > 0 && (
             <section aria-label="Urgent" className="mb-5">
               <h2 className="font-medium text-ink">They need this today</h2>
-              <ul className="mt-3 grid items-start gap-4 xl:grid-cols-2">
+              <ul className="mt-3 grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
                 {pinned.map((card) => (
                   <CrateCard key={card.listingId} {...crateProps(card)} />
                 ))}
@@ -462,7 +462,7 @@ export function MarketBoard() {
                   options={[{ value: "money", label: "Most money" }, { value: "nearest", label: "Nearest" }]}
                 />
               </div>
-              <ul data-list className="mt-3 grid items-start gap-4 xl:grid-cols-2">
+              <ul data-list className="mt-3 grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
                 {open.map((card) => (
                   <CrateCard key={card.listingId} {...crateProps(card)} />
                 ))}
@@ -481,7 +481,7 @@ export function MarketBoard() {
                 {showFull ? "Hide full buyers" : `Show ${full.length} full ${full.length === 1 ? "buyer" : "buyers"}`}
               </button>
               {showFull && (
-                <ul className="mt-3 grid items-start gap-4 xl:grid-cols-2">
+                <ul className="mt-3 grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
                   {full.map((card) => (
                     <CrateCard key={card.listingId} {...crateProps(card)} />
                   ))}
