@@ -1,7 +1,10 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 import { ViewTransition } from "react";
 
+import { useAuthUser } from "@/components/auth/use-auth-user";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +18,14 @@ const NAV_LINK = cn(
 const ENTER = "motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:fill-mode-both motion-safe:duration-500";
 
 export function Hero() {
+  const { user, loading } = useAuthUser();
+
+  // While Firebase is restoring a saved session, we don't know yet — show nothing
+  // on the nav button to avoid a flash. Once resolved, show the right label.
+  const signedIn = !loading && !!user;
+  const ctaHref = signedIn ? "/dashboard" : "/auth/login";
+  const ctaLabel = signedIn ? "Dashboard" : "Sign in";
+
   return (
     <section className="relative isolate mx-auto mt-2 flex min-h-[calc(100svh-1rem)] w-[calc(100%-1rem)] max-w-[1600px] flex-col overflow-hidden rounded-2xl rounded-tl-none bg-field text-paper md:mt-3 md:min-h-[calc(100svh-1.5rem)] md:w-[calc(100%-1.5rem)]">
       {/* Pexels photo 34705725, free licence. Must not imply this person endorses Lumora. */}
@@ -72,12 +83,15 @@ export function Hero() {
           <a href={BUYER_HREF} className={cn(NAV_LINK, "hidden sm:inline-flex")}>
             Buyers
           </a>
-          <Link
-            href="/auth/login"
-            className="ml-1 inline-flex min-h-10 items-center rounded-md bg-paper px-4 text-sm font-semibold text-ink transition-colors duration-200 ease-out hover:bg-sage-soft focus-visible:ring-3 focus-visible:ring-paper/60 focus-visible:outline-none md:ml-2"
-          >
-            Sign in
-          </Link>
+          {/* Hide the button while auth is loading to prevent a label flash */}
+          {!loading && (
+            <Link
+              href={ctaHref}
+              className="ml-1 inline-flex min-h-10 items-center rounded-md bg-paper px-4 text-sm font-semibold text-ink transition-colors duration-200 ease-out hover:bg-sage-soft focus-visible:ring-3 focus-visible:ring-paper/60 focus-visible:outline-none md:ml-2"
+            >
+              {ctaLabel}
+            </Link>
+          )}
         </nav>
       </header>
 
@@ -98,7 +112,7 @@ export function Hero() {
         </p>
 
         <Link
-          href="/auth/login"
+          href={ctaHref}
           className={cn(
             buttonVariants({ variant: "highlight" }),
             ON_DARK_FOCUS,
@@ -106,7 +120,7 @@ export function Hero() {
             "mt-6 w-full motion-safe:delay-200 sm:w-auto",
           )}
         >
-          Sign in
+          {ctaLabel}
         </Link>
       </div>
     </section>
