@@ -55,7 +55,7 @@ export function ProfileCard({
   produce?: string[];
   note?: ReactNode;
   corner?: ReactNode;
-  action: { label: string; href?: string; onClick?: () => void };
+  action?: { label: string; href?: string; onClick?: () => void };
 }) {
   const initials = name.split(" ").filter(Boolean).slice(0, 2).map((word) => word[0]).join("").toUpperCase();
   const kinds = [...new Set(produce)];
@@ -124,13 +124,15 @@ export function ProfileCard({
             ]}
           />
 
-          <div data-card="pop" className="sm:shrink-0">
-            {action.href ? (
-              <Link href={action.href} className={HILLS_ACTION}>{action.label}</Link>
-            ) : (
-              <button type="button" onClick={action.onClick} className={HILLS_ACTION}>{action.label}</button>
-            )}
-          </div>
+          {action && (
+            <div data-card="pop" className="sm:shrink-0">
+              {action.href ? (
+                <Link href={action.href} className={HILLS_ACTION}>{action.label}</Link>
+              ) : (
+                <button type="button" onClick={action.onClick} className={HILLS_ACTION}>{action.label}</button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </HillsCard>

@@ -106,7 +106,6 @@ export default function PublicProfilePage() {
         posts={profile.listing_count}
         produce={(profile.listings ?? []).map((listing) => listing.commodity.name)}
         corner={<SaveProfileButton id={profile.id} />}
-        action={{ label: "Get in touch", href: `/dashboard/messages?to=${encodeURIComponent(profile.name)}` }}
       />
 
       {/* Listings */}

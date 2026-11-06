@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import {
   ArrowLeft, MapPin, Clock, Shield, CheckCircle2,
@@ -66,7 +66,6 @@ type Listing = {
 
 export default function ListingDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const [tab, setTab] = useState<Tab>("overview");
   const [listing, setListing] = useState<Listing | null>(null);
   const [loading, setLoading] = useState(true);
@@ -322,13 +321,6 @@ export default function ListingDetailPage() {
             ) : (
               <span className={`${HILLS_ACTION_QUIET} pointer-events-none text-ink-muted`}>No open slots</span>
             )}
-            <button
-              type="button"
-              onClick={() => router.push(`/dashboard/messages?to=${encodeURIComponent(listing.buyer.name)}`)}
-              className={HILLS_ACTION_QUIET}
-            >
-              Message {listing.buyer.name}
-            </button>
             <Link href={`/dashboard/profile/${listing.buyer.id}`} className={HILLS_ACTION_QUIET}>
               View profile
             </Link>
