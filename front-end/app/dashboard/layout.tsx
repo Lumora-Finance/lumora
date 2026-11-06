@@ -1,9 +1,7 @@
-"use client";
+import type { ReactNode } from "react";
+import { Suspense } from "react";
 
-import { useRouter } from "next/navigation";
-import { type ReactNode, Suspense, useEffect } from "react";
-
-import { useAuthUser } from "@/components/auth/use-auth-user";
+import { DashboardAuthGuard } from "@/components/dashboard/auth-guard";
 import { DashboardScroll } from "@/components/dashboard/dashboard-scroll";
 import { DashboardHeader } from "@/components/dashboard/header";
 import { FirstLoad } from "@/components/loader/first-load";
@@ -11,26 +9,9 @@ import { Sidebar } from "@/components/dashboard/sidebar";
 
 export const instant = false;
 
-function AuthGuard({ children }: { children: ReactNode }) {
-  const router = useRouter();
-  const { user, loading } = useAuthUser();
-
-  useEffect(() => {
-    if (loading) return;
-    if (!user) {
-      router.replace("/auth/login");
-    }
-  }, [loading, user, router]);
-
-  // While loading, or if redirecting, render nothing to avoid a flash of dashboard content
-  if (loading || !user) return null;
-
-  return <>{children}</>;
-}
-
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
-    <AuthGuard>
+    <DashboardAuthGuard>
       <div className="flex h-svh overflow-hidden bg-paper">
         <FirstLoad />
         {/* Desktop sidebar */}
@@ -52,6 +33,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           </DashboardScroll>
         </div>
       </div>
-    </AuthGuard>
+    </DashboardAuthGuard>
   );
 }
