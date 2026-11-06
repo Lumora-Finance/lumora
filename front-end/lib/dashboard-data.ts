@@ -48,3 +48,25 @@ export const upcoming = (bookings: DashboardBooking[] | null | undefined) =>
 /** Who's on the other side, whichever side the viewer is. */
 export const otherParty = (booking: DashboardBooking) =>
   booking.is_buyer ? (booking.farmer ?? "A farmer") : (booking.contact?.name ?? "Your buyer");
+
+export type MoneyRow = { amount_kobo: number; direction: "credit" | "debit"; kind: string; created_at: string };
+
+/** What a person's money chart counts: wallet funding for a buyer, delivery payouts for anyone selling. */
+export const countsTowardsChart = (row: MoneyRow, role: string | null | undefined) =>
+  row.direction === "credit" && row.kind === (role === "buyer" ? "deposit" : "trade");
+
+/** The total for each of the last `count` months, oldest first. */
+export function monthlyTotals(today: Date | null, rows: MoneyRow[], role: string | null | undefined, count: number) {
+  return Array.from({ length: count }, (_, index) => {
+    if (!today) return { name: "\u00A0", kobo: 0 };
+    const start = new Date(today.getFullYear(), today.getMonth() - (count - 1 - index), 1);
+    const end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
+    const kobo = rows
+      .filter((row) => {
+        const at = new Date(row.created_at);
+        return at >= start && at < end && countsTowardsChart(row, role);
+      })
+      .reduce((sum, row) => sum + (Number(row.amount_kobo) || 0), 0);
+    return { name: new Intl.DateTimeFormat("en-GB", { month: "short" }).format(start), kobo };
+  });
+}

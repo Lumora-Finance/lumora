@@ -16,7 +16,7 @@ const MOST_SHOWN = 4;
  */
 type TxRow = {
   id: string;
-  kind: "deposit" | "withdrawal" | "trade" | "hold" | "release" | "fee" | "other";
+  kind: "deposit" | "withdrawal" | "trade" | "payout" | "hold" | "release" | "fee" | "other";
   label: string;
   amount_kobo: number;
   direction: "credit" | "debit";

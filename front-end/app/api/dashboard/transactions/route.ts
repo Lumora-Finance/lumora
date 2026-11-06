@@ -81,7 +81,7 @@ export async function GET(request: Request) {
   // 4. Normalise every ledger row into a unified transaction shape
   type TxRow = {
     id: string;
-    kind: "deposit" | "withdrawal" | "trade" | "hold" | "release" | "fee" | "other";
+    kind: "deposit" | "withdrawal" | "trade" | "payout" | "hold" | "release" | "fee" | "other";
     label: string;
     amount_kobo: number;
     /** credit = money came in for this user, debit = money went out */
@@ -106,6 +106,10 @@ export async function GET(request: Request) {
     } else if ((r.from_bucket === "buyer_available" || r.from_bucket === "farmer_paid") && r.to_bucket === "external") {
       kind = "withdrawal";
       label = "Withdrawal";
+    } else if (r.from_bucket === "farmer_pending" && r.to_bucket === "farmer_paid") {
+      // The same money reaching the bank, so it isn't earned a second time.
+      kind = "payout";
+      label = booking ? `${booking.commodity} — sent to your bank` : "Sent to your bank";
     } else if (r.to_bucket === "farmer_pending" || r.to_bucket === "farmer_paid") {
       kind = "trade";
       label = booking ? `${booking.commodity} — delivery payout` : "Trade settlement";

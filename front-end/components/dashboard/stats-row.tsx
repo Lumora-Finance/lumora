@@ -1,7 +1,7 @@
 "use client";
 
 import { Skeleton } from "@/components/ui/skeleton";
-import type { DashboardStats } from "@/lib/dashboard-data";
+import { type DashboardStats, type MoneyRow, monthlyTotals } from "@/lib/dashboard-data";
 import { useDashboardData } from "@/lib/hooks/use-dashboard-data";
 import { formatKobo } from "@/lib/money/rules";
 import { useToday } from "@/lib/use-today";
@@ -15,11 +15,17 @@ export function StatsRow() {
   const { data: stats, loading } = useDashboardData<DashboardStats>("stats");
   const { data: me } = useDashboardData<{ role?: string; reliability?: { on_time: number; total: number } } | null>("me");
 
+  const { data: rows } = useDashboardData<MoneyRow[]>("transactions");
+  const buying = me?.role === "buyer";
+  const fundedThisMonth = monthlyTotals(today, Array.isArray(rows) ? rows : [], "buyer", 1)[0].kobo;
+
   const deliveries = stats?.monthlyCount ?? 0;
   const items = [
     { label: "Active posts", value: String(stats?.activePosts ?? 0), note: "Demand you've posted" },
     { label: "Bookings ahead", value: String(stats?.upcomingBookings ?? 0), note: "Booked and confirmed" },
-    { label: "Earned", value: formatKobo(stats?.monthlyKobo ?? 0), note: `From ${deliveries} ${deliveries === 1 ? "delivery" : "deliveries"}` },
+    buying
+      ? { label: "Funded", value: formatKobo(fundedThisMonth), note: "Added to your wallet" }
+      : { label: "Earned", value: formatKobo(stats?.monthlyKobo ?? 0), note: `From ${deliveries} ${deliveries === 1 ? "delivery" : "deliveries"}` },
     {
       label: "On time",
       value: me?.reliability && me.reliability.total > 0 ? `${me.reliability.on_time} of ${me.reliability.total}` : "None yet",

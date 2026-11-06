@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 
 import { ChartSkeleton } from "@/components/loader/skeletons";
 import { Skeleton } from "@/components/ui/skeleton";
+import { type MoneyRow, monthlyTotals } from "@/lib/dashboard-data";
 import { useDashboardData } from "@/lib/hooks/use-dashboard-data";
 import { formatKobo } from "@/lib/money/rules";
 import { gsap, isReducedMotion, playOnEnter, useGSAP } from "@/lib/gsap/effects";
@@ -17,48 +18,15 @@ const MONTHS = 6;
 
 const thousands = (kobo: number) => (kobo >= 100_000 ? `₦${Math.round(kobo / 100_000)}k` : formatKobo(kobo));
 
-/**
- * Normalised row shape from /api/dashboard/transactions.
- * We only need amount_kobo, direction, kind and created_at here.
- */
-type TxRow = {
-  amount_kobo: number;
-  direction: "credit" | "debit";
-  kind: string;
-  created_at: string;
-};
-
-/** Sum of credit movements that represent money earned (trades/settlements), by month. */
-function byMonth(today: Date | null, rows: TxRow[]) {
-  return Array.from({ length: MONTHS }, (_, index) => {
-    if (!today) return { name: "\u00A0", kobo: 0 };
-    const start = new Date(today.getFullYear(), today.getMonth() - (MONTHS - 1 - index), 1);
-    const end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
-    const kobo = rows
-      .filter((row) => {
-        const at = new Date(row.created_at);
-        // Only count credit movements — deposits, trade settlements, releases
-        // Exclude holds (not real earnings) and debits (withdrawals, fees)
-        return (
-          at >= start &&
-          at < end &&
-          row.direction === "credit" &&
-          row.kind !== "hold" &&
-          typeof row.amount_kobo === "number" &&
-          !Number.isNaN(row.amount_kobo)
-        );
-      })
-      .reduce((sum, row) => sum + (Number(row.amount_kobo) || 0), 0);
-    return { name: new Intl.DateTimeFormat("en-GB", { month: "short" }).format(start), kobo };
-  });
-}
-
 /** One series, so one colour: the chosen month stands out, and pointing at another shows its figures. */
 export function MoneyChart() {
   const bars = useRef<HTMLDivElement>(null);
   const today = useToday();
-  const { data, loading } = useDashboardData<TxRow[]>("transactions");
-  const months = byMonth(today, Array.isArray(data) ? data : []);
+  const { data, loading: rowsLoading } = useDashboardData<MoneyRow[]>("transactions");
+  const { data: me, loading: meLoading } = useDashboardData<{ role?: string } | null>("me");
+  const loading = rowsLoading || meLoading;
+  const buying = me?.role === "buyer";
+  const months = monthlyTotals(today, Array.isArray(data) ? data : [], me?.role, MONTHS);
   const [chosen, setChosen] = useState(MONTHS - 1);
 
   const top = Math.max(...months.map((month) => month.kobo), 1);
@@ -84,7 +52,7 @@ export function MoneyChart() {
 
   return (
     <Panel className="flex h-full flex-col">
-      <PanelHeading title="Money earned" sub="Pick a month to see it" action={<PanelLink href="/dashboard/transactions">Details</PanelLink>} />
+      <PanelHeading title={loading ? "Your money" : buying ? "Wallet funding" : "Money earned"} sub={buying ? "What you've added, month by month" : "Pick a month to see it"} action={<PanelLink href="/dashboard/transactions">Details</PanelLink>} />
       <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1 px-5 pt-4 sm:px-6">
         {loading ? (
           <Skeleton className="h-9 w-44 sm:h-10" />
@@ -111,12 +79,12 @@ export function MoneyChart() {
       )}
       {!hasMoney && !loading && (
         <p className="mt-auto px-5 pt-6 pb-6 text-center text-body-sm text-ink-muted sm:px-6">
-          Money from your deliveries will build up here, month by month.
+          {buying ? "Money you add to your wallet will build up here, month by month." : "Money from your deliveries will build up here, month by month."}
         </p>
       )}
       <div ref={bars} className={cn("relative mt-auto px-5 pt-6 pb-5 sm:px-6 sm:pb-6", !hasMoney && "hidden")}>
         <div className="relative h-52 sm:h-56">
-          <div role="group" aria-label="Money earned by month" className="absolute inset-0 flex items-end gap-1.5 sm:gap-2.5">
+          <div role="group" aria-label={buying ? "Wallet funding by month" : "Money earned by month"} className="absolute inset-0 flex items-end gap-1.5 sm:gap-2.5">
             {months.map(({ kobo: amount, name }, index) => {
               const selected = index === chosen;
               return (

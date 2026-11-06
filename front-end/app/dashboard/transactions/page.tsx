@@ -12,7 +12,7 @@ import { RowsSkeleton } from "@/components/loader/skeletons";
 import { HillsCard, HillsStats } from "@/components/profile/hills-card";
 import { trackTask } from "@/lib/loading/progress";
 
-type TxKind = "deposit" | "withdrawal" | "trade" | "hold" | "release" | "fee" | "other";
+type TxKind = "deposit" | "withdrawal" | "trade" | "payout" | "hold" | "release" | "fee" | "other";
 type Direction = "credit" | "debit";
 
 type TxRow = {
@@ -109,7 +109,7 @@ export default function TransactionsPage() {
     return true;
   });
 
-  const totalIn = txs.filter((t) => t.direction === "credit" && t.kind !== "hold").reduce((s, t) => s + t.amount_kobo, 0);
+  const totalIn = txs.filter((t) => t.direction === "credit" && t.kind !== "hold" && t.kind !== "payout").reduce((s, t) => s + t.amount_kobo, 0);
   const totalOut = txs.filter((t) => t.direction === "debit" && t.kind !== "release").reduce((s, t) => s + t.amount_kobo, 0);
 
   return (
