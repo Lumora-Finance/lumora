@@ -102,7 +102,7 @@ export function Hero() {
             "max-w-[40rem] font-display text-display-xl-sm font-medium text-balance md:text-display-xl",
           )}
         >
-          See who&apos;s buying <span className="text-sage">before you sell.</span>
+          Buyers are waiting. <span className="block text-sage">What are you selling?</span>
         </h1>
         <p
           className={cn(ENTER, "mt-4 max-w-[34rem] text-lg leading-7 motion-safe:delay-100")}

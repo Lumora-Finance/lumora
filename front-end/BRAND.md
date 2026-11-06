@@ -8,7 +8,7 @@ This file is the source of truth for Lumora's visual identity and UI. Follow it 
 
 Lumora is a demand board for farm produce. Bulk buyers post what they need, the price per unit and their daily capacity; farmers see every bid, book a slot, deliver and get paid by weight. The name comes from *lumen* (light): Lumora makes hidden demand visible. The product should feel like a calm, trustworthy market board, closer to a fintech or exchange than to a farm-themed startup.
 
-**Tagline:** See who's buying before you sell.
+**Tagline:** Buyers are waiting. What are you selling?
 
 ---
 
@@ -364,7 +364,7 @@ Show status as **plain text with an icon**, never as coloured dot pills.
 
 | Place | Copy |
 |---|---|
-| Hero headline | See who's buying before you sell. |
+| Hero headline | Buyers are waiting. What are you selling? |
 | Hero subline | Buyers post what they need and what they'll pay. Farmers book it before they load the truck. |
 | Buyer CTA | Post your demand |
 | Producer CTA | See buyers near you |

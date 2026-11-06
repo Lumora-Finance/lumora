@@ -1,5 +1,5 @@
 export const SITE_NAME = "Lumora";
-export const SITE_TAGLINE = "See who's buying before you sell";
+export const SITE_TAGLINE = "Buyers are waiting. What are you selling?";
 export const SITE_DESCRIPTION =
   "A demand board for farm produce in Jos and Plateau State. Buyers post what they need and what they'll pay. Farmers book it before they load the truck.";
 

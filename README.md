@@ -1,6 +1,6 @@
 # Lumora
 
-**See who's buying before you sell.**
+**Buyers are waiting. What are you selling?**
 
 Lumora is a demand board for farm produce: live poultry, eggs, tomatoes, grains and other raw agricultural commodities. Bulk buyers such as restaurants, hotels, schools, caterers and processors publish what they need, the price they will pay per unit and how much they can take each day. Farmers and aggregators see every active buyer near them, book a slot, deliver, and get paid on the weight or quantity the buyer records.
 

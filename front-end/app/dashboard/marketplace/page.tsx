@@ -266,7 +266,7 @@ export default function MarketplacePage() {
           <div className="px-5 pt-24 pb-6 sm:px-10 sm:pt-28 sm:pb-9 lg:px-14 lg:pt-32 lg:pb-11">
             <p data-card="rise" className="text-body-sm font-medium text-ink/70">Lumora · Marketplace</p>
             <h1 data-card="rise" className="mt-1 text-[28px] leading-[1.15] font-medium tracking-tight text-ink sm:text-[38px]">
-              See who&apos;s buying<br /><span className="text-green">before you sell.</span>
+              Buyers are waiting.<br /><span className="text-green">What are you selling?</span>
             </h1>
             <p data-card="rise" className="mt-2 max-w-[32rem] text-body text-ink/80">
               Active buyers near Jos. Real bids, live capacity.

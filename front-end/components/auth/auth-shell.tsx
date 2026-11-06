@@ -76,7 +76,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
                   className="h-6 w-auto"
                 />
               </span>
-              See who&apos;s buying before you sell.
+              Buyers are waiting. What are you selling?
             </p>
           </div>
         </aside>
