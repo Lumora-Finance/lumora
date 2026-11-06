@@ -2,9 +2,9 @@ import { ClosingCta } from "@/components/landing/closing-cta";
 import { ChaosToOrder } from "@/components/landing/chaos-to-order";
 import { Hero } from "@/components/landing/hero";
 import { DemandExplorer } from "@/components/landing/demand-explorer";
+import { Faq } from "@/components/landing/faq";
 import { HeroStory } from "@/components/landing/hero-story";
 import { HowItWorks } from "@/components/landing/how-it-works";
-import { OnePost } from "@/components/landing/one-post";
 import { SiteFooter } from "@/components/landing/site-footer";
 import { Ticker } from "@/components/landing/ticker";
 import { PageMotion } from "@/components/motion/page-motion";
@@ -48,7 +48,7 @@ export default function Home() {
         <Ticker />
         <ChaosToOrder />
         <HowItWorks />
-        <OnePost />
+        <Faq />
         <DemandExplorer />
         <ClosingCta />
       </main>

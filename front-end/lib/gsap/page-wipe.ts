@@ -11,7 +11,7 @@ let giveUp: ReturnType<typeof setTimeout> | undefined;
  * `onCovered`. The panel stays up across the navigation, and the next page calls `wipeAway`. It lives
  * on the body so it survives the route change. With reduced motion there's no panel at all.
  */
-export function wipeFrom(origin: DOMRect, label: string, onCovered: () => void) {
+export function wipeFrom(origin: DOMRect, label: string, accent: "sage" | "amber", onCovered: () => void) {
   if (isReducedMotion()) {
     onCovered();
     return;
@@ -27,9 +27,9 @@ export function wipeFrom(origin: DOMRect, label: string, onCovered: () => void) 
       <span data-wipe="label" class="block px-6 text-center font-display text-[34px] leading-[1.2] font-medium sm:text-[48px]"></span>
     </span>
     <span class="mt-4 flex w-40 flex-col items-center gap-1.5 sm:w-56">
-      <span data-wipe="line" class="block h-1 w-full origin-center rounded-full bg-sage"></span>
-      <span data-wipe="line" class="block h-1 w-[70%] origin-center rounded-full bg-sage"></span>
-      <span data-wipe="line" class="block h-1 w-[42%] origin-center rounded-full bg-sage"></span>
+      <span data-wipe="line" class="block h-1 w-full origin-center rounded-full ${accent === "amber" ? "bg-amber" : "bg-sage"}"></span>
+      <span data-wipe="line" class="block h-1 w-[70%] origin-center rounded-full ${accent === "amber" ? "bg-amber" : "bg-sage"}"></span>
+      <span data-wipe="line" class="block h-1 w-[42%] origin-center rounded-full ${accent === "amber" ? "bg-amber" : "bg-sage"}"></span>
     </span>`;
   (panel.querySelector('[data-wipe="label"]') as HTMLElement).textContent = label;
   document.body.append(panel);

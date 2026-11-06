@@ -26,6 +26,7 @@ const CHOICES = [
     tone: "bg-sage-soft text-green group-hover:bg-green group-hover:text-paper",
     note: null,
     wipe: true,
+    accent: "sage",
   },
   {
     // Now goes to the sell page — no verification required.
@@ -37,8 +38,9 @@ const CHOICES = [
     tone: "bg-amber-soft text-[#9A6A1A] group-hover:bg-[#9A6A1A] group-hover:text-paper",
     note: null,
     wipe: true,
+    accent: "amber",
   },
-];
+] as const;
 
 const FOCUSABLE = "button:not([disabled]), a[href]";
 /** Below this it's a sheet from the bottom edge. At and above it, a centred card. */
@@ -121,7 +123,7 @@ export function PostModal({ open, onClose }: { open: boolean; onClose: () => voi
     if (!open) return;
     opener.current = document.activeElement as HTMLElement | null;
     // So the page is ready when the wipe has covered the screen.
-    router.prefetch("/dashboard/listings/new");
+    CHOICES.forEach((choice) => router.prefetch(choice.href));
     card.current?.focus({ preventScroll: true });
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") {
@@ -176,7 +178,7 @@ export function PostModal({ open, onClose }: { open: boolean; onClose: () => voi
     gsap.to(root.current?.querySelector('[data-modal="frame"]') ?? null, { opacity: 1, duration: 0.25 });
   }
 
-  function choose(href: string, wipe: boolean, tile: HTMLElement) {
+  function choose({ href, wipe, title, accent }: (typeof CHOICES)[number], tile: HTMLElement) {
     if (!wipe) {
       goingTo.current = href;
       onClose();
@@ -185,7 +187,7 @@ export function PostModal({ open, onClose }: { open: boolean; onClose: () => voi
     if (wiping.current) return;
     wiping.current = true;
     // The tile opens out to fill the screen. Under that cover, the modal goes and the page changes.
-    wipeFrom(tile.getBoundingClientRect(), "Post demand", () => {
+    wipeFrom(tile.getBoundingClientRect(), title, accent, () => {
       wiping.current = false;
       motion.current?.kill();
       setShown(false);
@@ -253,12 +255,14 @@ export function PostModal({ open, onClose }: { open: boolean; onClose: () => voi
           </div>
 
           <div className="mt-4 grid gap-2.5 text-left sm:mt-6 sm:grid-cols-2 sm:gap-3">
-            {CHOICES.map(({ key, title, description, href, Icon, tone, note, wipe }) => (
+            {CHOICES.map((choice) => {
+              const { key, title, description, Icon, tone, note } = choice;
+              return (
               <button
                 key={key}
                 type="button"
                 data-modal="rise"
-                onClick={(event) => choose(href, wipe, event.currentTarget)}
+                onClick={(event) => choose(choice, event.currentTarget)}
                 className="group flex items-center gap-3 rounded-[20px] border border-line bg-white p-3 text-left transition-[border-color,background-color,transform] duration-200 ease-out [-webkit-tap-highlight-color:transparent] hover:border-green hover:bg-paper/50 focus-visible:border-green focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100 sm:flex-col sm:items-start sm:p-5"
               >
                 <span className={cn("flex size-11 shrink-0 items-center justify-center rounded-2xl transition-colors duration-200", tone)}>
@@ -275,7 +279,8 @@ export function PostModal({ open, onClose }: { open: boolean; onClose: () => voi
                 </span>
                 <ArrowRight aria-hidden="true" strokeWidth={2} className="size-4 shrink-0 text-ink-muted sm:hidden" />
               </button>
-            ))}
+              );
+            })}
           </div>
 
           <button
