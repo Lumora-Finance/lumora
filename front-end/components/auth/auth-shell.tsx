@@ -35,8 +35,24 @@ export function AuthShell({ children }: { children: ReactNode }) {
             {children}
           </main>
 
-          <footer className="py-5 text-body-sm text-ink-muted">
-            © <Num>2026</Num> Lumora
+          <footer className="flex flex-wrap items-center gap-x-4 gap-y-1 py-5 text-body-sm text-ink-muted">
+            <span>© <Num>2026</Num> Lumora</span>
+            <Link
+              href="/terms"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-sm underline-offset-4 hover:text-ink hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+            >
+              Terms
+            </Link>
+            <Link
+              href="/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-sm underline-offset-4 hover:text-ink hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+            >
+              Privacy
+            </Link>
           </footer>
         </div>
       </ViewTransition>

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRef } from "react";
 
 import { fx, gsap, isReducedMotion, playOnEnter, useGSAP } from "@/lib/gsap/effects";
@@ -42,6 +43,20 @@ export function SiteFooter() {
           Starting in Jos and Plateau State with live broilers and tomatoes. Built for HackJos{" "}
           <Num>2026</Num>. Names, prices and quantities on this page are example data.
         </p>
+        <div className="mt-5 flex flex-wrap gap-x-5 gap-y-1.5 text-body-sm text-ink-muted">
+          <Link
+            href="/terms"
+            className="rounded-sm underline-offset-4 hover:text-ink hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+          >
+            Terms &amp; Conditions
+          </Link>
+          <Link
+            href="/privacy"
+            className="rounded-sm underline-offset-4 hover:text-ink hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+          >
+            Privacy Policy
+          </Link>
+        </div>
       </div>
       <div aria-hidden="true" className="h-[16vw] overflow-hidden">
         <p
