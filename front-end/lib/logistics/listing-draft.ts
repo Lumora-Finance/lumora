@@ -1,11 +1,10 @@
-import { ALL_COMMODITIES, findCommodity, type CommodityOption } from "@/components/board/commodity-picker";
+import { ALL_COMMODITIES, findCommodity, type CommodityOption } from "@/lib/logistics/commodities";
 import { nairaToKobo } from "@/lib/money/rules";
 
 export { ALL_COMMODITIES };
 
 /**
  * Flat list of commodities used for validation helpers.
- * The actual picker data lives in components/board/commodity-picker.tsx.
  */
 export const LISTING_COMMODITIES = ALL_COMMODITIES.flatMap((cat) => cat.items);
 

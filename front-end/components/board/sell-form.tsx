@@ -6,7 +6,8 @@ import { useEffect, useRef, useState } from "react";
 
 import { useAuthUser } from "@/components/auth/use-auth-user";
 import { AiScan } from "@/components/board/ai-scan";
-import { CommodityPicker, findCommodity } from "@/components/board/commodity-picker";
+import { CommodityPicker } from "@/components/board/commodity-picker";
+import { findCommodity } from "@/lib/logistics/commodities";
 import { money } from "@/lib/email/format";
 import { gsap, isReducedMotion, useGSAP } from "@/lib/gsap/effects";
 import { wipeAway } from "@/lib/gsap/page-wipe";
