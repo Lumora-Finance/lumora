@@ -5,7 +5,7 @@ import { type ReactNode, useEffect } from "react";
 
 import { useAuthUser } from "@/components/auth/use-auth-user";
 
-/** Redirects unauthenticated users to /auth/login. Renders nothing until auth is resolved. */
+/** Redirects unauthenticated users to /auth/login. Shows nothing until auth is resolved. */
 export function DashboardAuthGuard({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { user, loading } = useAuthUser();
@@ -17,8 +17,10 @@ export function DashboardAuthGuard({ children }: { children: ReactNode }) {
     }
   }, [loading, user, router]);
 
-  // Render nothing while Firebase is restoring the session, or while redirecting
-  if (loading || !user) return null;
+  // Once we know there's no session, we're on the way to the sign-in page.
+  if (!loading && !user) return null;
 
-  return <>{children}</>;
+  // Rendered but hidden while the session is restored. Next.js checks each page ahead of time, so
+  // rendering nothing here would drop the page, and it warns about that on every route.
+  return <div className={loading ? "contents invisible" : "contents"}>{children}</div>;
 }
