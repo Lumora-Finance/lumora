@@ -103,6 +103,15 @@ export async function GET(request: Request) {
     if (r.from_bucket === "external" && r.to_bucket === "buyer_available") {
       kind = "deposit";
       label = "Wallet funding";
+    } else if (r.to_bucket === "listing_escrow" && r.from_bucket === "buyer_available") {
+      kind = "hold";
+      label = "Moved to escrow for your demand";
+    } else if (r.from_bucket === "listing_escrow" && r.to_bucket === "buyer_available") {
+      kind = "release";
+      label = "Escrow returned to your wallet";
+    } else if (r.from_bucket === "listing_escrow" && r.to_bucket === "buyer_reserved") {
+      kind = "hold";
+      label = booking ? `Escrow held for ${booking.commodity} booking` : "Escrow held for a booking";
     } else if ((r.from_bucket === "buyer_available" || r.from_bucket === "farmer_paid") && r.to_bucket === "external") {
       kind = "withdrawal";
       label = "Withdrawal";

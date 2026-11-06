@@ -23,6 +23,7 @@ type WalletData = {
   total_in_kobo: number;
   total_out_kobo: number;
   pending_kobo: number;
+  in_escrow_kobo?: number;
   history: WalletTx[];
 };
 
@@ -155,6 +156,7 @@ export default function WalletPage() {
   const totalIn = wallet?.total_in_kobo ?? 0;
   const totalOut = wallet?.total_out_kobo ?? 0;
   const pending = wallet?.pending_kobo ?? 0;
+  const inEscrow = wallet?.in_escrow_kobo ?? 0;
   const history = wallet?.history ?? [];
 
   function announce(message: string) {
@@ -187,6 +189,7 @@ export default function WalletPage() {
               stats={[
                 { value: walletLoading ? null : <span className={FIGURE}>{formatKobo(totalIn)}</span>, label: "total in" },
                 { value: walletLoading ? null : <span className={FIGURE}>{formatKobo(totalOut)}</span>, label: "total out" },
+                ...(inEscrow > 0 ? [{ value: <span className={FIGURE}>{formatKobo(inEscrow)}</span>, label: "in escrow" }] : []),
                 ...(pending > 0 ? [{ value: <span className={FIGURE}>{formatKobo(pending)}</span>, label: "pending" }] : []),
               ]}
             />

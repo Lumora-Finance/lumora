@@ -239,7 +239,7 @@ export function BookingPage({ bookingId }: { bookingId: string }) {
       {view.role === "buyer" && view.delivery_otp && (
         <section className={CARD}>
           <h2 className="font-semibold text-ink">Your delivery code</h2>
-          <p className="mt-1 text-ink-muted">Read this to {view.farmer} when you&apos;re happy with the delivery. Entering it releases their payment.</p>
+          <p className="mt-1 text-ink-muted">Record the weight first, then read this to {view.farmer}. Entering it pays them for the weight you recorded, and the rest comes back to you.</p>
           <p className="font-num mt-3 text-[2.5rem] leading-none font-medium tracking-[0.2em] text-ink">{view.delivery_otp}</p>
         </section>
       )}

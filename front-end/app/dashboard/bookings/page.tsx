@@ -64,14 +64,19 @@ function tabOf(b: Booking): Tab {
   return "upcoming";
 }
 
+/** Always answers, so a failed request can't leave a button waiting forever. */
 async function postBookingAction(bookingId: string, endpoint: string, body: object = {}) {
-  const token = await getToken();
-  const res = await fetch(`/api/bookings/${bookingId}/${endpoint}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: JSON.stringify(body),
-  });
-  return res.json();
+  try {
+    const token = await getToken();
+    const res = await fetch(`/api/bookings/${bookingId}/${endpoint}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify(body),
+    });
+    return (await res.json().catch(() => null)) ?? { ok: false, message: "That didn't work. Please try again." };
+  } catch {
+    return { ok: false, message: "We couldn't reach Lumora. Check your connection and try again." };
+  }
 }
 
 function BookingCard({

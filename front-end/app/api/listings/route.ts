@@ -2,6 +2,7 @@ import { connection } from "next/server";
 
 import { requestUser } from "@/lib/money/auth";
 import { serverMoneyDb } from "@/lib/money/db";
+import { formatKobo } from "@/lib/money/rules";
 
 const CUTOFF_HOURS = 24;
 
@@ -67,7 +68,11 @@ export async function POST(request: Request) {
     return Response.json({ ok: false, code: "invalid_numbers", message: "Minimum price must be between 1 and the maximum price." }, { status: 400 });
   }
 
-  const result = await db.rpc("logistics_create_listing", {
+  // One transaction: the money moves into escrow and the demand is posted, or neither happens.
+  type PostResult = {
+    ok: boolean; code?: string; message?: string; listing_id?: string; required_kobo?: number; balance_kobo?: number;
+  };
+  const result = await db.rpc<PostResult>("logistics_post_demand", {
     p_buyer: user.id,
     p_commodity: body.commodity ?? "",
     p_unit_price_kobo: priceMaxKobo,
@@ -85,27 +90,21 @@ export async function POST(request: Request) {
     p_spec: body.spec ?? null,
     p_now: new Date().toISOString(),
     p_images: body.images && body.images.length > 0 ? body.images : null,
-  }).catch((err: Error) => ({ ok: false, code: "db_error", message: err.message } as { ok: false; code: string; message: string }));
+  }).catch((err: Error): PostResult => ({ ok: false, code: "db_error", message: err.message }));
 
   if (!result.ok) {
+    if (result.code === "insufficient_balance") {
+      const required = Number(result.required_kobo ?? 0);
+      const balance = Number(result.balance_kobo ?? 0);
+      return Response.json({
+        ...result,
+        message: `This demand needs ${formatKobo(required)} in escrow, and your wallet has ${formatKobo(balance)}. Add ${formatKobo(required - balance)} to post it.`,
+      }, { status: 400 });
+    }
     return Response.json(result, { status: 400 });
   }
 
-  const listingId = (result as { listing_id?: string }).listing_id;
-
-  const escrowResult = await db.rpc("logistics_escrow_listing", {
-    p_buyer: user.id,
-    p_listing: listingId,
-    p_price_kobo: priceMaxKobo,
-    p_capacity: body.capacity ?? 1,
-  }).catch((err: Error) => ({ ok: false, message: err.message } as { ok: false; message: string }));
-
-  if (!escrowResult.ok) {
-    return Response.json({
-      ...result,
-      escrow_warning: "Listing created but escrow failed. Contact support if funds are not held.",
-    });
-  }
+  const listingId = result.listing_id;
 
   // Notify the buyer that their listing is live
   if (listingId) {
@@ -118,5 +117,5 @@ export async function POST(request: Request) {
     }).catch(() => null);
   }
 
-  return Response.json({ ...result, escrowed_kobo: (escrowResult as { escrowed_kobo?: number }).escrowed_kobo });
+  return Response.json(result);
 }

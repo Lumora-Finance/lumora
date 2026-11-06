@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, ImagePlus, X } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -37,7 +38,7 @@ const MODE_CHIPS = "mt-2 grid grid-cols-1 gap-2.5 min-[350px]:grid-cols-2 sm:fle
 const STEPS = [
   { title: "What do you need?", lead: "Farmers near you see this on their board." },
   { title: "When do you need it?", lead: "Choose the day and the hours someone will be there to receive it." },
-  { title: "What will you pay?", lead: "We only hold money from your balance when a farmer books." },
+  { title: "What will you pay?", lead: "This moves from your wallet into escrow when you post." },
   { title: "Check and post", lead: "Farmers can start booking as soon as you post." },
 ];
 
@@ -504,7 +505,7 @@ export function ListingForm() {
                 )}
                 {hold !== null && (
                   <p aria-live="polite" className="rounded-2xl bg-sage-soft px-4 py-3 text-body-sm text-ink">
-                    If every one is booked, up to <span className="font-num font-medium">{money(hold)}</span> of your balance is held until delivery. You pay for what&apos;s weighed, and the rest comes back.
+                    <span className="font-num font-medium">{money(hold)}</span> moves from your wallet into escrow when you post. Anything not used comes back to you.
                   </p>
                 )}
               </>
@@ -566,6 +567,12 @@ export function ListingForm() {
           {error && (
             <p role="alert" className="mb-3 text-body-sm text-danger sm:mt-5 sm:mb-0">
               {error}
+              {error.startsWith("This demand needs") && (
+                <>
+                  {" "}
+                  <Link href="/dashboard/wallet" className="font-medium text-ink underline underline-offset-4">Add funds</Link>
+                </>
+              )}
             </p>
           )}
           <div className="flex gap-3 sm:mt-8 sm:justify-end">

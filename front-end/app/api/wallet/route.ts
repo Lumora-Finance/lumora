@@ -42,6 +42,19 @@ export async function GET(request: Request) {
     // Balances not available — return zeros
   }
 
+  // Money in escrow: what's on this buyer's open demands, plus what's held for their bookings.
+  let inEscrow = reserved;
+  try {
+    const { data: listings } = await supabase.from("demand_listings").select("id").eq("buyer_id", user.id).neq("status", "closed");
+    const ids = (listings ?? []).map((listing: { id: string }) => listing.id);
+    if (ids.length > 0) {
+      const { data: escrows } = await supabase.from("money_balances").select("balance_kobo").eq("bucket", "listing_escrow").in("owner_id", ids);
+      inEscrow += (escrows ?? []).reduce((sum: number, row: { balance_kobo: number }) => sum + Number(row.balance_kobo), 0);
+    }
+  } catch {
+    // Escrow not available — the balance above still shows
+  }
+
   // Recent deposits (funding) for history
   let deposits: Record<string, unknown>[] | null = null;
   try {
@@ -138,6 +151,7 @@ export async function GET(request: Request) {
   return Response.json({
     available_kobo: available,
     reserved_kobo: reserved,
+    in_escrow_kobo: inEscrow,
     total_in_kobo: totalIn,
     total_out_kobo: totalOut,
     pending_kobo: pendingOut,
