@@ -7,8 +7,8 @@ import { type FormEvent, useLayoutEffect, useRef, useState } from "react";
 
 import { BusyBar } from "@/components/loader/busy-bar";
 import { LocationPicker, type PickedLocation } from "@/components/location/location-picker";
+import { PhoneInput, validateNigerianPhone } from "@/components/profile/phone-input";
 import { gsap, isReducedMotion } from "@/lib/gsap/effects";
-import { validPhone } from "@/lib/logistics/location-input";
 import { cn } from "@/lib/utils";
 
 export type OnboardingRole = "farmer" | "buyer";
@@ -159,8 +159,9 @@ export function OnboardingView({
       if (name.trim().length < 2) setError("Please tell us your name.");
       else goTo("phone");
     } else if (step === "phone") {
-      if (!validPhone(phone)) {
-        setError("That doesn't look like a phone number. Try 0803 000 0000.");
+      const phoneError = validateNigerianPhone(phone);
+      if (phoneError) {
+        setError(phoneError);
         return;
       }
       setSaving(true);
@@ -303,19 +304,15 @@ export function OnboardingView({
 
                 {step === "phone" && (
                   <>
-                    <label data-rise className="block">
-                      <span className={cn(MICRO, "text-ink-muted")}>Phone number</span>
-                      <input
+                    <div data-rise>
+                      <span className={cn(MICRO, "mb-2 block text-ink-muted")}>Phone number</span>
+                      <PhoneInput
+                        id="onboarding-phone"
                         value={phone}
-                        onChange={(event) => setPhone(event.target.value)}
-                        type="tel"
-                        inputMode="tel"
-                        autoComplete="tel"
-                        autoFocus
-                        placeholder="0803 000 0000"
-                        className={cn(FIELD, "font-num")}
+                        onChange={(e164) => { setPhone(e164); setError(null); }}
+                        error={error}
                       />
-                    </label>
+                    </div>
                     <p data-rise className="mt-3 text-body-sm text-ink-muted">
                       {role === "buyer"
                         ? "We email you when a farmer books. Farmers only see it after that."
@@ -343,7 +340,7 @@ export function OnboardingView({
                   </div>
                 )}
 
-                {error && (
+                {error && step !== "phone" && (
                   <p role="alert" className="mt-3 text-body-sm text-danger">
                     {error}
                   </p>
