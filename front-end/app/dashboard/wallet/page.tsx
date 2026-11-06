@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  ArrowDownLeft, ArrowUpRight,
+  ArrowDownLeft, ArrowRight, ArrowUpRight,
   CheckCircle2, History, X,
 } from "lucide-react";
+import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 
 import { getToken } from "@/lib/firebase/auth";
@@ -206,16 +207,16 @@ export default function WalletPage() {
         </div>
       )}
 
-      {/* Transaction history */}
+      {/* Transaction history — 4 most recent only, with link to full list */}
       <Reveal effect="riseIn">
         <div className="overflow-hidden rounded-xl border border-line bg-white shadow-sm">
           <div className="flex flex-col gap-3 border-b border-line px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="flex items-center gap-2 text-heading font-medium text-ink">
                 <History strokeWidth={1.5} className="size-4 text-green" />
-                Wallet History
+                Recent Activity
               </h2>
-              <p className="mt-0.5 text-body-sm text-ink-muted">All funding, withdrawals and settlements</p>
+              <p className="mt-0.5 text-body-sm text-ink-muted">Your 4 most recent wallet movements</p>
             </div>
             {!walletLoading && (totalIn > 0 || totalOut > 0) && (
               <div className="flex items-center gap-2">
@@ -235,7 +236,7 @@ export default function WalletPage() {
             ) : history.length === 0 ? (
               <p className="py-8 text-center text-body-sm text-ink-muted">No wallet activity yet.</p>
             ) : (
-              history.map((tx) => {
+              history.slice(0, 4).map((tx) => {
                 const isIn = tx.amount_kobo > 0;
                 return (
                   <div key={tx.id} className="flex items-center gap-4 rounded-lg bg-paper px-4 py-3.5 transition-all hover:shadow-sm hover:-translate-y-px">
@@ -260,6 +261,19 @@ export default function WalletPage() {
               })
             )}
           </div>
+
+          {/* Always show "View all transactions" footer */}
+          {!walletLoading && (
+            <div className="border-t border-line px-5 py-3">
+              <Link
+                href="/dashboard/transactions"
+                className="flex items-center justify-center gap-1.5 text-body-sm font-medium text-ink-muted transition-colors hover:text-green"
+              >
+                View all transactions
+                <ArrowRight strokeWidth={2} className="size-3.5" />
+              </Link>
+            </div>
+          )}
         </div>
       </Reveal>
 

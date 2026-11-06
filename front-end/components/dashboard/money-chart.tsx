@@ -5,7 +5,6 @@ import { useRef, useState } from "react";
 
 import { ChartSkeleton } from "@/components/loader/skeletons";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { DashboardSettlement } from "@/lib/dashboard-data";
 import { useDashboardData } from "@/lib/hooks/use-dashboard-data";
 import { formatKobo } from "@/lib/money/rules";
 import { gsap, isReducedMotion, playOnEnter, useGSAP } from "@/lib/gsap/effects";
@@ -18,18 +17,38 @@ const MONTHS = 6;
 
 const thousands = (kobo: number) => (kobo >= 100_000 ? `₦${Math.round(kobo / 100_000)}k` : formatKobo(kobo));
 
-/** What was paid out in each of the last six months, oldest first, with their short names. */
-function byMonth(today: Date | null, settlements: DashboardSettlement[]) {
+/**
+ * Normalised row shape from /api/dashboard/transactions.
+ * We only need amount_kobo, direction, kind and created_at here.
+ */
+type TxRow = {
+  amount_kobo: number;
+  direction: "credit" | "debit";
+  kind: string;
+  created_at: string;
+};
+
+/** Sum of credit movements that represent money earned (trades/settlements), by month. */
+function byMonth(today: Date | null, rows: TxRow[]) {
   return Array.from({ length: MONTHS }, (_, index) => {
     if (!today) return { name: "\u00A0", kobo: 0 };
     const start = new Date(today.getFullYear(), today.getMonth() - (MONTHS - 1 - index), 1);
     const end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
-    const kobo = settlements
+    const kobo = rows
       .filter((row) => {
         const at = new Date(row.created_at);
-        return at >= start && at < end;
+        // Only count credit movements — deposits, trade settlements, releases
+        // Exclude holds (not real earnings) and debits (withdrawals, fees)
+        return (
+          at >= start &&
+          at < end &&
+          row.direction === "credit" &&
+          row.kind !== "hold" &&
+          typeof row.amount_kobo === "number" &&
+          !Number.isNaN(row.amount_kobo)
+        );
       })
-      .reduce((sum, row) => sum + row.net_kobo, 0);
+      .reduce((sum, row) => sum + (Number(row.amount_kobo) || 0), 0);
     return { name: new Intl.DateTimeFormat("en-GB", { month: "short" }).format(start), kobo };
   });
 }
@@ -38,7 +57,7 @@ function byMonth(today: Date | null, settlements: DashboardSettlement[]) {
 export function MoneyChart() {
   const bars = useRef<HTMLDivElement>(null);
   const today = useToday();
-  const { data, loading } = useDashboardData<DashboardSettlement[]>("transactions");
+  const { data, loading } = useDashboardData<TxRow[]>("transactions");
   const months = byMonth(today, Array.isArray(data) ? data : []);
   const [chosen, setChosen] = useState(MONTHS - 1);
 

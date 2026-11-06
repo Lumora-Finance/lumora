@@ -1,18 +1,20 @@
+import { ALL_COMMODITIES, findCommodity, type CommodityOption } from "@/components/board/commodity-picker";
 import { nairaToKobo } from "@/lib/money/rules";
 
-/** Mirrors the commodities seed, for showing rules before submitting. The database enforces them. */
-export const LISTING_COMMODITIES = [
-  { name: "Live broilers", unit: "kg", latest: "11:00", crate: 10 },
-  { name: "Turkey", unit: "kg", latest: "11:00", crate: 10 },
-  { name: "Tomatoes", unit: "basket", latest: null, crate: null },
-  { name: "Eggs", unit: "crate", latest: null, crate: null },
-] as const;
+export { ALL_COMMODITIES };
+
+/**
+ * Flat list of commodities used for validation helpers.
+ * The actual picker data lives in components/board/commodity-picker.tsx.
+ */
+export const LISTING_COMMODITIES = ALL_COMMODITIES.flatMap((cat) => cat.items);
 
 export const CUTOFF_HOURS = 24;
 export const LISTING_STEPS = 4;
 
 export type ListingDraft = {
-  commodity: (typeof LISTING_COMMODITIES)[number]["name"];
+  /** Free-form commodity name — validated against the DB on submit */
+  commodity: string;
   mode: "farmer_delivers" | "buyer_collects";
   address: string;
   date: string;
@@ -28,12 +30,22 @@ export type ListingDraft = {
   maxWeight: string;
   spec: string;
   images: string[];
+  /** The unit auto-filled when a commodity is selected */
+  unit: string;
 };
 
-export const commodityRules = (name: ListingDraft["commodity"]) =>
-  LISTING_COMMODITIES.find((item) => item.name === name) ?? LISTING_COMMODITIES[0];
+/**
+ * Returns the commodity rules for the current draft commodity.
+ * Falls back gracefully to kg defaults so the form never crashes.
+ */
+export const commodityRules = (name: string): CommodityOption & { latest: string | null; crate: number | null } => {
+  const found = findCommodity(name);
+  if (found) return found;
+  // Unknown / custom commodity — default to kg, no time constraint
+  return { name, unit: "kg", latest: null, crate: null };
+};
 
-/** Only kg-priced produce has a weight to ask about. Baskets and crates count as 1 each. */
+/** Only kg-priced produce has a weight to ask about. Baskets, crates etc. count as 1 each. */
 export const asksForWeight = (draft: ListingDraft) => commodityRules(draft.commodity).unit === "kg";
 
 const wholeNumber = (value: string) => (/^\d+$/.test(value.trim()) ? Number(value) : null);
@@ -56,6 +68,7 @@ export function cutoffAt(draft: ListingDraft): Date | null {
 /** What's wrong with a step, in plain words, or null when it can move on. Steps count from 1. */
 export function stepProblem(step: number, draft: ListingDraft, now: Date): string | null {
   if (step === 1) {
+    if (!draft.commodity.trim()) return "Choose a produce type.";
     if (draft.mode === "farmer_delivers" && !draft.address.trim()) return "Add the address farmers should deliver to.";
     if (draft.images.length < 1) return "Add at least 1 photo so farmers can see what you need.";
     return null;
@@ -94,7 +107,7 @@ export function stepProblem(step: number, draft: ListingDraft, now: Date): strin
 
 /** The most this can ever hold from the buyer's balance: every unit at the largest weight × max price. */
 export function largestHoldKobo(draft: ListingDraft): number | null {
-  const kobo = nairaToKobo(draft.priceMax); // use max price for the worst-case hold
+  const kobo = nairaToKobo(draft.priceMax);
   const capacity = wholeNumber(draft.capacity);
   const max = asksForWeight(draft) ? positive(draft.maxWeight) : 1;
   if (!kobo || !capacity || !max) return null;
@@ -106,7 +119,7 @@ export function listingBody(draft: ListingDraft) {
   const weighs = asksForWeight(draft);
   return {
     commodity: draft.commodity,
-    unitPriceKobo: nairaToKobo(draft.priceMax), // use max as the posted price
+    unitPriceKobo: nairaToKobo(draft.priceMax),
     unitPriceMinKobo: nairaToKobo(draft.priceMin),
     unitPriceMaxKobo: nairaToKobo(draft.priceMax),
     capacity: Number(draft.capacity),

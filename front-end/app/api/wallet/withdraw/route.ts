@@ -91,7 +91,7 @@ export async function POST(request: Request) {
       accountName: body.accountName,
     });
 
-    // 2. Initiate the transfer
+    // 2. Initiate the transfer on Paystack
     const transfer = await paystack.createTransfer({
       reference,
       amountKobo: body.amountKobo,
@@ -99,24 +99,34 @@ export async function POST(request: Request) {
       reason: `Lumora withdrawal — ${user.name ?? user.phone}`,
     });
 
-    // 3. Save the withdrawal request for audit
-    const { error } = await supabase
-      .from("withdrawal_requests")
-      .insert({
-        user_id: user.id,
-        amount_kobo: body.amountKobo,
-        bank_name: body.bankName,
-        bank_code: body.bankCode,
-        account_number: body.accountNumber,
-        account_name: body.accountName,
-        status: "pending",
-        transfer_code: transfer.id?.toString() ?? null,
-        transfer_reference: reference,
-      });
+    // 3. Record the withdrawal atomically in money_ledger + withdrawal_requests.
+    //    money_record_withdrawal debits buyer_available/farmer_pending → external
+    //    and inserts the withdrawal_requests row in one transaction.
+    const result = await db.rpc<{ ok: boolean; code?: string; withdrawal_id?: string }>(
+      "money_record_withdrawal",
+      {
+        p_user_id: user.id,
+        p_amount_kobo: body.amountKobo,
+        p_bank_name: body.bankName,
+        p_bank_code: body.bankCode,
+        p_account_number: body.accountNumber,
+        p_account_name: body.accountName,
+        p_transfer_reference: reference,
+      },
+    );
 
-    if (error) {
-      console.error("Failed to save withdrawal request:", error.message);
+    if (!result?.ok) {
+      return Response.json(
+        { ok: false, code: result?.code ?? "ledger_failed", error: "Could not record withdrawal" },
+        { status: 500 },
+      );
     }
+
+    // 4. Update the withdrawal request with the Paystack transfer code
+    await supabase
+      .from("withdrawal_requests")
+      .update({ transfer_code: transfer.id?.toString() ?? null })
+      .eq("transfer_reference", reference);
 
     return Response.json({
       ok: true,
@@ -127,7 +137,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Withdrawal failed";
-    // Save the failed attempt for audit
+    // Save the failed attempt for audit (best-effort)
     await supabase.from("withdrawal_requests").insert({
       user_id: user.id,
       amount_kobo: body.amountKobo,

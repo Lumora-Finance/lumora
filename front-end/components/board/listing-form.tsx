@@ -6,13 +6,14 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useAuthUser } from "@/components/auth/use-auth-user";
+import { CommodityPicker } from "@/components/board/commodity-picker";
 import { BusyBar } from "@/components/loader/busy-bar";
 import { dayAndClock, money, windowText } from "@/lib/email/format";
 import { gsap, isReducedMotion, useGSAP } from "@/lib/gsap/effects";
 import { wipeAway } from "@/lib/gsap/page-wipe";
 import { apiFetch } from "@/lib/logistics/client";
 import {
-  asksForWeight, commodityRules, cutoffAt, largestHoldKobo, LISTING_COMMODITIES, LISTING_STEPS, listingBody,
+  asksForWeight, commodityRules, cutoffAt, largestHoldKobo, LISTING_STEPS, listingBody,
   type ListingDraft, stepProblem,
 } from "@/lib/logistics/listing-draft";
 import { nairaToKobo } from "@/lib/money/rules";
@@ -53,8 +54,8 @@ const FAILURES: Record<string, string> = {
 };
 
 const START: ListingDraft = {
-  commodity: "Live broilers", mode: "farmer_delivers", address: "", date: "", windowStart: "07:00", windowEnd: "11:00",
-  priceMin: "", priceMax: "", capacity: "", minQty: "1", minWeight: "", maxWeight: "", spec: "", images: [],
+  commodity: "", mode: "farmer_delivers", address: "", date: "", windowStart: "07:00", windowEnd: "11:00",
+  priceMin: "", priceMax: "", capacity: "", minQty: "1", minWeight: "", maxWeight: "", spec: "", images: [], unit: "",
 };
 
 /** The check sits against its label and slides open, so the two stay centred together as one. */
@@ -340,16 +341,18 @@ export function ListingForm() {
           <div data-step-fields key={step} className="mt-6 space-y-5 sm:mt-7 sm:space-y-6">
             {step === 1 && (
               <>
-                <fieldset>
-                  <legend className={LABEL}>Produce</legend>
-                  <div className={CHIPS}>
-                    {LISTING_COMMODITIES.map((item) => (
-                      <Chip key={item.name} selected={draft.commodity === item.name} onClick={() => change({ commodity: item.name })}>
-                        {item.name}
-                      </Chip>
-                    ))}
-                  </div>
-                </fieldset>
+                <div>
+                  <label className={LABEL} htmlFor="commodity-picker">Produce</label>
+                  <CommodityPicker
+                    value={draft.commodity}
+                    onChange={(name, unit) => change({ commodity: name, unit: String(unit) })}
+                  />
+                  {draft.unit && (
+                    <span className="mt-1.5 block text-body-sm font-normal text-ink-muted">
+                      Measured in <span className="font-medium text-ink">{draft.unit}</span>
+                    </span>
+                  )}
+                </div>
                 <fieldset>
                   <legend className={LABEL}>How does it reach you?</legend>
                   <div className={MODE_CHIPS}>
