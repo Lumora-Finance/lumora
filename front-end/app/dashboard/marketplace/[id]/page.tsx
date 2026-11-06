@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   ArrowLeft, MapPin, Clock, Shield, CheckCircle2,
   Calendar, Package, BarChart3, Send, Star,
@@ -32,6 +32,7 @@ type Offer = {
   id: string;
   qty: number;
   note: string | null;
+  unit_price_kobo: number | null;
   status: string;
   created_at: string;
   farmer: { id: string; name: string; area: string | null; verified: boolean; photo_url: string | null };
@@ -85,6 +86,9 @@ export default function ListingDetailPage() {
   const [pinOpen, setPinOpen] = useState<"offer" | "accept" | null>(null);
   const [acceptingOfferId, setAcceptingOfferId] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [meId, setMeId] = useState<string | null>(null);
+  const [editingOfferId, setEditingOfferId] = useState<string | null>(null);
+  const offerFormRef = useRef<HTMLDivElement>(null);
 
   const id = params.id as string;
 
@@ -130,18 +134,45 @@ export default function ListingDetailPage() {
     if (listing && tab === "offers") loadOffers();
   }, [tab, listing]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Fetch current user id
+  useEffect(() => {
+    async function fetchMe() {
+      const token = await getToken();
+      const res = await fetch("/api/me", { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (res.ok) {
+        const me = (await res.json()) as { id?: string };
+        setMeId(me?.id ?? null);
+      }
+    }
+    fetchMe();
+  }, []);
+
   async function submitOffer() {
     setOfferSubmitting(true);
     try {
       const token = await getToken();
+      if (editingOfferId) {
+        // Update existing offer: withdraw old one and resubmit
+        const delRes = await fetch(`/api/offers/${editingOfferId}`, {
+          method: "DELETE",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        const delResult = await delRes.json();
+        if (!delResult.ok) { alert(delResult.message ?? delResult.code ?? "Could not update offer."); return; }
+      }
       const res = await fetch("/api/offers", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ listingId: id, qty: offerQty, note: offerNote || null, unitPriceKobo: offerPrice ? Math.round(Number(offerPrice) * 100) : null }),
       });
       const result = await res.json();
-      if (result.ok) { setOfferDone(true); loadOffers(); }
-      else alert(result.message ?? result.code ?? "Offer failed.");
+      if (result.ok) {
+        setOfferDone(true);
+        setEditingOfferId(null);
+        loadOffers();
+      } else {
+        alert(result.message ?? result.code ?? "Offer failed.");
+      }
     } catch { alert("Network error. Try again."); } finally { setOfferSubmitting(false); }
   }
 
@@ -158,6 +189,31 @@ export default function ListingDetailPage() {
     } else {
       alert(result.message ?? result.code ?? "Could not accept offer.");
     }
+  }
+
+  async function removeOffer(offerId: string) {
+    const token = await getToken();
+    const res = await fetch(`/api/offers/${offerId}`, {
+      method: "DELETE",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    const result = await res.json();
+    if (result.ok) {
+      loadOffers();
+    } else {
+      alert(result.message ?? result.code ?? "Could not remove offer.");
+    }
+  }
+
+  function startEditOffer(offer: Offer) {
+    setEditingOfferId(offer.id);
+    setOfferQty(offer.qty);
+    setOfferNote(offer.note ?? "");
+    setOfferPrice(offer.unit_price_kobo != null ? String(offer.unit_price_kobo / 100) : "");
+    setOfferDone(false);
+    setTimeout(() => {
+      offerFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 50);
   }
 
   async function handleBook(slotId: string) {
@@ -416,7 +472,7 @@ export default function ListingDetailPage() {
 
             {/* Make offer form (for farmers) */}
             {!offerDone ? (
-              <div className="rounded-xl border border-amber/30 bg-amber-soft/30 p-5">
+              <div ref={offerFormRef} className="rounded-xl border border-amber/30 bg-amber-soft/30 p-5">
                 <h3 className="text-body font-medium text-ink">Make an Offer</h3>
                 <p className="mt-1 text-body-sm text-ink-muted">
                   Submit how many {unit}s you can supply. Your price must fall within the buyer&apos;s range.
@@ -515,9 +571,11 @@ export default function ListingDetailPage() {
                 <div className="space-y-3">
                   {offers.map((offer) => {
                     const initials = offer.farmer.name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+                    const isOwn = Boolean(meId && offer.farmer.id === meId);
                     return (
                       <div key={offer.id} className={cn(
                         "rounded-xl border bg-white p-4 shadow-sm",
+                        isOwn ? "border-amber/40 bg-amber-soft/10" :
                         offer.status === "accepted" ? "border-green/40 bg-sage-soft/20" : "border-line",
                       )}>
                         <div className="flex items-start gap-3">
@@ -528,38 +586,70 @@ export default function ListingDetailPage() {
                               : initials}
                           </Link>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <Link href={`/dashboard/profile/${offer.farmer.id}`}
-                                className="font-medium text-ink hover:text-green hover:underline">
-                                {offer.farmer.name}
-                              </Link>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {isOwn ? (
+                                <span className="font-medium text-ink">You</span>
+                              ) : (
+                                <Link href={`/dashboard/profile/${offer.farmer.id}`}
+                                  className="font-medium text-ink hover:text-green hover:underline">
+                                  {offer.farmer.name}
+                                </Link>
+                              )}
                               {offer.farmer.verified && (
                                 <span className="rounded-full bg-sage-soft px-2 py-0.5 text-label font-medium text-green">✓</span>
                               )}
+                              {isOwn && (
+                                <span className="rounded-full bg-amber px-2 py-0.5 text-label font-medium text-ink">Your offer</span>
+                              )}
                               <span className={cn("rounded-full px-2.5 py-0.5 text-label font-medium capitalize ml-auto",
                                 offer.status === "accepted" ? "bg-sage-soft text-green" :
-                                offer.status === "rejected" ? "bg-danger/10 text-danger" : "bg-amber-soft text-amber")}>
+                                offer.status === "rejected" ? "bg-danger/10 text-danger" :
+                                offer.status === "withdrawn" ? "bg-line text-ink-muted" : "bg-amber-soft text-amber")}>
                                 {offer.status}
                               </span>
                             </div>
-                            {offer.farmer.area && (
+                            {!isOwn && offer.farmer.area && (
                               <p className="text-body-sm text-ink-muted flex items-center gap-1">
                                 <MapPin strokeWidth={1.5} className="size-3.5" /> {offer.farmer.area}
                               </p>
                             )}
                             <p className="mt-1 font-num text-body-sm font-medium text-ink">
-                              {offer.qty} {unit}s at ₦{(listing.unit_price_kobo / 100).toLocaleString()}/{unit}
+                              {offer.qty} {unit}s
+                              {offer.unit_price_kobo != null
+                                ? ` at ₦${(offer.unit_price_kobo / 100).toLocaleString()}/${unit}`
+                                : ` at ₦${(listing.unit_price_kobo / 100).toLocaleString()}/${unit}`}
                             </p>
                             {offer.note && <p className="mt-1 text-body-sm text-ink-muted">{offer.note}</p>}
                           </div>
                         </div>
+
+                        {/* Actions */}
                         {offer.status === "pending" && (
                           <div className="mt-3 flex gap-2 border-t border-line pt-3">
-                            <button
-                              onClick={() => { setAcceptingOfferId(offer.id); setPinOpen("accept"); }}
-                              className="flex items-center gap-1.5 rounded-lg bg-green px-4 py-2 text-body-sm font-medium text-paper hover:bg-green-hover">
-                              <CheckCircle2 strokeWidth={2} className="size-3.5" /> Accept offer (PIN required)
-                            </button>
+                            {isOwn ? (
+                              <>
+                                {/* Own offer: Remove + Edit */}
+                                <button
+                                  onClick={() => { if (confirm("Remove this offer?")) removeOffer(offer.id); }}
+                                  className="flex items-center gap-1.5 rounded-lg border border-danger/40 bg-danger/5 px-4 py-2 text-body-sm font-medium text-danger hover:bg-danger/10">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                  Remove offer
+                                </button>
+                                <button
+                                  onClick={() => startEditOffer(offer)}
+                                  className="flex items-center gap-1.5 rounded-lg border border-line px-4 py-2 text-body-sm font-medium text-ink hover:border-green hover:text-green">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                  Edit offer
+                                </button>
+                              </>
+                            ) : (
+                              /* Others' offer: Accept (buyer only) */
+                              <button
+                                onClick={() => { setAcceptingOfferId(offer.id); setPinOpen("accept"); }}
+                                className="flex items-center gap-1.5 rounded-lg bg-green px-4 py-2 text-body-sm font-medium text-paper hover:bg-green-hover">
+                                <CheckCircle2 strokeWidth={2} className="size-3.5" /> Accept offer (PIN required)
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>

@@ -31,6 +31,7 @@ type BoardRow = {
   plain_plural: string;
   spec: string | null;
   commodity: string;
+  images?: string[];
 };
 
 type SupplyRow = {
@@ -53,7 +54,9 @@ function formatKobo(kobo: number, unit: string) {
   return `₦${(kobo / 100).toLocaleString("en-NG")}/${unit}`;
 }
 
-function DemandCard({ row }: { row: BoardRow }) {
+function DemandCard({ row, meId, mePhoto }: { row: BoardRow; meId: string | null; mePhoto: string | null }) {
+  const isOwn = Boolean(meId && row.buyer_id === meId);
+  const buyerInitials = row.buyer.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
   return (
     <Link
       href={`/dashboard/marketplace/${row.listing_id}`}
@@ -62,9 +65,24 @@ function DemandCard({ row }: { row: BoardRow }) {
       <div className="flex-1 p-5">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <span className="rounded-md bg-green/10 px-2 py-0.5 font-num text-label font-medium text-green">
-              DEMAND
-            </span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="rounded-md bg-green/10 px-2 py-0.5 font-num text-label font-medium text-green">
+                DEMAND
+              </span>
+              {isOwn && (
+                <span className="rounded-full bg-green text-paper text-label font-medium px-2 py-0.5">
+                  You
+                </span>
+              )}
+            </div>
+            {isOwn && row.images && row.images.length > 0 && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={row.images[0]}
+                alt={row.commodity}
+                className="mt-2 size-[60px] rounded-lg object-cover"
+              />
+            )}
             <p className="mt-2 font-medium text-ink">{row.commodity}</p>
             {row.spec && (
               <p className="mt-0.5 line-clamp-2 text-body-sm text-ink-muted">{row.spec}</p>
@@ -79,8 +97,15 @@ function DemandCard({ row }: { row: BoardRow }) {
           <Link
             href={`/dashboard/profile/${row.buyer_id ?? ""}`}
             onClick={(e) => e.stopPropagation()}
-            className="font-medium text-ink hover:text-green hover:underline"
+            className="flex items-center gap-1.5 font-medium text-ink hover:text-green hover:underline"
           >
+            {isOwn ? (
+              <span className="flex size-5 items-center justify-center overflow-hidden rounded-full bg-sage-soft font-num text-[10px] font-medium text-green">
+                {mePhoto
+                  ? <img src={mePhoto} alt="" className="size-full object-cover" referrerPolicy="no-referrer" />
+                  : buyerInitials}
+              </span>
+            ) : null}
             {row.buyer}
           </Link>
           {row.area && (
@@ -104,8 +129,9 @@ function DemandCard({ row }: { row: BoardRow }) {
   );
 }
 
-function SupplyCard({ row }: { row: SupplyRow }) {
+function SupplyCard({ row, meId }: { row: SupplyRow; meId: string | null }) {
   const initials = row.farmer.name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+  const isOwn = Boolean(meId && row.farmer.id === meId);
   return (
     <Link
       href={`/dashboard/marketplace/supply/${row.id}`}
@@ -144,6 +170,11 @@ function SupplyCard({ row }: { row: SupplyRow }) {
             </span>
             {row.farmer.name}
             {row.farmer.verified && <span className="text-green">✓</span>}
+            {isOwn && (
+              <span className="rounded-full bg-green text-paper text-label font-medium px-2 py-0.5">
+                You
+              </span>
+            )}
           </Link>
           {row.area && (
             <p className="flex items-center gap-1">
@@ -175,6 +206,9 @@ export default function MarketplacePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [meId, setMeId] = useState<string | null>(null);
+  const [mePhoto, setMePhoto] = useState<string | null>(null);
+
   const [filters, setFilters] = useState<FilterState>({
     commodity: "All",
     area: "All areas",
@@ -193,9 +227,10 @@ export default function MarketplacePage() {
         const token = await getToken();
         const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
 
-        const [boardRes, supplyRes] = await Promise.all([
+        const [boardRes, supplyRes, meRes] = await Promise.all([
           fetch("/api/board", { headers }),
           fetch("/api/supply-listings", { headers }),
+          fetch("/api/me", { headers }),
         ]);
 
         if (!boardRes.ok) throw new Error(`board:${boardRes.status}`);
@@ -205,6 +240,14 @@ export default function MarketplacePage() {
 
         let supplyList: SupplyRow[] = [];
         if (supplyRes.ok) supplyList = (await supplyRes.json()) as SupplyRow[];
+
+        if (meRes.ok) {
+          const me = (await meRes.json()) as { id?: string; photo_url?: string | null };
+          if (!cancelled) {
+            setMeId(me?.id ?? null);
+            setMePhoto(me?.photo_url ?? null);
+          }
+        }
 
         if (!cancelled) { setRows(cards); setSupplyRows(supplyList); }
       } catch {
@@ -217,6 +260,37 @@ export default function MarketplacePage() {
     load();
     return () => { cancelled = true; };
   }, []);
+
+  // Enrich own demand rows with images from the listing detail API
+  useEffect(() => {
+    if (!meId || rows.length === 0) return;
+    let cancelled = false;
+    async function enrich() {
+      const token = await getToken();
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+      const ownRows = rows.filter((r) => r.buyer_id === meId && !r.images);
+      if (ownRows.length === 0) return;
+      await Promise.all(
+        ownRows.map(async (r) => {
+          try {
+            const res = await fetch(`/api/listings/${r.listing_id}`, { headers });
+            if (!res.ok) return;
+            const data = (await res.json()) as { images?: string[] };
+            if (cancelled) return;
+            if (data.images && data.images.length > 0) {
+              setRows((prev) =>
+                prev.map((row) =>
+                  row.listing_id === r.listing_id ? { ...row, images: data.images } : row,
+                ),
+              );
+            }
+          } catch { /* ignore */ }
+        }),
+      );
+    }
+    enrich();
+    return () => { cancelled = true; };
+  }, [meId, rows.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
   // Map board cards to display shape (board returns BoardCard from buildBoard)
@@ -352,7 +426,7 @@ export default function MarketplacePage() {
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {filteredDemand.map((row) => (
                 <Reveal key={row.listing_id} effect="riseIn" config={{ stagger: 0 }}>
-                  <DemandCard row={row} />
+                  <DemandCard row={row} meId={meId} mePhoto={mePhoto} />
                 </Reveal>
               ))}
             </div>
@@ -373,7 +447,7 @@ export default function MarketplacePage() {
                 .filter((r) => areaFilter === "All areas" || r.area === areaFilter)
                 .map((row) => (
                 <Reveal key={row.id} effect="riseIn" config={{ stagger: 0 }}>
-                  <SupplyCard row={row} />
+                  <SupplyCard row={row} meId={meId} />
                 </Reveal>
               ))}
             </div>
