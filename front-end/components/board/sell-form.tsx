@@ -54,9 +54,13 @@ const STEPS = [
 ];
 
 const FAILURES: Record<string, string> = {
-  not_a_farmer: "Only farmer accounts can post supply.",
+  not_a_farmer: "Only farmer accounts can post supply. Check your role in your profile.",
   invalid_numbers: "Check the price and quantity.",
   too_many_images: "You can only add up to 4 photos.",
+  images_required: "Add 1 to 4 photos so buyers can see what you have.",
+  title_required: "Give your listing a title.",
+  location_required: "Set your location in your profile first, so buyers can see how far you are.",
+  db_error: "", // message comes from the API
 };
 
 /** What's wrong with a step, in plain words, or null when it can move on. Steps count from 1. */
@@ -298,13 +302,13 @@ export function SellForm() {
       unit,
       images: draft.images,
     }).catch(() => null);
-    const result = (await response?.json().catch(() => null)) as { ok?: boolean; code?: string } | null;
+    const result = (await response?.json().catch(() => null)) as { ok?: boolean; code?: string; message?: string } | null;
     setSaving(false);
     if (result?.ok) {
       router.push("/dashboard/marketplace");
       return;
     }
-    setError(FAILURES[result?.code ?? ""] ?? "That didn't save. Please try again.");
+    setError(FAILURES[result?.code ?? ""] || result?.message || "That didn't save. Please try again.");
   }
 
   const copy = STEPS[step - 1];

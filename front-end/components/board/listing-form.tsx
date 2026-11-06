@@ -41,12 +41,15 @@ const STEPS = [
 
 const FAILURES: Record<string, string> = {
   location_required: "Set your location in your profile first, so farmers can see how far you are.",
-  not_a_buyer: "Only buyer accounts can post demand.",
+  not_a_buyer: "Only buyer accounts can post demand. Update your role in your profile.",
   address_required: "Add the delivery address.",
   invalid_window: "The window has to end after it starts.",
   invalid_weights: "The largest weight can't be less than the smallest.",
   invalid_numbers: "Check the price and quantities.",
-  too_soon: "That day is too soon. Farmers need at least 24 hours to book.",
+  too_soon: "That day is too soon. Farmers need at least 5 hours to book.",
+  unknown_commodity: "That commodity isn't available yet.",
+  insufficient_balance: "", // message comes from the API
+  db_error: "", // message comes from the API
 };
 
 const START: ListingDraft = {
@@ -293,7 +296,7 @@ export function ListingForm() {
     setSaving(true);
     setError(null);
     const response = await apiFetch(user, "/api/listings", listingBody(draft)).catch(() => null);
-    const result = (await response?.json().catch(() => null)) as { ok?: boolean; code?: string; latest?: string } | null;
+    const result = (await response?.json().catch(() => null)) as { ok?: boolean; code?: string; latest?: string; message?: string } | null;
     setSaving(false);
     if (result?.ok) {
       router.push("/dashboard/board");
@@ -302,7 +305,7 @@ export function ListingForm() {
     setError(
       result?.code === "window_too_late"
         ? `${draft.commodity} must be delivered by ${result.latest}.`
-        : (FAILURES[result?.code ?? ""] ?? "That didn't save. Please try again."),
+        : (FAILURES[result?.code ?? ""] || result?.message || "That didn't save. Please try again."),
     );
   }
 
