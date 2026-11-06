@@ -60,6 +60,7 @@ export default function ProfilePage() {
   // Validation errors
   const [nameError, setNameError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -123,6 +124,7 @@ export default function ProfilePage() {
     if (!valid) return;
 
     setSaving(true);
+    setSaveError(null);
     try {
       const res = await apiFetch(user, "/api/me", { name: name.trim(), phone, role }).catch(() => null);
       if (res?.ok) {
@@ -135,9 +137,19 @@ export default function ProfilePage() {
           display_name: name.trim(),
           photo_url: user.photoURL ?? "",
         }).catch(() => {});
-        setSummary((current) => ({ ...current, name: name.trim(), display_name: name.trim(), area: location || current?.area }));
+        const savedRole = ((await res.json().catch(() => null)) as { role?: string } | null)?.role ?? role;
+        setRole(savedRole);
+        setSummary((current) => ({ ...current, role: savedRole, name: name.trim(), display_name: name.trim(), area: location || current?.area }));
         setSaved(true);
         setTimeout(() => setSaved(false), 2500);
+      } else {
+        const code = ((await res?.json().catch(() => null)) as { code?: string } | null)?.code;
+        setSaveError(
+          code === "phone_in_use" ? "That phone number is already on another account."
+            : code === "invalid_role" ? "Choose whether you're a farmer or a buyer."
+              : code === "invalid_details" ? "Check your name and phone number."
+                : "That didn't save. Please try again.",
+        );
       }
     } finally {
       setSaving(false);
@@ -287,6 +299,7 @@ export default function ProfilePage() {
                 Save changes
                 <BusyBar active={saving} />
               </button>
+              {saveError && <p role="alert" className="text-body-sm text-danger">{saveError}</p>}
               {saved && (
                 <span className="flex items-center gap-1.5 text-body-sm text-success">
                   <CheckCircle2 strokeWidth={2} className="size-4" /> Saved
