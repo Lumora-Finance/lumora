@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { useAuthUser } from "@/components/auth/use-auth-user";
+import { AiScan } from "@/components/board/ai-scan";
 import { CommodityPicker, findCommodity } from "@/components/board/commodity-picker";
 import { money } from "@/lib/email/format";
 import { gsap, isReducedMotion, useGSAP } from "@/lib/gsap/effects";
@@ -408,6 +409,14 @@ export function SellForm() {
                     </p>
                   )}
                 </div>
+                {/* AI scan: show buyers already wanting this commodity */}
+                {draft.commodity && (
+                  <AiScan
+                    commodity={draft.commodity}
+                    mode="supply"
+                    userToken={null}
+                  />
+                )}
               </>
             )}
 

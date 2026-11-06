@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useAuthUser } from "@/components/auth/use-auth-user";
+import { AiScan } from "@/components/board/ai-scan";
 import { CommodityPicker } from "@/components/board/commodity-picker";
 import { BusyBar } from "@/components/loader/busy-bar";
 import { dayAndClock, money, windowText } from "@/lib/email/format";
@@ -353,6 +354,14 @@ export function ListingForm() {
                     </span>
                   )}
                 </div>
+                {/* AI scan: show farmers already selling this commodity */}
+                {draft.commodity && (
+                  <AiScan
+                    commodity={draft.commodity}
+                    mode="demand"
+                    userToken={null}
+                  />
+                )}
                 <fieldset>
                   <legend className={LABEL}>How does it reach you?</legend>
                   <div className={MODE_CHIPS}>
