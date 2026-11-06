@@ -20,7 +20,7 @@ export async function GET(request: Request) {
   const db = serverMoneyDb();
   const user = await requestUser(request, db);
   if (!user) return new Response("Unauthorized", { status: 401 });
-  if (user.role !== "admin") return new Response("Forbidden", { status: 403 });
+  if (!user.is_admin) return new Response("Forbidden", { status: 403 });
 
   const url = new URL(request.url);
   const status = url.searchParams.get("status") ?? "pending";
@@ -47,7 +47,7 @@ export async function PATCH(request: Request) {
   const db = serverMoneyDb();
   const user = await requestUser(request, db);
   if (!user) return new Response("Unauthorized", { status: 401 });
-  if (user.role !== "admin") return new Response("Forbidden", { status: 403 });
+  if (!user.is_admin) return new Response("Forbidden", { status: 403 });
 
   const body = (await request.json().catch(() => null)) as {
     id?: string;

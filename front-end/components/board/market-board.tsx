@@ -15,16 +15,41 @@ import { reliabilityWords } from "@/lib/money/booking-view";
 import { freeDeliveriesLeft } from "@/lib/pricing";
 
 import { CardsSkeleton } from "@/components/loader/skeletons";
+import { LumoraSelect } from "@/components/ui/lumora-select";
 import { BuyerRadar } from "./buyer-radar";
 import { cardTakeHome, CrateCard } from "./crate-card";
 import { Segmented } from "./segmented";
 
-const COMMODITIES = [
+// Static fallback list — replaced by DB data once it loads
+const COMMODITIES_FALLBACK = [
   { name: "Live broilers", label: "chickens", unit: "kg", one: "chicken", many: "chickens", flock: true },
-  { name: "Turkey", label: "turkeys", unit: "kg", one: "turkey", many: "turkeys", flock: true },
+  { name: "Live Turkey", label: "turkeys", unit: "kg", one: "turkey", many: "turkeys", flock: true },
   { name: "Tomatoes", label: "tomatoes", unit: "basket", one: "basket of tomatoes", many: "baskets of tomatoes", flock: false },
   { name: "Eggs", label: "eggs", unit: "crate", one: "crate of eggs", many: "crates of eggs", flock: false },
 ] as const;
+
+type CommodityMeta = {
+  name: string;
+  label: string;
+  unit: string;
+  one: string;
+  many: string;
+  flock: boolean;
+};
+
+function makeMeta(name: string, unit: string): CommodityMeta {
+  const lower = name.toLowerCase();
+  const isPoultry = lower.includes("broiler") || lower.includes("turkey") || lower.includes("fowl") || lower.includes("duck") || lower.includes("geese") || lower.includes("chick");
+  const label = name.replace(/^live /i, "").toLowerCase();
+  return {
+    name,
+    label,
+    unit,
+    one: isPoultry ? label.replace(/s$/, "") : `${unit} of ${label}`,
+    many: isPoultry ? label : `${unit}s of ${label}`,
+    flock: isPoultry,
+  };
+}
 
 type Sort = "money" | "nearest";
 
@@ -34,7 +59,7 @@ const inDays = (days: number, hour: number) => {
   return date.toISOString();
 };
 
-const example = (id: string, buyer: string, area: string, km: number, priceKobo: number, remaining: number, commodity: (typeof COMMODITIES)[number], days: number, collects = false, weights = [2.5, 3.5]): BoardCard => ({
+const example = (id: string, buyer: string, area: string, km: number, priceKobo: number, remaining: number, commodity: CommodityMeta, days: number, collects = false, weights = [2.5, 3.5]): BoardCard => ({
   listingId: id, slotId: id, buyer, area, km, priceKobo, priceUnit: commodity.unit, remaining, minQty: 1,
   windowStart: inDays(days, 7), windowEnd: inDays(days, 11), collects, plainName: commodity.one, plainPlural: commodity.many, spec: null,
   commodity: commodity.name, minWeightKg: weights[0], maxWeightKg: weights[1], urgent: false, pinned: false,
@@ -42,12 +67,12 @@ const example = (id: string, buyer: string, area: string, km: number, priceKobo:
 
 /** Shown only when the live board can't be reached, and labelled as examples. */
 const exampleCards = (): BoardCard[] => [
-  example("e1", "Caterer D", "Angwan Rukuba", 9, 380_000, 40, COMMODITIES[0], 2, true),
-  example("e2", "Rayfield Restaurant", "Rayfield", 3, 350_000, 12, COMMODITIES[0], 1),
-  example("e3", "Hotel B", "Barkin Ladi", 39, 340_000, 90, COMMODITIES[0], 3),
-  example("e4", "Bukuru Grill", "Bukuru", 1, 360_000, 0, COMMODITIES[0], 2),
-  example("e5", "Caterer D", "Angwan Rukuba", 9, 2_800_000, 14, COMMODITIES[2], 2, false, [1, 1]),
-  example("e6", "Bakery H", "Bukuru", 1, 560_000, 25, COMMODITIES[3], 1, true, [1, 1]),
+  example("e1", "Caterer D", "Angwan Rukuba", 9, 380_000, 40, COMMODITIES_FALLBACK[0], 2, true),
+  example("e2", "Rayfield Restaurant", "Rayfield", 3, 350_000, 12, COMMODITIES_FALLBACK[0], 1),
+  example("e3", "Hotel B", "Barkin Ladi", 39, 340_000, 90, COMMODITIES_FALLBACK[0], 3),
+  example("e4", "Bukuru Grill", "Bukuru", 1, 360_000, 0, COMMODITIES_FALLBACK[0], 2),
+  example("e5", "Caterer D", "Angwan Rukuba", 9, 2_800_000, 14, COMMODITIES_FALLBACK[2], 2, false, [1, 1]),
+  example("e6", "Bakery H", "Bukuru", 1, 560_000, 25, COMMODITIES_FALLBACK[3], 1, true, [1, 1]),
 ];
 
 export function MarketBoard() {
@@ -56,7 +81,8 @@ export function MarketBoard() {
   const [cards, setCards] = useState<BoardCard[] | null>(null);
   const [isExample, setIsExample] = useState(false);
   const [area, setArea] = useState("Jos");
-  const [commodityName, setCommodityName] = useState<string>(COMMODITIES[0].name);
+  const [commodityName, setCommodityName] = useState<string>(COMMODITIES_FALLBACK[0].name);
+  const [commodities, setCommodities] = useState<CommodityMeta[]>([...COMMODITIES_FALLBACK]);
   const [stockByCommodity, setStockByCommodity] = useState<Record<string, number>>({});
   const [follows, setFollows] = useState<string[]>([]);
   const [sort, setSort] = useState<Sort>("money");
@@ -68,8 +94,21 @@ export function MarketBoard() {
   const [version, setVersion] = useState(0);
   const [followMessage, setFollowMessage] = useState<string | null>(null);
 
+  // Fetch all commodities from DB for the dropdown
   useEffect(() => {
-    if (loading) return;
+    fetch("/api/commodities")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data: Array<{ label: string; items: Array<{ name: string; unit: string }> }> | null) => {
+        if (!Array.isArray(data)) return;
+        const flat: CommodityMeta[] = data.flatMap((cat) =>
+          cat.items.map((item) => makeMeta(item.name, item.unit)),
+        );
+        if (flat.length > 0) setCommodities(flat);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     const showExamples = () => {
       if (cancelled) return;
@@ -103,7 +142,7 @@ export function MarketBoard() {
     };
   }, [user, loading, version]);
 
-  const commodity = COMMODITIES.find((item) => item.name === commodityName) ?? COMMODITIES[0];
+  const commodity = commodities.find((item) => item.name === commodityName) ?? commodities[0] ?? COMMODITIES_FALLBACK[0];
   const words = unitWords(commodity.unit, commodity.one, commodity.many);
   const stock = stockByCommodity[commodity.name] ?? DEFAULT_FLOCK;
   const noun = commodity.flock ? "flock" : "stock";
@@ -161,8 +200,8 @@ export function MarketBoard() {
   );
 
   function changeCommodity(name: string) {
-    const from = COMMODITIES.findIndex((item) => item.name === commodityName);
-    const to = COMMODITIES.findIndex((item) => item.name === name);
+    const from = commodities.findIndex((item) => item.name === commodityName);
+    const to = commodities.findIndex((item) => item.name === name);
     tabDirection.current = to >= from ? 1 : -1;
     setCommodityName(name);
     setSelected(null);
@@ -242,7 +281,7 @@ export function MarketBoard() {
   });
 
   const label = commodity.label;
-  const others = COMMODITIES.filter((item) => item.name !== commodity.name)
+  const others = commodities.filter((item) => item.name !== commodity.name)
     .map((item) => ({ ...item, count: (cards ?? []).filter((card) => card.commodity === item.name && card.remaining > 0).length }))
     .filter((item) => item.count > 0);
   const goingShare = stock > 0 ? (going / stock) * 100 : 0;
@@ -258,16 +297,21 @@ export function MarketBoard() {
         </h1>
       </header>
 
-      <Segmented
-        label="Produce"
-        className="mt-4 max-w-[520px]"
-        value={commodity.name}
-        onChange={changeCommodity}
-        options={COMMODITIES.map((item) => {
-          const count = (cards ?? []).filter((card) => card.commodity === item.name && card.remaining > 0).length;
-          return { value: item.name, label: item.label[0].toUpperCase() + item.label.slice(1), dot: count > 0, hint: count > 0 ? `${count} buyers` : undefined };
-        })}
-      />
+      <div className="mt-4 max-w-[520px]">
+        <LumoraSelect
+          value={commodityName}
+          onChange={changeCommodity}
+          placeholder="Choose a commodity…"
+          options={commodities.map((item) => {
+            const count = (cards ?? []).filter((card) => card.commodity === item.name && card.remaining > 0).length;
+            return {
+              value: item.name,
+              label: item.name,
+              hint: count > 0 ? `${count} buyer${count !== 1 ? "s" : ""} available` : undefined,
+            };
+          })}
+        />
+      </div>
 
       {sold && (
         <p role="status" className="mt-4 rounded-2xl bg-sage-soft px-4 py-3 font-medium text-ink">
@@ -388,10 +432,28 @@ export function MarketBoard() {
             </section>
           ) : (
             <>
-              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-                <h2 className="font-medium text-ink">
-                  <span className="font-num">{open.length}</span> {open.length === 1 ? "buyer" : "buyers"} near you
-                </h2>
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  {/* Commodity picker — also shown here so switching produce is fast from the list */}
+                  <div className="w-[200px] shrink-0 sm:w-[220px]">
+                    <LumoraSelect
+                      value={commodityName}
+                      onChange={changeCommodity}
+                      placeholder="Choose a commodity…"
+                      options={commodities.map((item) => {
+                        const count = (cards ?? []).filter((card) => card.commodity === item.name && card.remaining > 0).length;
+                        return {
+                          value: item.name,
+                          label: item.name,
+                          hint: count > 0 ? `${count} buyer${count !== 1 ? "s" : ""} available` : undefined,
+                        };
+                      })}
+                    />
+                  </div>
+                  <h2 className="font-medium text-ink">
+                    <span className="font-num">{open.length}</span> {open.length === 1 ? "buyer" : "buyers"} near you
+                  </h2>
+                </div>
                 <Segmented
                   label="Sort"
                   className="w-[220px]"

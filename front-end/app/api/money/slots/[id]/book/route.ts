@@ -1,6 +1,7 @@
 import { requestUser } from "@/lib/money/auth";
 import { bookSlot } from "@/lib/money/booking";
 import { serverMoneyDb } from "@/lib/money/db";
+import { notifyBookingCreated } from "@/lib/notify";
 
 /**
  * POST /api/money/slots/:id/book
@@ -48,6 +49,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     },
     { db },
   );
+
+  // Fire in-app notification to the farmer on successful booking
+  if (result.ok && result.booking_id) {
+    void notifyBookingCreated(db, user.id, {
+      bookingId: result.booking_id,
+      code: String(result.code ?? ""),
+      qty: body?.qty as number,
+      unit: "units",
+      buyer: String(result.buyer ?? "buyer"),
+      area: String(result.area ?? ""),
+    }).catch(() => null);
+  }
 
   return Response.json(result, { status: result.ok ? 200 : 409 });
 }

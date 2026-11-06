@@ -1,5 +1,6 @@
 import { requestUser } from "@/lib/money/auth";
 import { serverMoneyDb } from "@/lib/money/db";
+import { notifyDeliveryRecorded } from "@/lib/notify";
 
 type Body = { unitsReceived?: number; declined?: unknown[]; measuredKg?: number; scalePhotos?: string[] };
 
@@ -20,5 +21,28 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     p_measured_kg: body.measuredKg ?? 0,
     p_scale_photos: body.scalePhotos ?? [],
   });
+
+  // Notify the buyer (who just recorded) and, if available, the farmer
+  if (result.ok) {
+    void notifyDeliveryRecorded(db, user.id, {
+      bookingId: id,
+      code: String(result.code ?? ""),
+      accepted: body.unitsReceived ?? 0,
+      unit: "units",
+      kg: body.measuredKg ?? 0,
+    }).catch(() => null);
+
+    // Also notify the farmer if their id is returned
+    if (result.farmer_id && result.farmer_id !== user.id) {
+      void notifyDeliveryRecorded(db, String(result.farmer_id), {
+        bookingId: id,
+        code: String(result.code ?? ""),
+        accepted: body.unitsReceived ?? 0,
+        unit: "units",
+        kg: body.measuredKg ?? 0,
+      }).catch(() => null);
+    }
+  }
+
   return Response.json(result, { status: result.ok ? 200 : 409 });
 }

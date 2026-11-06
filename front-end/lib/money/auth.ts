@@ -6,7 +6,7 @@ const FIREBASE_KEYS = createRemoteJWKSet(
   new URL("https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"),
 );
 
-export type MoneyUser = { id: string; phone: string; name: string; role: string; email?: string | null };
+export type MoneyUser = { id: string; phone: string; name: string; role: string; is_admin?: boolean; email?: string | null };
 
 /** The verified identity behind a request. They may not have a row in `users` yet. */
 export async function firebaseIdentity(request: Request): Promise<{ uid: string; email: string | null } | null> {

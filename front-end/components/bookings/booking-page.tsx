@@ -10,6 +10,7 @@ import { BusyBar } from "@/components/loader/busy-bar";
 import { DetailSkeleton } from "@/components/loader/skeletons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { LumoraSelect } from "@/components/ui/lumora-select";
 import { clock, dayAndClock, kilos, money, pricePer, windowText } from "@/lib/email/format";
 import { apiFetch } from "@/lib/logistics/client";
 import {
@@ -247,13 +248,18 @@ export function BookingPage({ bookingId }: { bookingId: string }) {
             <Button variant="outline" className="mt-3 h-12 text-base" onClick={() => setGateOpen(true)}>Decline the delivery</Button>
           ) : (
             <div className="mt-3 space-y-3">
-              <label className={LABEL}>
-                Reason
-                <select className={FIELD} value={gateReason} onChange={(event) => setGateReason(event.target.value)}>
-                  <option value="">Choose a reason</option>
-                  {GATE_REASONS.map((reason) => <option key={reason.value} value={reason.value}>{reason.label}</option>)}
-                </select>
-              </label>
+              <div>
+                <p className={LABEL}>Reason</p>
+                <div className="mt-1.5">
+                  <LumoraSelect
+                    portal
+                    value={gateReason}
+                    onChange={setGateReason}
+                    placeholder="Choose a reason"
+                    options={GATE_REASONS.map((r) => ({ value: r.value, label: r.label }))}
+                  />
+                </div>
+              </div>
               <label className={LABEL}>
                 Note (optional)
                 <input className={FIELD} value={gateNote} onChange={(event) => setGateNote(event.target.value)} />

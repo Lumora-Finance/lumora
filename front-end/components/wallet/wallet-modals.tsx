@@ -6,6 +6,7 @@ import type { FormEvent, PointerEvent as ReactPointerEvent, ReactNode } from "re
 import { createPortal } from "react-dom";
 
 import { BusyBar } from "@/components/loader/busy-bar";
+import { LumoraSelect } from "@/components/ui/lumora-select";
 import { getToken } from "@/lib/firebase/auth";
 import { gsap, isReducedMotion, useGSAP } from "@/lib/gsap/effects";
 import { playMoment } from "@/lib/loading/moment";
@@ -582,26 +583,22 @@ export function WithdrawModal({
 
       <div data-rise>
         <label htmlFor={`${id}-bank`} className="mb-2 block text-body-sm font-medium text-ink">Bank</label>
-        <div className="relative">
-          <select
-            id={`${id}-bank`}
-            value={bankCode}
-            disabled={banksLoading}
-            onChange={(e) => {
-              const selected = banks.find((b) => b.code === e.target.value);
-              setBankCode(e.target.value);
-              setBankName(selected?.name ?? "");
-              setAccountName("");
-              setVerifyError(null);
-              setError(null);
-            }}
-            className={cn(FIELD, "appearance-none pr-10", !bankCode && "text-ink-muted")}
-          >
-            <option value="">{banksLoading ? "Loading banks…" : "Select your bank"}</option>
-            {banks.map((b) => <option key={b.code} value={b.code}>{b.name}</option>)}
-          </select>
-          <ChevronDown aria-hidden="true" strokeWidth={1.75} className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-ink-muted" />
-        </div>
+        <LumoraSelect
+          id={`${id}-bank`}
+          portal
+          value={bankCode}
+          onChange={(code) => {
+            const selected = banks.find((b) => b.code === code);
+            setBankCode(code);
+            setBankName(selected?.name ?? "");
+            setAccountName("");
+            setVerifyError(null);
+            setError(null);
+          }}
+          disabled={banksLoading}
+          placeholder={banksLoading ? "Loading banks…" : "Select your bank"}
+          options={banks.map((b) => ({ value: b.code, label: b.name }))}
+        />
       </div>
 
       <div data-rise>

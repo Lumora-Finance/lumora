@@ -3,6 +3,7 @@ import { connection } from "next/server";
 import { requestUser } from "@/lib/money/auth";
 import { serverMoneyDb } from "@/lib/money/db";
 import { createPaystackClient } from "@/lib/money/paystack";
+import { notifyWalletFunded } from "@/lib/notify";
 
 /**
  * POST /api/wallet/verify-payment
@@ -46,6 +47,11 @@ export async function POST(request: Request) {
       p_payment_type: verified.paymentChannel ?? "unknown",
       p_now: new Date().toISOString(),
     }) as { ok?: boolean; duplicate?: boolean; code?: string };
+
+    // Notify the user their wallet was funded (only on fresh credits, not duplicates)
+    if (!result.duplicate && verified.amountKobo) {
+      void notifyWalletFunded(db, user.id, { amountKobo: verified.amountKobo }).catch(() => null);
+    }
 
     return Response.json({
       ok: true,

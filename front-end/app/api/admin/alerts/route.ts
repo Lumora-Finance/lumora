@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   const db = serverMoneyDb();
   const user = await requestUser(request, db);
   if (!user) return new Response("Unauthorized", { status: 401 });
-  if (user.role !== "admin") return new Response("Forbidden", { status: 403 });
+  if (!user.is_admin) return new Response("Forbidden", { status: 403 });
 
   try {
     const supabase = createClient(

@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useAuthUser } from "@/components/auth/use-auth-user";
 import { BusyBar } from "@/components/loader/busy-bar";
 import { Button } from "@/components/ui/button";
+import { LumoraSelect } from "@/components/ui/lumora-select";
 import { apiFetch } from "@/lib/logistics/client";
 import { DECLINE_REASONS, declineProblem, type DeclinedUnit } from "@/lib/logistics/decline";
 
@@ -118,22 +119,17 @@ export function DeliveryForm({ bookingId }: { bookingId: string }) {
           const reason = DECLINE_REASONS.find((item) => item.value === unit.reason);
           return (
             <div key={index} className="rounded-lg border border-line bg-white p-4">
-              <label className={LABEL}>
+              <p className={LABEL}>
                 Reason for unit <span className="font-num">{index + 1}</span>
-                <select
-                  required
+              </p>
+              <div className="mt-1.5">
+                <LumoraSelect
                   value={unit.reason}
-                  onChange={(event) => updateUnit(index, { reason: event.target.value as DeclinedUnit["reason"] })}
-                  className={FIELD}
-                >
-                  <option value="">Choose a reason</option>
-                  {DECLINE_REASONS.map((item) => (
-                    <option key={item.value} value={item.value}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  onChange={(val) => updateUnit(index, { reason: val as DeclinedUnit["reason"] })}
+                  placeholder="Choose a reason"
+                  options={DECLINE_REASONS.map((item) => ({ value: item.value, label: item.label }))}
+                />
+              </div>
               {unit.reason === "other" && (
                 <label className={`${LABEL} mt-3`}>
                   Note

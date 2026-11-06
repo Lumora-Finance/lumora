@@ -107,5 +107,16 @@ export async function POST(request: Request) {
     });
   }
 
+  // Notify the buyer that their listing is live
+  if (listingId) {
+    const { notifyListingCreated } = await import("@/lib/notify");
+    void notifyListingCreated(db, user.id, {
+      listingId: String(listingId),
+      commodity: body.commodity ?? "produce",
+      priceKobo: priceMaxKobo,
+      capacity: body.capacity ?? 0,
+    }).catch(() => null);
+  }
+
   return Response.json({ ...result, escrowed_kobo: (escrowResult as { escrowed_kobo?: number }).escrowed_kobo });
 }
