@@ -305,22 +305,6 @@ export default function ListingDetailPage() {
           </div>
 
           <div data-card="pop" className="mt-6 flex flex-col gap-3 sm:mt-8 sm:flex-row sm:flex-wrap">
-            {bookingDone ? (
-              <div role="status" className={HILLS_ACTION_QUIET}>
-                <CheckCircle2 aria-hidden="true" strokeWidth={2} className="mr-2 size-4 text-green" /> Booking confirmed!
-              </div>
-            ) : firstSlot ? (
-              <button
-                type="button"
-                onClick={() => handleBook(firstSlot.id)}
-                disabled={booking || remaining === 0}
-                className={`${HILLS_ACTION} disabled:pointer-events-none disabled:opacity-50`}
-              >
-                {booking ? "Booking…" : remaining === 0 ? "Slot full" : `Book ${listing.min_qty} ${unit}${listing.min_qty > 1 ? "s" : ""}`}
-              </button>
-            ) : (
-              <span className={`${HILLS_ACTION_QUIET} pointer-events-none text-ink-muted`}>No open slots</span>
-            )}
             <Link href={`/dashboard/profile/${listing.buyer.id}`} className={HILLS_ACTION_QUIET}>
               View profile
             </Link>
@@ -341,7 +325,7 @@ export default function ListingDetailPage() {
       )}
 
       {/* Tabs */}
-      <div className="mb-6 flex gap-1 overflow-x-auto rounded-xl border border-line bg-white p-1 w-fit">
+      <div className="mb-6 flex gap-1 overflow-x-auto rounded-xl border border-line bg-white p-1 w-full [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {TABS.map(({ key, label, icon: Icon }) => (
           <button key={key} onClick={() => setTab(key)}
             className={cn("flex items-center gap-2 rounded-lg px-4 py-2 text-body-sm font-medium capitalize transition-all whitespace-nowrap",
