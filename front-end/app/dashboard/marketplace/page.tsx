@@ -132,16 +132,7 @@ function SupplyCard({ row, meId }: { row: SupplyRow; meId: string | null }) {
       href={`/dashboard/marketplace/supply/${row.id}`}
       className="group flex flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
     >
-      {row.images && row.images.length > 0 ? (
-        <div className="aspect-[4/3] overflow-hidden bg-paper">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={row.images[0]} alt={row.title} className="size-full object-cover transition-transform duration-300 group-hover:scale-105" />
-        </div>
-      ) : (
-        <div className="flex aspect-[4/3] items-center justify-center bg-sage-soft">
-          <Package strokeWidth={1} className="size-10 text-green/40" />
-        </div>
-      )}
+      <ListingPhoto images={row.images} alt={row.title} className="aspect-[16/9] w-full" />
       <div className="flex-1 p-5">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
