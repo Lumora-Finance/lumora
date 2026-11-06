@@ -23,12 +23,14 @@ type RawNotification = {
 };
 
 function normalise(raw: RawNotification) {
-  const d = raw.data ?? {};
+  // The delivery code stays out of the list. It's shown on the booking page, to the buyer alone.
+  const d = { ...raw.data };
+  delete d.otp;
   return {
     id: raw.id,
     kind: raw.kind,
     title: String(d.title ?? kindToTitle(raw.kind)),
-    body: String(d.body ?? "Tap to view details."),
+    body: String(d.body ?? (raw.kind === "delivery_otp" ? "Open this booking to see the code to give the farmer." : "Tap to view details.")),
     booking_id: raw.booking_id ?? (d.booking_id ? String(d.booking_id) : null),
     data: d as Record<string, string>,
     read: raw.read_at !== null,
@@ -43,6 +45,7 @@ function kindToTitle(kind: string): string {
     booking_revoked: "Booking cancelled",
     delivery_recorded: "Delivery recorded",
     delivery_arrived: "Delivery marked",
+    delivery_otp: "Your delivery code",
     demand_listing_posted: "Listing posted",
     offer_accepted: "Offer accepted",
     offer_received: "New offer",

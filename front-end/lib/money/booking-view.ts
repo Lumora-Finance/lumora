@@ -30,6 +30,8 @@ export type BookingView = {
   no_code_until: string;
   record_by: string | null;
   delivery_code: string | null;
+  /** What the buyer reads to the farmer once delivery is marked. The farmer never receives this. */
+  delivery_otp?: string | null;
   address: string | null;
   collects: boolean;
   contact: { ok: boolean; name?: string; phone?: string; address?: string | null };
