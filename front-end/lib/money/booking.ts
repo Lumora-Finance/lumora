@@ -8,9 +8,14 @@ export type BookingResult = MoneyResult & { booking_id?: string; capacity_remain
 /**
  * Books a slot for a farmer. `book_slot` returns the plain delivery code for the server. It's removed
  * here because the farmer is the one calling this. The buyer reads it on their booking page.
+ *
+ * `offeredPriceKobo` — the price the farmer is willing to accept. Must be within the listing's
+ * [unit_price_min_kobo, unit_price_kobo] range. Defaults to the listing's max price when omitted.
+ * The buyer is always charged at the max price upfront and receives a refund at settlement for
+ * the difference: (max_price − offered_price) × measured_qty × weight.
  */
 export async function bookSlot(
-  input: { slotId: string; farmerId: string; qty: number; now?: Date },
+  input: { slotId: string; farmerId: string; qty: number; offeredPriceKobo?: number; now?: Date },
   deps: { db: MoneyDb },
 ): Promise<BookingResult> {
   const result = await deps.db.rpc<MoneyResult>("book_slot", {
@@ -18,6 +23,9 @@ export async function bookSlot(
     p_farmer: input.farmerId,
     p_qty: input.qty,
     p_now: (input.now ?? new Date()).toISOString(),
+    ...(input.offeredPriceKobo != null
+      ? { p_offered_price_kobo: input.offeredPriceKobo }
+      : {}),
   });
   const safe = { ...result };
   delete safe.delivery_code;
