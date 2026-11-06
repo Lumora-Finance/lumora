@@ -233,6 +233,24 @@ export default function ProfilePage() {
                 />
               </div>
 
+              {/* Role */}
+              <div>
+                <label htmlFor="role" className="mb-1.5 block text-body-sm font-medium text-ink">
+                  Your role
+                </label>
+                <select
+                  id="role"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  disabled={saving}
+                  className="w-full rounded-2xl border border-line bg-white px-4 py-3 text-base text-ink outline-none transition-colors focus:border-green focus:ring-3 focus:ring-ring/40"
+                >
+                  <option value="">Select a role…</option>
+                  <option value="farmer">Farmer</option>
+                  <option value="buyer">Buyer</option>
+                </select>
+              </div>
+
               {/* Location */}
               <div>
                 <label htmlFor="location" className="mb-1.5 block text-body-sm font-medium text-ink">
