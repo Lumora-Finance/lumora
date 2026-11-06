@@ -533,23 +533,28 @@ export function WithdrawModal({
         headers: { "Content-Type": "application/json", ...(await authHeaders()) },
         body: JSON.stringify({ amountKobo, bankName, bankCode, accountNumber, accountName: accountName.trim() }),
       });
-      const data = (await res.json().catch(() => ({}))) as { message?: string; error?: string; transferStatus?: string };
-      if (!res.ok) throw new Error(data.error ?? data.message ?? "We couldn't send that withdrawal. Try again.");
-      const shown = `₦${naira.toLocaleString("en-NG")}`;
+      const data = (await res.json().catch(() => ({}))) as {
+        message?: string; error?: string;
+        feeKobo?: number; netKobo?: number;
+      };
+      if (!res.ok) throw new Error(data.error ?? data.message ?? "We couldn't submit that withdrawal. Try again.");
+      const feeKobo = data.feeKobo ?? Math.floor(amountKobo * 0.015);
+      const netKobo = data.netKobo ?? (amountKobo - feeKobo);
+      const net = `₦${(netKobo / 100).toLocaleString("en-NG")}`;
       playMoment({
-        label: "Sending your money",
+        label: "Withdrawal submitted",
         work: Promise.resolve({
-          top: "Withdrawal",
-          line: data.transferStatus === "success" ? "Paid to your bank" : "On its way to your bank",
+          top: "Pending review",
+          line: `You'll receive ${net} once approved`,
           fraction: 1,
-          text: shown,
+          text: net,
         }),
       });
       setAmount(""); setBankCode(""); setBankName(""); setAccountNumber(""); setAccountName("");
       onClose();
-      onDone(data.message ?? `Withdrawal of ${shown} submitted.`);
+      onDone(data.message ?? `Withdrawal submitted. You will receive ${net} after the 1.5% fee once an admin approves it.`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "We couldn't send that withdrawal. Try again.");
+      setError(err instanceof Error ? err.message : "We couldn't submit that withdrawal. Try again.");
     } finally {
       setBusy(false);
     }
@@ -561,9 +566,9 @@ export function WithdrawModal({
       onClose={dismiss}
       busy={busy}
       title="Withdraw to bank"
-      lead="Processed via Paystack to your Nigerian bank"
+      lead="1.5% fee applied · pending admin review before payment"
       error={error}
-      submitLabel="Withdraw funds"
+      submitLabel="Request withdrawal"
       submitIcon={<ChevronUp aria-hidden="true" strokeWidth={2} className="size-4" />}
       onSubmit={withdraw}
     >
@@ -579,6 +584,20 @@ export function WithdrawModal({
             </button>
           </div>
         )}
+        {/* Live fee preview */}
+        {parseFloat(amount) >= 500 && (() => {
+          const amtKobo = Math.round(parseFloat(amount) * 100);
+          const feeKobo = Math.floor(amtKobo * 0.015);
+          const netKobo = amtKobo - feeKobo;
+          return (
+            <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-line bg-sage-soft/40 px-4 py-3 text-label">
+              <span className="text-ink-muted">1.5% processing fee</span>
+              <span className="text-right font-num font-medium text-amber-700">−{formatKobo(feeKobo)}</span>
+              <span className="font-medium text-ink">You will receive</span>
+              <span className="text-right font-num font-bold text-green">{formatKobo(netKobo)}</span>
+            </div>
+          );
+        })()}
       </div>
 
       <div data-rise>
@@ -644,6 +663,15 @@ export function WithdrawModal({
             <span aria-hidden>✓</span> Account verified
           </p>
         )}
+      </div>
+
+      {/* Pending-review notice */}
+      <div data-rise className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-body-sm text-amber-800">
+        <p className="font-medium">Your request will be reviewed by an admin</p>
+        <p className="mt-0.5 text-label text-amber-700">
+          Once approved, the net amount will be sent to your bank. If rejected, the full amount
+          is refunded to your Lumora wallet within 3 business days.
+        </p>
       </div>
     </ModalShell>
   );

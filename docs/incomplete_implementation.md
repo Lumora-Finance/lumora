@@ -1,14 +1,1 @@
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  lets implement the notifications fully any actions comepleted on the app should sent in app notifications to the user also in the notifications and also Rayfield market board                               
-                                                                                                                                                                                                               
-  Who wants your turkeys?                                                                                                                                                                                      
-                                                                                                                                                                                                               
-  Chickens                                                                                                                                                                                                     
-                                                                                                                                                                                                               
-  Turkeys                                                                                                                                                                                                      
-                                                                                                                                                                                                               
-  Tomatoes                                                                                                                                                                                                     
-                                                                                                                                                                                                               
-  Eggs   in this page lets have that same dropdown in the for product categoris in this buyers near you and it should fecth everything perfectly from the datbase and bring all the buyers near yoou like you  
-  get now base on your selected adress  get ? and also all the dropdowns in this app should match the ui should look like the product select dropdown like the banks withdrawal page and alot more of modal    
-  selcting bank should be like that and also check other sections using default dropdown  
+› i want the users role to apear for him in his profile page he can only be able to add switch using a dropdown we're using u can be able to switch either he is a farmer or a buyer that is only roles we have for users and also  
