@@ -5,8 +5,6 @@ import { connection } from "next/server";
 import { requestUser } from "@/lib/money/auth";
 import { serverMoneyDb } from "@/lib/money/db";
 
-export const dynamic = "force-dynamic";
-
 /**
  * GET /api/ai-scan?commodity=<name>&mode=demand|supply
  *
